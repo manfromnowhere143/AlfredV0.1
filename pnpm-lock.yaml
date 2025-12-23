@@ -18,6 +18,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/api:
+    dependencies:
+      '@alfred/core':
+        specifier: workspace:*
+        version: link:../core
+      '@alfred/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@alfred/rag':
+        specifier: workspace:*
+        version: link:../rag
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@20.19.27)
+
   packages/core:
     devDependencies:
       tsup:
