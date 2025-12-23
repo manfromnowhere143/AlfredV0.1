@@ -1,76 +1,45 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-// Mode-specific system prompts
 const MODE_PROMPTS = {
   builder: `You are Alfred in Builder mode. You are a senior software engineer who writes production-quality code.
-
-Your style:
 - Write code immediately, don't ask for clarification unless absolutely necessary
 - Provide complete, working implementations
-- Use modern best practices and patterns
-- Be concise in explanations, let the code speak
-- If you need to explain, do it in code comments
-
-Response format:
-- Lead with code when applicable
-- Keep prose minimal
-- Be direct and confident`,
+- Be concise in explanations, let the code speak`,
 
   mentor: `You are Alfred in Mentor mode. You are a patient teacher who helps developers understand concepts deeply.
-
-Your style:
 - Explain the "why" behind things
 - Use analogies and examples
-- Break complex topics into digestible pieces
-- Encourage questions and exploration
-- Build mental models, not just knowledge
-
-Response format:
-- Lead with explanation
-- Use examples liberally
-- Check for understanding`,
+- Break complex topics into digestible pieces`,
 
   reviewer: `You are Alfred in Reviewer mode. You are a meticulous code reviewer focused on quality.
-
-Your style:
 - Identify bugs, security issues, and performance problems
 - Suggest concrete improvements with code examples
-- Prioritize feedback (critical → important → nice-to-have)
-- Be constructive, not harsh
-- Explain why something is an issue
-
-Response format:
-- Structured feedback with categories
-- Severity levels
-- Code suggestions for each issue`,
+- Prioritize feedback (critical → important → nice-to-have)`,
 };
 
 export async function POST(request: NextRequest) {
   try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    
+    if (!apiKey || apiKey.trim() === '') {
+      console.error('ANTHROPIC_API_KEY is not set or empty');
+      return new Response(
+        JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { message, mode = 'builder', history = [] } = await request.json();
 
     if (!message) {
-      return new Response(JSON.stringify({ error: 'Message is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!process.env.ANTHROPPI_KEY) {
-      return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Message is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // Build messages array
-    const messages: Anthropic.MessageParam[] = [
+    const messages = [
       ...history.map((msg: { role: string; content: string }) => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
@@ -78,36 +47,80 @@ export async function POST(request: NextRequest) {
       { role: 'user' as const, content: message },
     ];
 
-    // Create streaming response
-    const stream = await anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: MODE_PROMPTS[mode as keyof typeof MODE_PROMPTS] || MODE_PROMPTS.builder,
-      messages,
+    // Call Anthropic API directly with fetch
+    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: MODE_PROMPTS[mode as keyof typeof MODE_PROMPTS] || MODE_PROMPTS.builder,
+        messages,
+        stream: true,
+      }),
     });
 
-    // Create a ReadableStream for the response
+    if (!anthropicResponse.ok) {
+      const errorText = await anthropicResponse.text();
+      console.error('Anthropic API error:', anthropicResponse.status, errorText);
+      return new Response(
+        JSON.stringify({ error: `API error: ${anthropicResponse.status}` }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Stream the response
     const encoder = new TextEncoder();
-    const readable = new ReadableStream({
+    const decoder = new TextDecoder();
+
+    const stream = new ReadableStream({
       async start(controller) {
+        const reader = anthropicResponse.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
+        }
+
         try {
-          for await (const event of stream) {
-            if (event.type === 'content_block_delta') {
-              const delta = event.delta;
-              if ('text' in delta) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: delta.text })}\n\n`));
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+                
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ text: parsed.delta.text })}\n\n`)
+                    );
+                  }
+                } catch {
+                  // Skip invalid JSON
+                }
               }
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
+          console.error('Stream error:', error);
           controller.error(error);
         }
       },
     });
 
-    return new Response(readable, {
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
