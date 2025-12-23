@@ -51,56 +51,57 @@ export const MODES: Record<AlfredMode, ModeConfig> = {
 // MODE INFERENCE
 // ============================================================================
 
-interface InferenceSignal {
-  pattern: RegExp | string[];
+interface InferenceResult {
   mode: AlfredMode;
   confidence: number;
 }
 
-const INFERENCE_SIGNALS: InferenceSignal[] = [
-  // Explicit review requestpattern: ['review', 'critique', 'check this', 'what do you think of'], mode: 'reviewer', confidence: 0.9 },
-  
-  // Explicit learning requests
-  { pattern: ['explain', 'why', 'teach', 'how does', 'what is'], mode: 'mentor', confidence: 0.8 },
-  
-  // Build requests
-  { pattern: ['build', 'create', 'make', 'generate', 'implement', 'scaffold'], mode: 'builder', confidence: 0.85 },
-];
-
 /**
  * Infers the appropriate mode based on user message.
- * Returns mode and confidence score.
+ * Returns mode and confidence score, or null iot infer.
  */
-export function inferMode(message: string): { mode: AlfredMode; confidence: number } | null {
-  const lowerMessage = message.toLowerCase();
+export function inferMode(message: string): InferenceResult | null {
+  const lower = message.toLowerCase();
 
   // Check for code paste (likely review)
-  const hasCodeBlock = message.includes('```') || 
-                       /function\s+\w+\s*\(/.test(message) ||
-                       /const\s+\w+\s*=/.test(message);
-  
+  const hasCodeBlock = message.includes('```') ||
+    /function\s+\w+\s*\(/.test(message) ||
+    /const\s+\w+\s*=/.test(message);
+
   if (hasCodeBlock) {
     return { mode: 'reviewer', confidence: 0.85 };
   }
 
-  // Check inference signals
-  for (const signal of INFERENCE_SIGNALS) {
-    const patterns = Array.isArray(signal.pattern) ? signal.pattern : [signal.pattern.source];
-    
-    for (const pattern of patterns) {
-      if (lowerMessage.includes(pattern)) {
-        return { mode: signal.mode, confidence: signal.confidence };
-      }
+  // Reviewer signals
+  const reviewerPatterns = ['review', 'critique', 'check this', 'what do you think'];
+  for (const pattern of reviewerPatterns) {
+    if (lower.includes(pattern)) {
+      return { mode: 'reviewer', confidence: 0.9 };
     }
   }
 
-  // Default: cannot infer confidently
+  // Mentor signals
+  const mentorPatterns = ['explain', 'why', 'teach', 'how does', 'what is'];
+  for (const pattern of mentorPatterns) {
+    if (lower.includes(pattern)) {
+      return { mode: 'mentor', confidence: 0.8 };
+    }
+  }
+
+  // Builder signals
+  const builderPatterns = ['build', 'create', 'make', 'generate', 'implement', 'scaffold'];
+  for (const pattern of builderPatterns) {
+    if (lower.includes(pattern)) {
+      return { mode: 'builder', confidence: 0.85 };
+    }
+  }
+
+  // Cannot infer confidently
   return null;
 }
 
 /**
  * Infers skill level from message patterns.
- * Uses weighted signal matching.
  */
 export function inferSkillLevel(messages: Message[]): SkillLevel {
   if (messages.length === 0) {
@@ -110,26 +111,24 @@ export function inferSkillLevel(messages: Message[]): SkillLevel {
   const userMessages = messages.filter(m => m.role === 'user');
   const combinedText = userMessages.map(m => m.content).join(' ').toLowerCase();
 
-  const signals = {
-    experienced: [
-      'architecture', 'refactor', 'dependency injection', 'composition',
-      'abstraction', 'interface', 'type system', 'monorepo', 'ci/cd',
-      'deployment', 'optimization', 'complexity', 'tradeoff', 'scalability',
-    ],
-    beginner: [
-      'how do i', 'what is', "don't understand", "doesn't work",
-      'error', 'help me', 'tutorial', 'beginner', 'new to', 'first time',
-    ],
-  };
+  const experiencedSignals = [
+    'architecture', 'refactor', 'dependency injection', 'composition',
+    'abstraction', 'interface', 'type system', 'monorepo', 'ci/cd',
+    'deployment', 'optimization', 'complexity', 'tradeoff', 'scalability',
+  ];
 
-  const experiencedScore = signals.experienced.filter(s => combinedText.includes(s)).length;
-  const beginnerScore = signals.beginner.filter(s => combinedText.includes(s)).length;
+  const beginnerSignals = [
+    'how do i', 'what is', "don't understand", "doesn't work",
+    'error', 'help me', 'tutorial', 'beginner', 'new to', 'first time',
+  ];
 
-  // Weighted decision
+  const experiencedScore = experiencedSignals.filter(s => combinedText.includes(s)).length;
+  const beginnerScore = beginnerSignals.filter(s => combinedText.includes(s)).length;
+
   if (experiencedScore >= 3) return 'experienced';
   if (experiencedScore >= 2 && beginnerScore === 0) return 'experienced';
   if (beginnerScore >= 2 && experiencedScore < 2) return 'beginner';
-  
+
   return 'intermediate';
 }
 
@@ -160,7 +159,7 @@ export function shouldSwitchMode(
   message: string
 ): { shouldSwitch: boolean; suggestedMode?: AlfredMode; reason?: string } {
   const inferred = inferMode(message);
-  
+
   if (!inferred) {
     return { shouldSwitch: false };
   }
@@ -169,7 +168,6 @@ export function shouldSwitchMode(
     return { shouldSwitch: false };
   }
 
-  // Only switch if confidence is high enough
   if (inferred.confidence >= 0.8) {
     return {
       shouldSwitch: true,

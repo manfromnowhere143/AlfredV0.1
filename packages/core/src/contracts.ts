@@ -103,7 +103,7 @@ export function validateReviewOutput(
 /**
  * Sorts review issues by severity (critical first).
  */
-export function sortReviewIssues(issues: ReviewIs]): ReviewIssue[] {
+export function sortReviewIssues(issues: ReviewIssue[]): ReviewIssue[] {
   const severityOrder = { critical: 0, important: 1, optional: 2 };
   return [...issues].sort(
     (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
