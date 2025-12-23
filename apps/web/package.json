@@ -1,0 +1,25 @@
+{
+  "name": "@alfred/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@alfred/core": "workspace:*",
+    "@alfred/llm": "workspace:*",
+    "next": "^14.2.21",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.14",
+    "@types/react-dom": "^18.3.2",
+    "typescript": "^5.7.2"
+  }
+}
