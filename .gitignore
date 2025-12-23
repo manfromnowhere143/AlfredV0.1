@@ -51,3 +51,8 @@ tmp/
 
 # Local development
 .local/
+
+# Environment
+.env
+.env.local
+.env.*.local
