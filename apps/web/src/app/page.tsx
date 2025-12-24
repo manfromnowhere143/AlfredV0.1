@@ -15,6 +15,48 @@ interface Message {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// MARKDOWN RENDERER — Simple but effective
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderMarkdown(content: string): string {
+  if (!content) return '';
+  
+  let html = content
+    // Escape HTML first
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Code blocks with language
+    .replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+      const language = lang || 'text';
+      return `<div class="code-block"><div class="code-header">${language}</div><pre><code>${code.trim()}</code></pre></div>`;
+    })
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+    // Bold
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>')
+    // Lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul class="md-list">$&</ul>')
+    // Numbered lists
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // Paragraphs (double newline)
+    .replace(/\n\n/g, '</p><p>')
+    // Single newlines in regular text (not in code blocks)
+    .replace(/([^>])\n([^<])/g, '$1<br/>$2');
+
+  return `<p>${html}</p>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ICONS — Sacred Geometry
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -228,7 +270,7 @@ export default function Home() {
 
   const { sendMessage, isStreaming } = useStreamingChat();
 
-  // Viewport handling
+  // Viewport handling for mobile
   useEffect(() => {
     const updateViewport = () => {
       const vh = window.innerHeight * 0.01;
@@ -260,7 +302,7 @@ export default function Home() {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // Auto-scroll
+  // Auto-scroll to bottom
   useEffect(() => {
     if (messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -388,10 +430,14 @@ export default function Home() {
                 </div>
                 <div className="message-content">
                   <div className="message-sender">{message.role === 'alfred' ? 'Alfred' : 'You'}</div>
-                  <div className="message-text">
-                    <p>{message.content || '\u00A0'}</p>
-                    {streamingMessageId === message.id && <span className="cursor">▊</span>}
-                  </div>
+                  <div 
+                    className="message-text"
+                    dangerouslySetInnerHTML={{ 
+                      __html: message.content 
+                        ? renderMarkdown(message.content) + (streamingMessageId === message.id ? '<span class="cursor">▊</span>' : '')
+                        : '<p>&nbsp;</p>' + (streamingMessageId === message.id ? '<span class="cursor">▊</span>' : '')
+                    }}
+                  />
                 </div>
               </div>
             ))}
