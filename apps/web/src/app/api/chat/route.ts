@@ -1,16 +1,36 @@
 import { NextRequest } from 'next/server';
 import { inferMode, getSystemPrompt } from '@alfred/core';
+import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { getDb } from '@/lib/db';
 import { createConversation, createMessage, updateConversation } from '@alfred/database';
 
 type AlfredMode = 'builder' | 'mentor' | 'reviewer';
 type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
 
-// Local skill inference (simpler than core version)
+// Singleton LLM client
+let llmClient: ReturnType<typeof createLLMClient> | null = null;
+
+function getLLMClient() {
+  if (!llmClient) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+    
+    llmClient = createLLMClient({
+      apiKey,
+      model: (process.env.ANTHROPIC_MODEL as any) || 'claude-sonnet-4-20250514',
+      maxTokens: 8192,
+      temperature: 0.7,
+      maxRetries: 3,
+    });
+  }
+  return llmClient;
+}
+
+// Skill level inference from conversation history
 function inferSkillLevel(messages: Array<{ role: string; content: string }>): SkillLevel {
   const text = messages.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase();
-  const expSignals = ['architecture', 'refactor', 'dependency injection', 'monorepo', 'ci/cd'];
-  const begSignals = ['how do i', 'what is', "don't understand", 'help me', 'tutorial'];
+  const expSignals = ['architecture', 'refactor', 'dependency injection', 'monorepo', 'ci/cd', 'kubernetes', 'terraform'];
+  const begSignals = ['how do i', 'what is', "don't understand", 'help me', 'tutorial', 'explain'];
   const expScore = expSignals.filter(s => text.includes(s)).length;
   const begScore = begSignals.filter(s => text.includes(s)).length;
   if (expScore >= 2) return 'experienced';
@@ -20,11 +40,8 @@ function inferSkillLevel(messages: Array<{ role: string; content: string }>): Sk
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API key missing' }), { status: 500 });
-    }
-
+    const client = getLLMClient();
+    
     const body = await request.json();
     const { message, mode: requestedMode, history = [], conversationId } = body;
 
@@ -71,79 +88,64 @@ export async function POST(request: NextRequest) {
       console.warn('[Alfred] Database unavailable:', dbError);
     }
 
-    // Build messages for Claude
+    // Build messages for LLM
     const messages = history.map((m: { role: string; content: string }) => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
+      role: m.role === 'user' ? 'user' as const : 'assistant' as const,
       content: m.content,
     }));
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user' as const, content: message });
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: 'Claude API error' }), { status: 500 });
-    }
-
+    // Stream response
     const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
     let fullResponse = '';
 
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) { controller.close(); return; }
+        try {
+          const streamOptions: StreamOptions = {
+            onToken: (token: string) => {
+              fullResponse += token;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: token })}\n\n`));
+            },
+            onError: (error: Error) => {
+              console.error('[Alfred] Stream error:', error);
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+            },
+          };
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          await client.stream(
+            {
+              system: systemPrompt,
+              messages,
+              maxTokens: 8192,
+            },
+            streamOptions
+          );
 
-          for (const line of decoder.decode(value).split('\n')) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === 'content_block_delta' && data.delta?.text) {
-                  const text = data.delta.text;
-                  fullResponse += text;
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-                }
-              } catch {}
+          // Save response to database
+          if (convId && fullResponse) {
+            try {
+              const db = await getDb();
+              await createMessage(db, {
+                conversationId: convId,
+                role: 'alfred',
+                content: fullResponse,
+                mode,
+              });
+              await updateConversation(db, convId, { lastMessageAt: new Date() });
+            } catch (dbError) {
+              console.warn('[Alfred] Failed to save response:', dbError);
             }
           }
-        }
 
-        // Save response to database
-        if (convId && fullResponse) {
-          try {
-            const db = await getDb();
-            await createMessage(db, {
-              conversationId: convId,
-              role: 'alfred',
-              content: fullResponse,
-              mode,
-            });
-            await updateConversation(db, convId, { lastMessageAt: new Date() });
-          } catch (dbError) {
-            console.warn('[Alfred] Failed to save response:', dbError);
-          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('[Alfred] Stream failed:', error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`));
+          controller.close();
         }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId })}\n\n`));
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
       },
     });
 

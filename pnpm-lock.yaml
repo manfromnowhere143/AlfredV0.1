@@ -20,6 +20,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@alfred/api':
+        specifier: workspace:^
+        version: link:../../packages/api
       '@alfred/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -29,6 +32,12 @@ importers:
       '@alfred/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@alfred/memory':
+        specifier: workspace:^
+        version: link:../../packages/memory
+      '@alfred/rag':
+        specifier: workspace:^
+        version: link:../../packages/rag
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
