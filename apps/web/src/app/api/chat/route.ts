@@ -4,6 +4,7 @@ import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { getDb } from '@/lib/db';
 import { createConversation, createMessage, updateConversation, getOrCreateUser } from '@alfred/database';
 import { recordSkillSignals, recordStackPreferences, getContextForPrompt } from '@/lib/memory-service';
+import { buildRAGContext } from '@/lib/rag-service';
 
 type AlfredMode = 'builder' | 'mentor' | 'reviewer';
 type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
@@ -69,14 +70,12 @@ export async function POST(request: NextRequest) {
     // Database operations
     let convId = conversationId;
     let userId = clientUserId;
-    let userContext = '';
 
     try {
       const db = await getDb();
       
       // Get or create user
       if (!userId) {
-        // For now, use a default user or create anonymous
         const user = await getOrCreateUser(db, { externalId: 'anonymous' });
         if (user) {
           userId = user.id;
@@ -86,14 +85,25 @@ export async function POST(request: NextRequest) {
       // Get user context from memory
       if (userId) {
         try {
-          userContext = await getContextForPrompt(db, userId);
+          const userContext = await getContextForPrompt(db, userId);
           if (userContext) {
             systemPrompt += userContext;
-            console.log(`[Alfred] Added user context to prompt`);
+            console.log('[Alfred] Added user context to prompt');
           }
         } catch (memError) {
           console.warn('[Alfred] Memory context unavailable:', memError);
         }
+      }
+
+      // Get RAG context
+      try {
+        const ragContext = await buildRAGContext(db, message);
+        if (ragContext) {
+          systemPrompt += ragContext;
+          console.log('[Alfred] Added RAG context to prompt');
+        }
+      } catch (ragError) {
+        console.warn('[Alfred] RAG context unavailable:', ragError);
       }
 
       // Create conversation if needed
