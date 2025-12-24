@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { inferMode, getSystemPrompt } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { getDb } from '@/lib/db';
-import { createConversation, createMessage, updateConversation } from '@alfred/database';
+import { createConversation, createMessage, updateConversation, getOrCreateUser } from '@alfred/database';
+import { recordSkillSignals, recordStackPreferences, getContextForPrompt } from '@/lib/memory-service';
 
 type AlfredMode = 'builder' | 'mentor' | 'reviewer';
 type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     const client = getLLMClient();
     
     const body = await request.json();
-    const { message, mode: requestedMode, history = [], conversationId } = body;
+    const { message, mode: requestedMode, history = [], conversationId, userId: clientUserId } = body;
 
     if (!message) {
       return new Response(JSON.stringify({ error: 'Message required' }), { status: 400 });
@@ -59,30 +60,72 @@ export async function POST(request: NextRequest) {
       { role: 'user', content: message }
     ];
     const skillLevel = inferSkillLevel(allMessages);
-    const systemPrompt = getSystemPrompt(mode, { skillLevel });
+    
+    // Base system prompt
+    let systemPrompt = getSystemPrompt(mode, { skillLevel });
 
     console.log(`[Alfred] Mode: ${mode} (${confidence.toFixed(2)}) | Skill: ${skillLevel}`);
 
-    // Database: Get or create conversation
+    // Database operations
     let convId = conversationId;
+    let userId = clientUserId;
+    let userContext = '';
+
     try {
       const db = await getDb();
       
+      // Get or create user
+      if (!userId) {
+        // For now, use a default user or create anonymous
+        const user = await getOrCreateUser(db, { externalId: 'anonymous' });
+        if (user) {
+          userId = user.id;
+        }
+      }
+
+      // Get user context from memory
+      if (userId) {
+        try {
+          userContext = await getContextForPrompt(db, userId);
+          if (userContext) {
+            systemPrompt += userContext;
+            console.log(`[Alfred] Added user context to prompt`);
+          }
+        } catch (memError) {
+          console.warn('[Alfred] Memory context unavailable:', memError);
+        }
+      }
+
+      // Create conversation if needed
       if (!convId) {
-        const conv = await createConversation(db, { mode });
+        const conv = await createConversation(db, { 
+          mode,
+          userId: userId || undefined,
+        });
         if (conv) {
           convId = conv.id;
           console.log(`[Alfred] New conversation: ${convId}`);
         }
       }
 
+      // Save user message
       if (convId) {
-        await createMessage(db, {
+        const savedMsg = await createMessage(db, {
           conversationId: convId,
           role: 'user',
           content: message,
           mode,
         });
+
+        // Record skill signals and stack preferences (async, don't wait)
+        if (userId) {
+          recordSkillSignals(db, userId, message, convId, savedMsg?.id).catch(e => 
+            console.warn('[Alfred] Failed to record skill signals:', e)
+          );
+          recordStackPreferences(db, userId, message, convId).catch(e =>
+            console.warn('[Alfred] Failed to record stack preferences:', e)
+          );
+        }
       }
     } catch (dbError) {
       console.warn('[Alfred] Database unavailable:', dbError);
@@ -138,7 +181,10 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+            conversationId: convId,
+            userId,
+          })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
@@ -156,6 +202,7 @@ export async function POST(request: NextRequest) {
         'X-Alfred-Mode': mode,
         'X-Alfred-Skill': skillLevel,
         'X-Alfred-Conversation': convId || '',
+        'X-Alfred-User': userId || '',
       },
     });
   } catch (error) {

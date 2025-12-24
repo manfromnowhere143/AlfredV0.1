@@ -789,3 +789,28 @@ export async function incrementUsage(
 
   return updated;
 }
+
+// ============================================================================
+// USER HELPERS
+// ============================================================================
+
+export async function getOrCreateUser(
+  client: DatabaseClient,
+  input: { externalId?: string; email?: string }
+) {
+  // Try to find existing user
+  if (input.externalId) {
+    const existing = await getUserByExternalId(client, input.externalId);
+    if (existing) return existing;
+  }
+  if (input.email) {
+    const existing = await getUserByEmail(client, input.email);
+    if (existing) return existing;
+  }
+  
+  // Create new user
+  return createUser(client, {
+    externalId: input.externalId,
+    email: input.email,
+  });
+}
