@@ -6,7 +6,6 @@
  */
 
 import type {
-  ApiRequest,
   ApiResponse,
   ResponseMeta,
   StartConversationRequest,
@@ -23,23 +22,12 @@ import type {
 import {
   AlfredError,
   toAlfredError,
-  ErrorCodes,
   notFoundError,
 } from './errors';
 
-import {
-  validate,
-  validateOrThrow,
-  string,
-  oneOf,
-  array,
-  Schema,
-  ALFRED_MODES,
-} from './validation';
+import { createLogger, Logger } from './logger';
 
-import { createLogger, Logger, startMeasure, endMeasure } from './logger';
-
-import { MODES, DEFAULT_MODE, inferMode, announceModeSwtich } from '@alfred/core';
+import { DEFAULT_MODE, inferMode, announceModeSwtich } from '@alfred/core';
 import type { AlfredMode } from '@alfred/core';
 
 // ============================================================================
@@ -170,25 +158,15 @@ interface ConversationState {
   createdAt: Date;
 }
 
-const startConversationSchema: Schema<StartConversationRequest> = {
-  userId: string({ optional: true }),
-  mode: oneOf(ALFRED_MODES, { optional: true }),
-  projectContext: () => ({ success: true, errors: [] }), // TODO: nested validation
-} as Schema<StartConversationRequest>;
-
-export const handleStartConversation: Handler
-  StartConversationRequest,
-  ApiResponse<StartConversationResponse>
-> = async (ctx, request) => {
-  const validated = validateOrThrow(request, startConversationSchema);
-  
+export const handleStartConversation: Handler<StartConversationRequest, ApiResponse<StartConversationResponse>> = async (ctx, request) => {
   const conversationId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const mode = validated.mode || DEFAULT_MODE;
+  const mode: AlfredMode = (request.mode as AlfredMode) || DEFAULT_MODE;
+  const userId = request.userId as string | undefined;
 
   const state: ConversationState = {
     id: conversationId,
-    userId: validated.userId,
+    userId,
     mode,
     messages: [],
     createdAt: new Date(),
@@ -217,25 +195,17 @@ function generateGreeting(mode: AlfredMode): string {
   return greetings[mode];
 }
 
-const sendMessageSchema: Schema<SendMessageRequest> = {
-  conversationId: string({ minLength: 1 }),
-  content: string({ minLength: 1, maxLength: 100000 }),
-  attachments: array(() => ({ success: true, errors: [] }), { optional: true }),
-} as Schema<SendMessageRequest>;
-
-export const handleSendMessage: Handler
-  SendMessageRequest,
-  ApiResponse<SendMessageResponse>
-> = async (ctx, request) => {
-  const validated = validateOrThrow(request, sendMessageSchema);
+export const handleSendMessage: Handler<SendMessageRequest, ApiResponse<SendMessageResponse>> = async (ctx, request) => {
+  const conversationId = request.conversationId as string;
+  const content = request.content as string;
   
-  const conversation = conversations.get(validated.conversationId);
+  const conversation = conversations.get(conversationId);
   if (!conversation) {
-    throw notFoundError('conversation', validated.conversationId);
+    throw notFoundError('conversation', conversationId);
   }
 
   // Check for mode switch
-  const inferredMode = inferMode(validated.content);
+  const inferredMode = inferMode(content);
   let modeChanged = false;
   let currentMode = conversation.mode;
 
@@ -248,11 +218,11 @@ export const handleSendMessage: Handler
   // Store user message
   conversation.messages.push({
     role: 'user',
-    content: validated.content,
+    content,
   });
 
   // Generate response (placeholder - would call LLM)
-  const responseContent = generateResponse(validated.content, currentMode, modeChanged);
+  const responseContent = generateResponse(currentMode, modeChanged);
 
   // Store alfred message
   conversation.messages.push({
@@ -272,13 +242,9 @@ export const handleSendMessage: Handler
 };
 
 function generateResponse(
-  userMessage: string,
   mode: AlfredMode,
   modeChanged: boolean
 ): string {
-  // Placeholder response generation
-  // In production, this would call the LLM with appropriate context
-  
   let response = '';
   
   if (modeChanged) {
@@ -313,37 +279,30 @@ function generateSuggestions(mode: AlfredMode): string[] {
 // MODE HANDLERS
 // ============================================================================
 
-const switchModeSchema: Schema<SwitchModeRequest> = {
-  conversationId: string({ minLength: 1 }),
-  mode: oneOf(ALFRED_MODES),
-  reason: string({ optional: true }),
-} as Schema<SwitchModeRequest>;
-
-export const handleSwitchMode: Handler
-  SwitchModeRequest,
-  ApiResponse<SwitchModeResponse>
-> = async (ctx, request) => {
-  const validated = validateOrThrow(request, switchModeSchema);
+export const handleSwitchMode: Handler<SwitchModeRequest, ApiResponse<SwitchModeResponse>> = async (ctx, request) => {
+  const conversationId = request.conversationId as string;
+  const newMode = request.mode as AlfredMode;
+  const reason = request.reason as string | undefined;
   
-  const conversation = conversations.get(validated.conversationId);
+  const conversation = conversations.get(conversationId);
   if (!conversation) {
-    throw notFoundError('conversation', validated.conversationId);
+    throw notFoundError('conversation', conversationId);
   }
 
   const previousMode = conversation.mode;
-  conversation.mode = validated.mode;
+  conversation.mode = newMode;
 
-  const announcement = announceModeSwtich(validated.mode, validated.reason);
+  const announcement = announceModeSwtich(newMode, reason);
 
   ctx.logger.info('Mode switched', {
-    conversationId: validated.conversationId,
+    conversationId,
     previousMode,
-    newMode: validated.mode,
+    newMode,
   });
 
   return successResponse(ctx, {
     previousMode,
-    currentMode: validated.mode,
+    currentMode: newMode,
     announcement,
   });
 };
@@ -352,29 +311,18 @@ export const handleSwitchMode: Handler
 // REVIEW HANDLERS
 // ============================================================================
 
-const reviewCodeSchema: Schema<ReviewCodeRequest> = {
-  conversationId: string({ minLength: 1 }),
-  code: string({ minLength: 1, maxLength: 100000 }),
-  language: string({ minLength: 1 }),
-  context: string({ optional: true }),
-  focusAreas: array(string(), { optional: true }),
-} as Schema<ReviewCodeRequest>;
-
-export const handleReviewCode: Handler
-  ReviewCodeRequest,
-  ApiResponse<ReviewCodeResponse>
-> = async (ctx, request) => {
-  const validated = validateOrThrow(request, reviewCodeSchema);
+export const handleReviewCode: Handler<ReviewCodeRequest, ApiResponse<ReviewCodeResponse>> = async (ctx, request) => {
+  const conversationId = request.conversationId as string;
+  const code = request.code as string;
   
-  const conversation = conversations.get(validated.conversationId);
+  const conversation = conversations.get(conversationId);
   if (!conversation) {
-    throw notFoundError('conversation', validated.conversationId);
+    throw notFoundError('conversation', conversationId);
   }
 
-  // Placeholder review (would use LLM + RAG in production)
   const reviewId = `review_${Date.now()}`;
   
-  const issues = analyzeCode(validated.code, validated.language);
+  const issues = analyzeCode(code);
 
   return successResponse(ctx, {
     reviewId,
@@ -387,14 +335,9 @@ export const handleReviewCode: Handler
   });
 };
 
-function analyzeCode(
-  code: string,
-  language: string
-): ReviewCodeResponse['issues'] {
-  // Placeholder analysis
+function analyzeCode(code: string): ReviewCodeResponse['issues'] {
   const issues: ReviewCodeResponse['issues'] = [];
 
-  // Check for common issues
   if (!code.includes('try') && !code.includes('catch')) {
     issues.push({
       severity: 'important',
@@ -429,10 +372,7 @@ function analyzeCode(
 // HEALTH HANDLERS
 // ============================================================================
 
-export const handleHealthCheck: Handler
-  void,
-  ApiResponse<HealthCheckResponse>
-> = async (ctx) => {
+export const handleHealthCheck: Handler<void, ApiResponse<HealthCheckResponse>> = async (ctx) => {
   const uptime = process.uptime();
 
   return successResponse(ctx, {

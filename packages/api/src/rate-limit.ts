@@ -121,7 +121,7 @@ function getBucket(
     return existing;
   }
 
-  const tierConfig = limiter.config.tiers[tier] || limiter.config.tiers[limiter.config.defaultTier];
+  const tierConfig = limiter.config.tiers[tier] ?? limiter.config.tiers[limiter.config.defaultTier]; if (!tierConfig) throw new Error(`Unknown tier: ${tier}`);
   const bucket = createBucket(tierConfig);
   limiter.buckets.set(key, bucket);
   return bucket;
@@ -156,7 +156,7 @@ export function getRemainingTokens(
 ): number {
   const bucket = limiter.buckets.get(key);
   if (!bucket) {
-    return limiter.config.tiers[limiter.config.defaultTier].capacity;
+    const defaultConfig = limiter.config.tiers[limiter.config.defaultTier]; return defaultConfig ? defaultConfig.capacity : 0;
   }
 
   const refilled = refillBucket(bucket);

@@ -5,7 +5,7 @@
  * Approximations for fast, offline calculations.
  */
 
-import type { ModelId, Usage, CostEstimate, Message, MODEL_INFO } from './types';
+import type { ModelId, Usage, CostEstimate, Message } from './types';
 
 // ============================================================================
 // MODEL PRICING (as of 2024)
@@ -248,10 +248,10 @@ export function truncateConversation(
 
   // Start from the end (most recent)
   for (let i = messages.length - 1; i >= 0; i--) {
-    const msgTokens = messageTokens[i];
+    const msgTokens = messageTokens[i] ?? 0;
 
     if (currentTokens + msgTokens <= availableForMessages || truncated.length < minKeep) {
-      truncated.unshift(messages[i]);
+      const msg = messages[i]; if (msg) truncated.unshift(msg);
       currentTokens += msgTokens;
     } else {
       removedCount++;

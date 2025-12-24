@@ -61,7 +61,7 @@ export function updateProjectContext(
   };
 }
 
-export function setStack(
+export function setProjectStack(
   project: ProjectMemory,
   stack: Partial<StackDefinition>
 ): ProjectMemory {

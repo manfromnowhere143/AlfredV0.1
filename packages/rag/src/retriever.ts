@@ -5,15 +5,15 @@
  * Implements BM25 for keyword matching + vector similarity.
  */
 
-import type {
+import {
   Chunk,
   EmbeddedChunk,
   RetrievalQuery,
   RetrievalResult,
   RetrievalOptions,
   RetrievalResponse,
-  ScoreBreakdown,
   DEFAULT_RETRIEVAL_OPTIONS,
+  ScoreBreakdown,
 } from './types';
 import { cosineSimilarity } from './similarity';
 
@@ -33,7 +33,7 @@ export function hybridRetrieve(
   const startTime = Date.now();
 
   // Apply filters
-  let candidates = applyFilters(chunks, query.filters);
+  const candidates = applyFilters(chunks, query.filters);
 
   // Calculate semantic scores
   const semanticScores = calculateSemanticScores(candidates, queryEmbedding);
@@ -45,8 +45,7 @@ export function hybridRetrieve(
   const results = combineScores(
     candidates,
     semanticScores,
-    keywordScores,
-    options
+    keywordScores
   );
 
   // Filter by minimum score
@@ -162,8 +161,8 @@ function calculateIDF(chunks: Chunk[], terms: string[]): Map<string, number> {
 
   for (const term of terms) {
     // Count documents containing this term
-    const docsWithTerm = chunks.filter(chunk =>
-      tokenize(chunk.content).includes(term)
+    const docsWithTerm = chunks.filter(c =>
+      tokenize(c.content).includes(term)
     ).length;
 
     // IDF formula: log((N - n + 0.5) / (n + 0.5))
@@ -208,8 +207,7 @@ export function tokenize(text: string): string[] {
 function combineScores(
   chunks: EmbeddedChunk[],
   semanticScores: Map<string, number>,
-  keywordScores: Map<string, number>,
-  options: RetrievalOptions
+  keywordScores: Map<string, number>
 ): RetrievalResult[] {
   const results: RetrievalResult[] = [];
 
@@ -275,7 +273,7 @@ function applyFilters(
     return chunks;
   }
 
-  return chunks.filter(chunk => {
+  return chunks.filter(() => {
     // Source type filter
     if (filters.sourceTypes && filters.sourceTypes.length > 0) {
       // Would need document reference to filter by source type
@@ -317,7 +315,8 @@ export function applyDiversitySampling(
   const remaining = [...results];
 
   // Always include the top result
-  selected.push(remaining.shift()!);
+  const first = remaining.shift();
+  if (first) selected.push(first);
 
   while (selected.length < limit && remaining.length > 0) {
     let bestIndex = 0;
@@ -325,6 +324,7 @@ export function applyDiversitySampling(
 
     for (let i = 0; i < remaining.length; i++) {
       const candidate = remaining[i];
+      if (!candidate) continue;
 
       // Calculate maximum similarity to already selected results
       const maxSimilarity = Math.max(
@@ -342,13 +342,16 @@ export function applyDiversitySampling(
 
     // Update diversity score in breakdown
     const selectedResult = remaining[bestIndex];
+    if (!selectedResult) break;
+    
     selectedResult.scoreBreakdown.diversity = 1 - (
       Math.max(...selected.map(s =>
         contentSimilarity(selectedResult.chunk.content, s.chunk.content)
       ))
     );
 
-    selected.push(remaining.splice(bestIndex, 1)[0]);
+    const spliced = remaining.splice(bestIndex, 1)[0];
+    if (spliced) selected.push(spliced);
   }
 
   return selected;

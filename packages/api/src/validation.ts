@@ -5,8 +5,7 @@
  * Type-safe. Composable. No external dependencies.
  */
 
-import { AlfredError, ErrorCodes, missingFieldError, invalidTypeError } from './errors';
-import type { AlfredMode } from '@alfred/core';
+import { AlfredError, ErrorCodes } from './errors';
 
 // ============================================================================
 // VALIDATION RESULT

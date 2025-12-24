@@ -97,7 +97,6 @@ export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): n
  */
 export function reinforceMemory(entry: MemoryEntry): MemoryEntry {
   const now = new Date();
-  const currentRetention = calculateRetention(entry, now);
   
   // Confidence increases with access, but diminishing returns
   const confidenceBoost = ACCESS_STRENGTH_BONUS * (1 - entry.confidence);

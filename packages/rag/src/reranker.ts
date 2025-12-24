@@ -5,7 +5,7 @@
  * Implements cross-encoder simulation and multi-signal scoring.
  */
 
-import type { RetrievalResult, ScoreBreakdown } from './types';
+import type { RetrievalResult } from './types';
 import { tokenize } from './retriever';
 
 // ============================================================================
@@ -205,7 +205,7 @@ function calculateTermProximity(
 
   // Find all positions of each query term
   for (let i = 0; i < contentTerms.length; i++) {
-    const term = contentTerms[i];
+    const term = contentTerms[i]; if (!term) continue;
     if (queryTerms.includes(term)) {
       if (!positions.has(term)) {
         positions.set(term, []);
@@ -227,7 +227,7 @@ function calculateTermProximity(
 
   while (true) {
     // Get current positions
-    const currentPositions = positionArrays.map((arr, i) => arr[indices[i]]);
+    const currentPositions = positionArrays.map((arr, i) => arr[indices[i]!]!);
     const validPositions = currentPositions.filter(p => p !== undefined);
 
     if (validPositions.length < positions.size) {
@@ -240,9 +240,9 @@ function calculateTermProximity(
 
     // Advance the minimum position
     const minIndex = currentPositions.indexOf(min);
-    indices[minIndex]++;
+    indices[minIndex]!++;
 
-    if (indices[minIndex] >= positionArrays[minIndex].length) {
+    if (indices[minIndex]! >= positionArrays[minIndex]!.length) {
       break;
     }
   }
@@ -332,7 +332,7 @@ export function reciprocalRankFusion(
 
   for (const ranking of rankings) {
     for (let rank = 0; rank < ranking.length; rank++) {
-      const result = ranking[rank];
+      const result = ranking[rank]; if (!result) continue;
       const rrfScore = 1 / (k + rank + 1);
 
       if (scores.has(result.chunk.id)) {

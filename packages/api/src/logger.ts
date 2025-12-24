@@ -244,10 +244,9 @@ export function logRequestEnd(
   request: RequestLogContext,
   response: ResponseLogContext
 ): void {
-  const level = response.statusCode >= 500 ? 'error' :
                 response.statusCode >= 400 ? 'warn' : 'info';
 
-  logger[level]('Request completed', {
+  logger.info('Request completed', {
     method: request.method,
     path: request.path,
     statusCode: response.statusCode,

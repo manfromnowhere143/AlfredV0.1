@@ -27,9 +27,9 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   let normB = 0;
 
   for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    dotProduct += (a[i] ?? 0) * (b[i] ?? 0);
+    normA += (a[i] ?? 0) * (a[i] ?? 0);
+    normB += (b[i] ?? 0) * (b[i] ?? 0);
   }
 
   const mag = Math.sqrt(normA) * Math.sqrt(normB);
@@ -62,7 +62,7 @@ export function euclideanDistance(a: number[], b: number[]): number {
 
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    const diff = a[i] - b[i];
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
     sum += diff * diff;
   }
 
@@ -91,7 +91,7 @@ export function dotProduct(a: number[], b: number[]): number {
 
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    sum += a[i] * b[i];
+    sum += (a[i] ?? 0) * (b[i] ?? 0);
   }
 
   return sum;
@@ -111,7 +111,7 @@ export function manhattanDistance(a: number[], b: number[]): number {
 
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    sum += Math.abs(a[i] - b[i]);
+    sum += Math.abs((a[i] ?? 0) - (b[i] ?? 0));
   }
 
   return sum;
@@ -149,7 +149,7 @@ export function addVectors(a: number[], b: number[]): number[] {
     throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`);
   }
 
-  return a.map((v, i) => v + b[i]);
+  return a.map((v, i) => v + (b[i] ?? 0));
 }
 
 /**
@@ -160,7 +160,7 @@ export function subtractVectors(a: number[], b: number[]): number[] {
     throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`);
   }
 
-  return a.map((v, i) => v - b[i]);
+  return a.map((v, i) => v - (b[i] ?? 0));
 }
 
 /**
@@ -178,7 +178,7 @@ export function averageVectors(vectors: number[][]): number[] {
     return [];
   }
 
-  const dimensions = vectors[0].length;
+  const dimensions = vectors[0]!.length;
   const sum = new Array(dimensions).fill(0);
 
   for (const vector of vectors) {
@@ -241,9 +241,9 @@ export function pairwiseSimilarity(
 
   for (let i = 0; i < n; i++) {
     for (let j = i; j < n; j++) {
-      const score = similarityFn(vectors[i], vectors[j]);
-      matrix[i][j] = score;
-      matrix[j][i] = score;
+      const score = similarityFn(vectors[i]!, vectors[j]!);
+      matrix[i]![j] = score;
+      matrix[j]![i] = score;
     }
   }
 

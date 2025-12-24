@@ -14,14 +14,14 @@ import type {
   CompletionResponse,
   StreamOptions,
   Usage,
-  CostEstimate,
+
   ContentBlock,
   TextBlock,
   AlfredRequest,
   AlfredResponse,
-  AlfredContext,
-  DEFAULT_MODEL,
-  MODEL_INFO,
+
+
+
 } from './types';
 import { buildSystemPrompt } from './prompts';
 import { estimateCost } from './tokens';
@@ -112,7 +112,6 @@ export function createLLMClient(config: LLMConfig): LLMClient {
 
     let responseId = '';
     const contentBlocks: ContentBlock[] = [];
-    let currentBlockIndex = -1;
     let currentText = '';
     let inputTokens = 0;
     let outputTokens = 0;
@@ -143,7 +142,7 @@ export function createLLMClient(config: LLMConfig): LLMClient {
             break;
 
           case 'content_block_start':
-            currentBlockIndex = event.index;
+            // block index: event.index
             if (event.content_block.type === 'text') {
               currentText = '';
             }
@@ -394,7 +393,7 @@ function extractArtifacts(content: string): AlfredResponse['artifacts'] {
   while ((match = artifactRegex.exec(content)) !== null) {
     const language = match[1] || 'text';
     const title = match[2] || `Code (${language})`;
-    const code = match[3].trim();
+    const code = (match[3] || "").trim();
 
     if (code.length > 50) {
       artifacts.push({

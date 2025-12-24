@@ -9,7 +9,6 @@ import {
   Document,
   Chunk,
   ChunkType,
-  ChunkMetadata,
   ChunkingConfig,
   DEFAULT_CHUNKING_CONFIG,
 } from './types';
@@ -107,7 +106,7 @@ interface CodeBoundary {
 /**
  * Finds structural boundaries in code.
  */
-function findCodeBoundaries(content: string, language?: string): CodeBoundary[] {
+function findCodeBoundaries(content: string, _language?: string): CodeBoundary[] {
   const boundaries: CodeBoundary[] = [];
   const lines = content.split('\n');
 
@@ -123,10 +122,10 @@ function findCodeBoundaries(content: string, language?: string): CodeBoundary[] 
 
   let currentBoundary: CodeBoundary | null = null;
   let braceDepth = 0;
-  let inMultilineString = false;
+  const inMultilineString = false;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? '';
     const trimmedLine = line.trim();
 
     // Skip empty lines and comments when looking for starts
@@ -241,7 +240,7 @@ function splitMarkdownSections(content: string): MarkdownSection[] {
   let currentSection: MarkdownSection | null = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? '';
     const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
 
     if (headerMatch) {
@@ -340,7 +339,7 @@ export function chunkGeneric(
   let chunkStartLine = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? '';
     const lineTokens = estimateTokens(line);
 
     if (currentTokens + lineTokens > config.maxTokens && currentChunk.length > 0) {
@@ -383,9 +382,10 @@ function calculateOverlapLines(lines: string[], targetTokens: number): string[] 
   let tokens = 0;
 
   for (let i = lines.length - 1; i >= 0; i--) {
-    const lineTokens = estimateTokens(lines[i]);
+    const line = lines[i] ?? '';
+    const lineTokens = estimateTokens(line);
     if (tokens + lineTokens > targetTokens) break;
-    result.unshift(lines[i]);
+    result.unshift(line);
     tokens += lineTokens;
   }
 
@@ -434,7 +434,8 @@ function splitLargeChunk(
   let lineOffset = boundary.lineStart;
 
   for (let i = 0; i < lines.length; i++) {
-    currentLines.push(lines[i]);
+    const line = lines[i] ?? '';
+    currentLines.push(line);
 
     if (estimateTokens(currentLines.join('\n')) >= config.maxTokens) {
       chunks.push(createChunk(
