@@ -151,3 +151,9 @@ export interface RetrievedContext {
   relevanceScore: number;
   type: 'code' | 'architecture' | 'pattern' | 'decision';
 }
+
+// Message type for API
+export interface AlfredMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
