@@ -6,7 +6,7 @@
  */
 
 import { eq, and, desc, asc, gte, lte, isNull, sql } from 'drizzle-orm';
-import type { DatabaseClient, Transaction } from './client';
+import type { DatabaseClient } from './client';
 import * as schema from './schema';
 
 // ============================================================================
@@ -774,6 +774,7 @@ export async function incrementUsage(
   }
 ) {
   const record = await getOrCreateUsageRecord(client, userId, periodType);
+  if (!record) throw new Error("Failed to create usage record");
 
   const [updated] = await client.db
     .update(schema.usageRecords)

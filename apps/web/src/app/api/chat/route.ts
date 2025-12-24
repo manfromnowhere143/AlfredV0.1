@@ -1,5 +1,22 @@
 import { NextRequest } from 'next/server';
-import { inferMode, inferSkillLevel, getSystemPrompt, type AlfredMessage } from '@alfred/core';
+import { inferMode, getSystemPrompt } from '@alfred/core';
+import { getDb } from '@/lib/db';
+import { createConversation, createMessage, updateConversation } from '@alfred/database';
+
+type AlfredMode = 'builder' | 'mentor' | 'reviewer';
+type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
+
+// Local skill inference (simpler than core version)
+function inferSkillLevel(messages: Array<{ role: string; content: string }>): SkillLevel {
+  const text = messages.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase();
+  const expSignals = ['architecture', 'refactor', 'dependency injection', 'monorepo', 'ci/cd'];
+  const begSignals = ['how do i', 'what is', "don't understand", 'help me', 'tutorial'];
+  const expScore = expSignals.filter(s => text.includes(s)).length;
+  const begScore = begSignals.filter(s => text.includes(s)).length;
+  if (expScore >= 2) return 'experienced';
+  if (begScore >= 2) return 'beginner';
+  return 'intermediate';
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,27 +26,52 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, mode: requestedMode, history = [] } = body;
+    const { message, mode: requestedMode, history = [], conversationId } = body;
 
     if (!message) {
       return new Response(JSON.stringify({ error: 'Message required' }), { status: 400 });
     }
 
-    // inferMode can return null, so handle that
+    // Infer mode and skill
     const inference = inferMode(message);
-    const mode = requestedMode || inference?.mode || 'mentor';
+    const mode: AlfredMode = requestedMode || inference?.mode || 'mentor';
     const confidence = inference?.confidence ?? 0.5;
-    const reason = inference?.reason || 'Default fallback';
     
-    const allMessages: AlfredMessage[] = [
-      ...history.map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user' as const, content: message }
+    const allMessages = [
+      ...history.map((m: any) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message }
     ];
     const skillLevel = inferSkillLevel(allMessages);
     const systemPrompt = getSystemPrompt(mode, { skillLevel });
 
-    console.log(`[Alfred] Mode: ${mode} (${confidence.toFixed(2)}) | Skill: ${skillLevel} | Reason: ${reason}`);
+    console.log(`[Alfred] Mode: ${mode} (${confidence.toFixed(2)}) | Skill: ${skillLevel}`);
 
+    // Database: Get or create conversation
+    let convId = conversationId;
+    try {
+      const db = await getDb();
+      
+      if (!convId) {
+        const conv = await createConversation(db, { mode });
+        if (conv) {
+          convId = conv.id;
+          console.log(`[Alfred] New conversation: ${convId}`);
+        }
+      }
+
+      if (convId) {
+        await createMessage(db, {
+          conversationId: convId,
+          role: 'user',
+          content: message,
+          mode,
+        });
+      }
+    } catch (dbError) {
+      console.warn('[Alfred] Database unavailable:', dbError);
+    }
+
+    // Build messages for Claude
     const messages = history.map((m: { role: string; content: string }) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       content: m.content,
@@ -58,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
+    let fullResponse = '';
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -73,12 +116,32 @@ export async function POST(request: NextRequest) {
               try {
                 const data = JSON.parse(line.slice(6));
                 if (data.type === 'content_block_delta' && data.delta?.text) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: data.delta.text })}\n\n`));
+                  const text = data.delta.text;
+                  fullResponse += text;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
                 }
               } catch {}
             }
           }
         }
+
+        // Save response to database
+        if (convId && fullResponse) {
+          try {
+            const db = await getDb();
+            await createMessage(db, {
+              conversationId: convId,
+              role: 'alfred',
+              content: fullResponse,
+              mode,
+            });
+            await updateConversation(db, convId, { lastMessageAt: new Date() });
+          } catch (dbError) {
+            console.warn('[Alfred] Failed to save response:', dbError);
+          }
+        }
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId })}\n\n`));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       },
@@ -90,7 +153,7 @@ export async function POST(request: NextRequest) {
         'Cache-Control': 'no-cache',
         'X-Alfred-Mode': mode,
         'X-Alfred-Skill': skillLevel,
-        'X-Alfred-Reason': reason,
+        'X-Alfred-Conversation': convId || '',
       },
     });
   } catch (error) {
