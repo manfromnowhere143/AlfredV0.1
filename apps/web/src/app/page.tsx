@@ -46,8 +46,6 @@ interface CodeBlock {
 // CODE DETECTION & RENDERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const RENDERABLE_LANGUAGES = ['jsx', 'tsx', 'react', 'html', 'svg', 'javascript', 'js'];
-
 function extractCodeBlocks(content: string): { text: string; blocks: CodeBlock[] } {
   const blocks: CodeBlock[] = [];
   let blockIndex = 0;
@@ -99,15 +97,25 @@ function renderReactCode(code: string): string {
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    #root { min-height: 100vh; }
+    html, body { 
+      width: 100%; 
+      max-width: 100%; 
+      overflow-x: hidden; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+    }
+    #root { 
+      width: 100%; 
+      max-width: 100%; 
+      min-height: 100vh; 
+      overflow-x: hidden; 
+    }
     .error { padding: 20px; color: #ef4444; font-size: 14px; white-space: pre-wrap; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .animate-spin { animation: spin 1s linear infinite; }
@@ -135,6 +143,7 @@ function renderReactCode(code: string): string {
     const Menu = ({ className, size }) => <Icon className={className} size={size} d="M3 12h18M3 6h18M3 18h18" />;
     const Search = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>);
     const ShoppingCart = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>);
+    const ShoppingBag = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>);
     const User = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>);
     const Mail = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>);
     const Phone = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>);
@@ -159,8 +168,10 @@ function renderReactCode(code: string): string {
     try {
       const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(React.createElement(${componentName}));
+      window.parent.postMessage({ type: 'preview-success' }, '*');
     } catch(e) {
       document.getElementById('root').innerHTML = '<div class="error"><strong>Render Error:</strong>\\n' + e.message + '</div>';
+      window.parent.postMessage({ type: 'preview-error', error: e.message }, '*');
       console.error(e);
     }
   </script>
@@ -169,13 +180,16 @@ function renderReactCode(code: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CODE BLOCK WITH PREVIEW — Premium Design
+// CODE BLOCK WITH PREVIEW — STATE OF THE ART
+// Two-row layout: Header (language + copy) | Toolbar (toggle + expand)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme }) {
   const [view, setView] = useState<'code' | 'preview'>('code');
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -189,11 +203,11 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
     if (!block.isRenderable || !block.code) return '';
     
     if (block.language === 'html') {
-      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style></head><body>${block.code}</body></html>`;
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"><script src="https://cdn.tailwindcss.com"></script><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;max-width:100%;overflow-x:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style></head><body>${block.code}</body></html>`;
     }
     
     if (block.language === 'svg' || block.code.trim().startsWith('<svg')) {
-      return `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box;}body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fafafa 0%,#f0f0f0 100%);padding:40px;}svg{width:140px;height:140px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.1));}</style></head><body>${block.code.trim()}</body></html>`;
+      return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;max-width:100%;overflow-x:hidden;}body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fafafa 0%,#f0f0f0 100%);padding:40px;}svg{max-width:80%;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.1));}</style></head><body>${block.code.trim()}</body></html>`;
     }
     
     if (['jsx', 'tsx', 'react', 'javascript', 'js'].includes(block.language)) {
@@ -203,38 +217,80 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
     return '';
   }, [block]);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'preview-success') {
+        setIsLoading(false);
+        setHasError(false);
+      } else if (event.data?.type === 'preview-error') {
+        setIsLoading(false);
+        setHasError(true);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const handlePreviewClick = () => {
     setView('preview');
     setIsLoading(true);
+    setHasError(false);
     
-    // Fallback timeout - hide loading after 3s regardless
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-    }, 3000);
+    timeoutRef.current = setTimeout(() => setIsLoading(false), 3000);
   };
 
   const handleIframeLoad = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setIsLoading(false);
+    setTimeout(() => {
+      try {
+        const iframe = iframeRef.current;
+        if (iframe?.contentDocument?.body) {
+          const hasContent = iframe.contentDocument.body.innerHTML.trim().length > 0;
+          if (!hasContent) setHasError(true);
+        }
+        setIsLoading(false);
+      } catch {
+        setIsLoading(false);
+      }
+    }, 500);
   };
 
-  // Cleanup timeout on unmount
   useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, []);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isFullscreen]);
+
+  const lineCount = block.code.split('\n').length;
+
   return (
-    <div className={`code-block-container ${view === 'preview' ? 'preview-mode' : ''}`}>
-      <div className="code-block-header">
-        <div className="code-block-title">
-          <span className="code-dot" />
-          <span className="code-language">{block.language}</span>
+    <>
+      <div className={`code-block-container ${view === 'preview' ? 'preview-mode' : ''}`}>
+        {/* ROW 1: Header - Language badge + Copy button */}
+        <div className="code-block-header">
+          <div className="code-block-title">
+            <span className="code-language-badge">
+              <span className="code-dot" />
+              <span className="code-language">{block.language}</span>
+            </span>
+            <span className="code-meta">{lineCount} lines</span>
+          </div>
+          <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopy}>
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
         </div>
-        <div className="code-actions">
-          {block.isRenderable && block.code && (
+
+        {/* ROW 2: Toolbar - View toggle + Fullscreen (only for renderable) */}
+        {block.isRenderable && block.code && (
+          <div className="code-block-toolbar">
             <div className="view-toggle">
               <button 
                 className={`toggle-btn ${view === 'code' ? 'active' : ''}`}
@@ -251,45 +307,88 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
                 <span>Preview</span>
               </button>
             </div>
-          )}
-          <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopy}>
-            {copied ? <CheckIcon /> : <CopyIcon />}
-            <span>{copied ? 'Copied' : 'Copy'}</span>
-          </button>
-        </div>
-      </div>
-      
-      <div className="code-block-content">
-        {view === 'code' ? (
-          <div className="code-view">
-            <pre className="code-pre">
-              <code>{block.code}</code>
-            </pre>
-          </div>
-        ) : (
-          <div className="preview-view active">
-            {isLoading && (
-              <div className="preview-loading">
-                <div className="preview-spinner" />
-                <span>Rendering preview...</span>
-              </div>
-            )}
-            <iframe
-              ref={iframeRef}
-              srcDoc={previewContent}
-              sandbox="allow-scripts"
-              className={`preview-iframe ${isLoading ? 'loading' : ''}`}
-              title="Live Preview"
-              onLoad={handleIframeLoad}
-            />
+            <button 
+              className="expand-btn" 
+              onClick={() => setIsFullscreen(true)} 
+              title="Open in fullscreen"
+            >
+              <ExpandIcon />
+              <span>Expand</span>
+            </button>
           </div>
         )}
+        
+        {/* Content Area */}
+        <div className="code-block-content">
+          {view === 'code' ? (
+            <div className="code-view-wrapper">
+              <div className="code-fade-top" />
+              <div className="code-scroll-area">
+                <pre className="code-pre"><code>{block.code}</code></pre>
+              </div>
+              <div className="code-fade-bottom" />
+              {lineCount > 10 && (
+                <div className="scroll-hint">
+                  <ScrollIcon />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="preview-view">
+              {isLoading && (
+                <div className="preview-loading">
+                  <div className="preview-spinner" />
+                  <span>Rendering...</span>
+                </div>
+              )}
+              {hasError && !isLoading && (
+                <div className="preview-error">
+                  <div className="preview-error-icon">⚠️</div>
+                  <div className="preview-error-text">Preview failed to render</div>
+                  <button className="preview-retry-btn" onClick={handlePreviewClick}>Retry</button>
+                </div>
+              )}
+              <iframe
+                ref={iframeRef}
+                srcDoc={previewContent}
+                sandbox="allow-scripts"
+                className={`preview-iframe ${isLoading ? 'loading' : ''}`}
+                title="Live Preview"
+                onLoad={handleIframeLoad}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Fullscreen Modal */}
+      {isFullscreen && (
+        <div className="fullscreen-overlay">
+          <div className="fullscreen-header">
+            <div className="fullscreen-title">
+              <span className="code-dot" />
+              <span>{block.language} — Live Preview</span>
+            </div>
+            <button className="fullscreen-close" onClick={() => setIsFullscreen(false)}>
+              <CloseIconSvg />
+              <span>Close</span>
+            </button>
+          </div>
+          <div className="fullscreen-content">
+            <iframe
+              srcDoc={previewContent}
+              sandbox="allow-scripts"
+              className="fullscreen-iframe"
+              title="Fullscreen Preview"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
-// Mini icons for code block
+// Icons
 function CodeIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
 }
@@ -304,6 +403,18 @@ function CopyIcon() {
 
 function CheckIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+}
+
+function ExpandIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>;
+}
+
+function ScrollIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+
+function CloseIconSvg() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -335,13 +446,17 @@ function parseMarkdownToElements(content: string, theme: Theme, isStreaming: boo
             <div key={`code-${index}`} className="code-block-container streaming">
               <div className="code-block-header">
                 <div className="code-block-title">
-                  <span className="code-dot" />
-                  <span className="code-language">{block.language}</span>
+                  <span className="code-language-badge">
+                    <span className="code-dot streaming" />
+                    <span className="code-language">{block.language}</span>
+                  </span>
                 </div>
               </div>
               <div className="code-block-content">
-                <div className="code-view active">
-                  <pre className="code-pre"><code>{block.code}</code></pre>
+                <div className="code-view-wrapper">
+                  <div className="code-scroll-area">
+                    <pre className="code-pre"><code>{block.code}</code></pre>
+                  </div>
                 </div>
               </div>
             </div>
@@ -657,7 +772,7 @@ function useFileUpload() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SIDEBAR — Minimal & Elegant
+// SIDEBAR
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface SidebarProps {
@@ -764,7 +879,7 @@ function MessageContent({ content, isStreaming, theme }: { content: string; isSt
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN — The Experience
+// MAIN
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function Home() {
