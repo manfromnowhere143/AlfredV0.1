@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Component, ReactNode } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -40,6 +40,60 @@ interface CodeBlock {
   language: string;
   code: string;
   isRenderable: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ERROR BOUNDARY — Graceful Failure
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Alfred Error Boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="error-boundary-fallback">
+          <div className="error-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
+          </div>
+          <p className="error-title">Something went wrong</p>
+          <p className="error-message">Alfred encountered an issue. Please refresh to continue.</p>
+          <button 
+            className="error-retry-btn"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -134,8 +188,6 @@ function renderReactCode(code: string): string {
     const ArrowLeft = ({ className, size }) => <Icon className={className} size={size} d="M19 12H5M12 19l-7-7 7-7" />;
     const Heart = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>);
     const Star = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>);
-    const Shield = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>);
-    const Truck = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>);
     const Check = ({ className, size }) => <Icon className={className} size={size} d="M20 6L9 17l-5-5" />;
     const X = ({ className, size }) => <Icon className={className} size={size} d="M18 6L6 18M6 6l12 12" />;
     const Plus = ({ className, size }) => <Icon className={className} size={size} d="M12 5v14M5 12h14" />;
@@ -143,25 +195,10 @@ function renderReactCode(code: string): string {
     const Menu = ({ className, size }) => <Icon className={className} size={size} d="M3 12h18M3 6h18M3 18h18" />;
     const Search = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>);
     const ShoppingCart = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>);
-    const ShoppingBag = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>);
-    const User = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>);
-    const Mail = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>);
-    const Phone = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>);
     const ChevronRight = ({ className, size }) => <Icon className={className} size={size} d="M9 18l6-6-6-6" />;
     const ChevronLeft = ({ className, size }) => <Icon className={className} size={size} d="M15 18l-6-6 6-6" />;
     const ChevronDown = ({ className, size }) => <Icon className={className} size={size} d="M6 9l6 6 6-6" />;
     const ChevronUp = ({ className, size }) => <Icon className={className} size={size} d="M18 15l-6-6-6 6" />;
-    const ExternalLink = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>);
-    const Loader = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" /><line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" /><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" /><line x1="16.24" y1="7.76" x2="19.07" y2="4.93" /></svg>);
-    const Zap = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>);
-    const Award = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="12" cy="8" r="7" /><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" /></svg>);
-    const Gift = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>);
-    const Clock = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>);
-    const MapPin = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>);
-    const Settings = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>);
-    const Globe = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>);
-    const Code = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>);
-    const Terminal = ({ className, size }) => (<svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>);
     
     ${cleanCode}
     
@@ -180,8 +217,7 @@ function renderReactCode(code: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CODE BLOCK WITH PREVIEW — STATE OF THE ART
-// Two-row layout: Header (language + copy) | Toolbar (toggle + expand)
+// CODE BLOCK WITH PREVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme }) {
@@ -194,9 +230,13 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(block.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(block.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API not available
+    }
   };
 
   const previewContent = useMemo(() => {
@@ -271,9 +311,8 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
   const lineCount = block.code.split('\n').length;
 
   return (
-    <>
+    <ErrorBoundary fallback={<div className="code-block-error">Failed to render code block</div>}>
       <div className={`code-block-container ${view === 'preview' ? 'preview-mode' : ''}`}>
-        {/* ROW 1: Header - Language badge + Copy button */}
         <div className="code-block-header">
           <div className="code-block-title">
             <span className="code-language-badge">
@@ -288,7 +327,6 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
           </button>
         </div>
 
-        {/* ROW 2: Toolbar - View toggle + Fullscreen (only for renderable) */}
         {block.isRenderable && block.code && (
           <div className="code-block-toolbar">
             <div className="view-toggle">
@@ -318,7 +356,6 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
           </div>
         )}
         
-        {/* Content Area */}
         <div className="code-block-content">
           {view === 'code' ? (
             <div className="code-view-wrapper">
@@ -343,7 +380,7 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
               )}
               {hasError && !isLoading && (
                 <div className="preview-error">
-                  <div className="preview-error-icon">⚠️</div>
+                  <div className="preview-error-icon">⚠</div>
                   <div className="preview-error-text">Preview failed to render</div>
                   <button className="preview-retry-btn" onClick={handlePreviewClick}>Retry</button>
                 </div>
@@ -361,9 +398,8 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
         </div>
       </div>
 
-      {/* Fullscreen Modal */}
       {isFullscreen && (
-        <div className="fullscreen-overlay">
+        <div className="fullscreen-overlay" onClick={(e) => e.target === e.currentTarget && setIsFullscreen(false)}>
           <div className="fullscreen-header">
             <div className="fullscreen-title">
               <span className="code-dot" />
@@ -384,29 +420,29 @@ function CodeBlockWithPreview({ block, theme }: { block: CodeBlock; theme: Theme
           </div>
         </div>
       )}
-    </>
+    </ErrorBoundary>
   );
 }
 
-// Icons
+// Icons — Minimal, precise
 function CodeIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
 }
 
 function PlayIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
 }
 
 function CopyIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
 }
 
 function CheckIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="20 6 9 17 4 12"/></svg>;
 }
 
 function ExpandIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>;
 }
 
 function ScrollIcon() {
@@ -414,7 +450,7 @@ function ScrollIcon() {
 }
 
 function CloseIconSvg() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -493,7 +529,7 @@ function parseMarkdownToElements(content: string, theme: Theme, isStreaming: boo
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ICONS — Sacred Geometry
+// ICONS — Sacred Geometry (Refined)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AlfredIcon({ size = 64, animated = false }: { size?: number; animated?: boolean }) {
@@ -574,7 +610,7 @@ function UserAvatarIcon() {
 function SendIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -648,8 +684,8 @@ function useVoiceRecording() {
       mediaRecorder.onstop = () => { stream.getTracks().forEach(track => track.stop()); };
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
-      console.error('Failed to start recording:', err);
+    } catch {
+      // Microphone not available
     }
   }, []);
 
@@ -717,7 +753,9 @@ function useStreamingChat() {
             try {
               const parsed = JSON.parse(data);
               if (parsed.text) onChunk(parsed.text);
-            } catch {}
+            } catch {
+              // Invalid JSON chunk
+            }
           }
         }
       }
@@ -808,11 +846,11 @@ function Sidebar({
     <aside className={`sidebar ${isMobile ? 'mobile-sidebar' : 'desktop-sidebar'} ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-brand">
-          <AlfredIcon size={26} />
+          <AlfredIcon size={24} />
           <span className="brand-name">Alfred</span>
         </div>
         {isMobile && onClose && (
-          <button className="sidebar-close" onClick={onClose}><CloseIcon /></button>
+          <button className="sidebar-close" onClick={onClose} aria-label="Close sidebar"><CloseIcon /></button>
         )}
       </div>
 
@@ -856,7 +894,13 @@ function Sidebar({
       <div className="sidebar-footer">
         <div className="sidebar-theme-toggle">
           {(['dark', 'silver', 'light'] as const).map(t => (
-            <button key={t} className={`sidebar-theme-btn theme-btn-${t} ${theme === t ? 'active' : ''}`} onClick={() => onThemeChange(t)} title={t} />
+            <button 
+              key={t} 
+              className={`sidebar-theme-btn theme-btn-${t} ${theme === t ? 'active' : ''}`} 
+              onClick={() => onThemeChange(t)} 
+              title={t.charAt(0).toUpperCase() + t.slice(1)}
+              aria-label={`Switch to ${t} theme`}
+            />
           ))}
         </div>
       </div>
@@ -872,7 +916,7 @@ function MessageContent({ content, isStreaming, theme }: { content: string; isSt
   const elements = useMemo(() => parseMarkdownToElements(content, theme, isStreaming), [content, theme, isStreaming]);
   return (
     <div className={`message-text ${isStreaming ? 'streaming' : ''}`}>
-      {elements}
+      {elements.length > 0 ? elements : (isStreaming ? null : <span className="text-muted">...</span>)}
       {isStreaming && <span className="cursor" />}
     </div>
   );
@@ -895,6 +939,7 @@ export default function Home() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -902,6 +947,11 @@ export default function Home() {
   const { sendMessage, isStreaming } = useStreamingChat();
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
   const { attachments, fileInputRef, openFilePicker, handleFileSelect, removeAttachment, clearAttachments } = useFileUpload();
+
+  // Hydration safety
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -1021,104 +1071,128 @@ export default function Home() {
 
   const getAnimClass = (state: AnimationState, prefix: string) => state === 'idle' ? '' : `${prefix}-${state}`;
 
-  return (
-    <main className={`alfred-app theme-${theme} ${getAnimClass(pageState, 'page')}`} style={{ height: viewportHeight }}>
-      <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.html,.css" onChange={handleFileSelect} style={{ display: 'none' }} />
-
-      <button className="mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}><MenuIcon /></button>
-      <div className={`sidebar-backdrop ${mobileSidebarOpen ? 'visible' : ''}`} onClick={() => setMobileSidebarOpen(false)} />
-
-      <Sidebar 
-        conversations={conversations} currentConversation={currentConversation} 
-        onSelectConversation={setCurrentConversation} onNewChat={handleNewChat}
-        mode={mode} onModeChange={setMode} theme={theme} onThemeChange={setTheme}
-        isMobile={false} isOpen={true}
-      />
-      <Sidebar 
-        conversations={conversations} currentConversation={currentConversation}
-        onSelectConversation={setCurrentConversation} onNewChat={handleNewChat}
-        mode={mode} onModeChange={setMode} theme={theme} onThemeChange={setTheme}
-        isMobile={true} isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)}
-      />
-
-      <div className="main-content">
-        <div className="messages-area">
-          {messages.length === 0 ? (
-            <div className={`empty-state ${getAnimClass(emptyState, 'empty')}`}>
+  // Prevent hydration mismatch
+  if (!isClient) {
+    return (
+      <main className="alfred-app theme-dark page-active" style={{ height: '100vh' }}>
+        <div className="main-content">
+          <div className="messages-area">
+            <div className="empty-state empty-active">
               <div className="empty-logo">
-                <AlfredIcon size={160} animated />
+                <AlfredIcon size={120} />
               </div>
               <div className="empty-text">
                 <h1 className="empty-title">Alfred</h1>
                 <p className="empty-subtitle">Your AI development partner</p>
               </div>
             </div>
-          ) : (
-            <div className="messages-container">
-              {messages.map(message => (
-                <div key={message.id} className={`message-row ${message.role} ${message.animState}`}>
-                  <div className="message-avatar">
-                    {message.role === 'alfred' ? <AlfredAvatarIcon /> : <UserAvatarIcon />}
-                  </div>
-                  <div className="message-content">
-                    <div className="message-header">
-                      <span className="message-sender">{message.role === 'alfred' ? 'Alfred' : 'You'}</span>
-                    </div>
-                    {message.attachments && message.attachments.length > 0 && (
-                      <div className="message-attachments">
-                        {message.attachments.map(att => (
-                          <div key={att.id} className={`attachment-preview ${att.type}`}>
-                            {att.type === 'image' ? <img src={att.url} alt={att.name} /> : <span>📄</span>}
-                            <span className="attachment-name">{att.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <MessageContent content={message.content} isStreaming={streamingMessageId === message.id} theme={theme} />
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} className="scroll-anchor" />
-            </div>
-          )}
+          </div>
         </div>
+      </main>
+    );
+  }
 
-        <div className="input-area">
-          <div className={`input-container ${getAnimClass(inputState, 'input')}`}>
-            {attachments.length > 0 && (
-              <div className="attachments-preview">
-                {attachments.map(att => (
-                  <div key={att.id} className="attachment-chip">
-                    {att.type === 'image' ? <img src={att.url} alt={att.name} className="chip-thumbnail" /> : <span>📄</span>}
-                    <span className="chip-name">{att.name}</span>
-                    <button className="chip-remove" onClick={() => removeAttachment(att.id)}>×</button>
+  return (
+    <ErrorBoundary>
+      <main className={`alfred-app theme-${theme} ${getAnimClass(pageState, 'page')}`} style={{ height: viewportHeight }}>
+        <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.html,.css" onChange={handleFileSelect} style={{ display: 'none' }} aria-hidden="true" />
+
+        <button className="mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)} aria-label="Open menu"><MenuIcon /></button>
+        <div className={`sidebar-backdrop ${mobileSidebarOpen ? 'visible' : ''}`} onClick={() => setMobileSidebarOpen(false)} aria-hidden="true" />
+
+        <Sidebar 
+          conversations={conversations} currentConversation={currentConversation} 
+          onSelectConversation={setCurrentConversation} onNewChat={handleNewChat}
+          mode={mode} onModeChange={setMode} theme={theme} onThemeChange={setTheme}
+          isMobile={false} isOpen={true}
+        />
+        <Sidebar 
+          conversations={conversations} currentConversation={currentConversation}
+          onSelectConversation={setCurrentConversation} onNewChat={handleNewChat}
+          mode={mode} onModeChange={setMode} theme={theme} onThemeChange={setTheme}
+          isMobile={true} isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)}
+        />
+
+        <div className="main-content">
+          <div className="messages-area">
+            {messages.length === 0 ? (
+              <div className={`empty-state ${getAnimClass(emptyState, 'empty')}`}>
+                <div className="empty-logo">
+                  <AlfredIcon size={120} animated />
+                </div>
+                <div className="empty-text">
+                  <h1 className="empty-title">Alfred</h1>
+                  <p className="empty-subtitle">Your AI development partner</p>
+                </div>
+              </div>
+            ) : (
+              <div className="messages-container">
+                {messages.map(message => (
+                  <div key={message.id} className={`message-row ${message.role} ${message.animState}`}>
+                    <div className="message-avatar">
+                      {message.role === 'alfred' ? <AlfredAvatarIcon /> : <UserAvatarIcon />}
+                    </div>
+                    <div className="message-content">
+                      <div className="message-header">
+                        <span className="message-sender">{message.role === 'alfred' ? 'Alfred' : 'You'}</span>
+                      </div>
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="message-attachments">
+                          {message.attachments.map(att => (
+                            <div key={att.id} className={`attachment-preview ${att.type}`}>
+                              {att.type === 'image' ? <img src={att.url} alt={att.name} /> : <span className="file-icon">📄</span>}
+                              <span className="attachment-name">{att.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <MessageContent content={message.content} isStreaming={streamingMessageId === message.id} theme={theme} />
+                    </div>
                   </div>
                 ))}
+                <div ref={messagesEndRef} className="scroll-anchor" />
               </div>
             )}
-            
-            <div className="input-wrapper">
-              <button className="input-action" onClick={openFilePicker}><AttachIcon /></button>
-              <textarea 
-                ref={inputRef} 
-                className="input-field" 
-                placeholder="Message Alfred..." 
-                rows={1} 
-                value={inputValue} 
-                onChange={handleInputChange} 
-                onKeyDown={handleKeyDown} 
-                disabled={isStreaming} 
-              />
-              <button className={`input-action ${isRecording ? 'recording' : ''}`} onClick={isRecording ? stopRecording : startRecording}>
-                <MicIcon recording={isRecording} />
-              </button>
-              <button className="input-send" disabled={isStreaming || (!inputValue.trim() && attachments.length === 0)} onClick={handleSendMessage}>
-                <SendIcon />
-              </button>
+          </div>
+
+          <div className="input-area">
+            <div className={`input-container ${getAnimClass(inputState, 'input')}`}>
+              {attachments.length > 0 && (
+                <div className="attachments-preview">
+                  {attachments.map(att => (
+                    <div key={att.id} className="attachment-chip">
+                      {att.type === 'image' ? <img src={att.url} alt={att.name} className="chip-thumbnail" /> : <span className="file-icon">📄</span>}
+                      <span className="chip-name">{att.name}</span>
+                      <button className="chip-remove" onClick={() => removeAttachment(att.id)} aria-label="Remove attachment">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="input-wrapper">
+                <button className="input-action" onClick={openFilePicker} aria-label="Attach file"><AttachIcon /></button>
+                <textarea 
+                  ref={inputRef} 
+                  className="input-field" 
+                  placeholder="Message Alfred..." 
+                  rows={1} 
+                  value={inputValue} 
+                  onChange={handleInputChange} 
+                  onKeyDown={handleKeyDown} 
+                  disabled={isStreaming} 
+                  aria-label="Message input"
+                />
+                <button className={`input-action ${isRecording ? 'recording' : ''}`} onClick={isRecording ? stopRecording : startRecording} aria-label={isRecording ? 'Stop recording' : 'Start voice recording'}>
+                  <MicIcon recording={isRecording} />
+                </button>
+                <button className="input-send" disabled={isStreaming || (!inputValue.trim() && attachments.length === 0)} onClick={handleSendMessage} aria-label="Send message">
+                  <SendIcon />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </ErrorBoundary>
   );
 }
