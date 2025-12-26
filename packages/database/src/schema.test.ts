@@ -65,11 +65,11 @@ describe('schema enums', () => {
     expect(schema.userTierEnum.enumValues).toContain('enterprise');
   });
 
-  it('defines alfredModeEnum', () => {
-    expect(schema.alfredModeEnum).toBeDefined();
-    expect(schema.alfredModeEnum.enumValues).toContain('builder');
-    expect(schema.alfredModeEnum.enumValues).toContain('mentor');
-    expect(schema.alfredModeEnum.enumValues).toContain('reviewer');
+  it('defines alfredFacetEnum', () => {
+    expect(schema.alfredFacetEnum).toBeDefined();
+    expect(schema.alfredFacetEnum.enumValues).toContain('build');
+    expect(schema.alfredFacetEnum.enumValues).toContain('teach');
+    expect(schema.alfredFacetEnum.enumValues).toContain('review');
   });
 
   it('defines skillLevelEnum', () => {

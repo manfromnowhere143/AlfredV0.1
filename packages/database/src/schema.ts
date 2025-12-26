@@ -33,8 +33,8 @@ import { relations } from 'drizzle-orm';
 // ============================================================================
 
 export const userTierEnum = pgEnum('user_tier', ['free', 'pro', 'enterprise']);
-export const alfredModeEnum = pgEnum('alfred_mode', ['builder', 'mentor', 'reviewer']);
-export const skillLevelEnum = pgEnum('skill_level', ['beginner', 'intermediate', 'experienced', 'inferred']);
+export const alfredFacetEnum = pgEnum('alfred_facet', ['build', 'teach', 'review']);
+export const skillLevelEnum = pgEnum('skill_level', ['beginner', 'intermediate', 'experienced', 'expert']);
 export const messageRoleEnum = pgEnum('message_role', ['user', 'alfred']);
 export const memoryTypeEnum = pgEnum('memory_type', ['preference', 'project', 'decision', 'skill_signal', 'stack_preference']);
 export const projectTypeEnum = pgEnum('project_type', ['web_app', 'dashboard', 'api', 'library', 'other']);
@@ -52,12 +52,12 @@ export const users = pgTable('users', {
   tier: userTierEnum('tier').notNull().default('free'),
   
   // Preferences
-  defaultMode: alfredModeEnum('default_mode').notNull().default('builder'),
+  defaultMode: alfredFacetEnum('default_mode').notNull().default('build'),
   optimizeFor: varchar('optimize_for', { length: 50 }).notNull().default('clarity'),
   verbosity: varchar('verbosity', { length: 50 }).notNull().default('minimal'),
   
   // Skill profile
-  skillLevel: skillLevelEnum('skill_level').notNull().default('inferred'),
+  skillLevel: skillLevelEnum('skill_level').notNull().default('intermediate'),
   skillConfidence: real('skill_confidence').notNull().default(0),
   
   // Metadata
@@ -83,7 +83,7 @@ export const conversations = pgTable('conversations', {
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   
   // State
-  mode: alfredModeEnum('mode').notNull().default('builder'),
+  mode: alfredFacetEnum('mode').notNull().default('build'),
   title: varchar('title', { length: 255 }),
   summary: text('summary'),
   
@@ -124,7 +124,7 @@ export const messages = pgTable('messages', {
   content: text('content').notNull(),
   
   // Context
-  mode: alfredModeEnum('mode'),
+  mode: alfredFacetEnum('mode'),
   modeChanged: boolean('mode_changed').notNull().default(false),
   
   // Tokens

@@ -69,10 +69,10 @@ export async function updateUser(
   id: string,
   updates: Partial<{
     tier: 'free' | 'pro' | 'enterprise';
-    defaultMode: 'builder' | 'mentor' | 'reviewer';
+    defaultMode: 'build' | 'teach' | 'review';
     optimizeFor: string;
     verbosity: string;
-    skillLevel: 'beginner' | 'intermediate' | 'experienced' | 'inferred';
+    skillLevel: 'beginner' | 'intermediate' | 'experienced' | 'expert';
     skillConfidence: number;
     metadata: Record<string, unknown>;
   }>
@@ -99,7 +99,7 @@ export async function softDeleteUser(client: DatabaseClient, id: string) {
 
 export interface CreateConversationInput {
   userId?: string;
-  mode?: 'builder' | 'mentor' | 'reviewer';
+  mode?: 'build' | 'teach' | 'review';
   projectId?: string;
   metadata?: Record<string, unknown>;
 }
@@ -112,7 +112,7 @@ export async function createConversation(
     .insert(schema.conversations)
     .values({
       userId: input.userId,
-      mode: input.mode || 'builder',
+      mode: input.mode || 'build',
       projectId: input.projectId,
       metadata: input.metadata,
     })
@@ -150,7 +150,7 @@ export async function updateConversation(
   client: DatabaseClient,
   id: string,
   updates: Partial<{
-    mode: 'builder' | 'mentor' | 'reviewer';
+    mode: 'build' | 'teach' | 'review';
     title: string;
     summary: string;
     projectId: string;
@@ -198,7 +198,7 @@ export interface CreateMessageInput {
   conversationId: string;
   role: 'user' | 'alfred';
   content: string;
-  mode?: 'builder' | 'mentor' | 'reviewer';
+  mode?: 'build' | 'teach' | 'review';
   modeChanged?: boolean;
   inputTokens?: number;
   outputTokens?: number;
