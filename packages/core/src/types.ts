@@ -34,10 +34,10 @@ export type UserTier = 'free' | 'pro';
 export interface UserPreferences {
   mode: AlfredMode;
   optimizeFor: 'speed' | 'clarity' | 'learning';
-  skillLevel: SkillLevel;
+  skillLevel: UserSkillLevel;
 }
 
-export type SkillLevel = 'beginner' | 'intermediate' | 'experienced' | 'inferred';
+export type UserSkillLevel = 'beginner' | 'intermediate' | 'experienced' | 'inferred';
 
 // ============================================================================
 // CONVERSATION
@@ -62,7 +62,7 @@ export interface Message {
 }
 
 export interface ConversationContext {
-  inferredSkillLevel: SkillLevel;
+  inferredSkillLevel: UserSkillLevel;
   projectType?: string;
   stack?: string[];
   decisions: Decision[];

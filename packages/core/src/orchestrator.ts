@@ -15,7 +15,8 @@
  * - COMPLETE: Task finished
  */
 
-import type { AlfredMode, SkillLevel } from './types';
+import type { AlfredMode } from './types';
+import type { SkillLevel } from './dna';
 
 // ============================================================================
 // STATE DEFINITIONS
@@ -62,7 +63,7 @@ export interface Artifact {
 
 export function createOrchestratorContext(
   mode: AlfredMode = 'builder',
-  skillLevel: SkillLevel = 'inferred'
+  skillLevel: SkillLevel = 'intermediate'
 ): OrchestratorContext {
   return {
     state: 'IDLE',

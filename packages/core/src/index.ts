@@ -9,6 +9,6 @@ export const VERSION = '0.1.0';
 
 export * from './types';
 export * from './contracts';
-export * from './modes';
+
 export * from './orchestrator';
 export * from './dna';
