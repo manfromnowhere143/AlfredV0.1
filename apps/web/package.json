@@ -17,11 +17,13 @@
     "@alfred/memory": "workspace:^",
     "@alfred/rag": "workspace:^",
     "@types/pg": "^8.16.0",
+    "@types/three": "^0.182.0",
     "drizzle-orm": "^0.38.2",
     "next": "^14.2.21",
     "pg": "^8.16.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

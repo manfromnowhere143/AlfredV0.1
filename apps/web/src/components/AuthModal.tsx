@@ -59,20 +59,33 @@ export default function AuthModal({ isOpen, onClose, onSignIn }: AuthModalProps)
         <div className="auth-content">
           {view === 'main' ? (
             <>
-              {/* Logo */}
+              {/* Flower of Life Sacred Geometry Logo */}
               <div className="auth-logo">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <path 
-                    d="M24 4L4 14v20l20 10 20-10V14L24 4z" 
-                    stroke="currentColor" 
-                    strokeWidth="2"
-                    fill="none"
-                  />
-                  <path 
-                    d="M24 4v40M4 14l20 10 20-10M4 34l20-10 20 10" 
-                    stroke="currentColor" 
-                    strokeWidth="2"
-                  />
+                <svg width="60" height="60" viewBox="0 0 100 100" fill="none">
+                  {/* Outer circle */}
+                  <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="1" opacity="0.3"/>
+                  
+                  {/* Center circle */}
+                  <circle cx="50" cy="50" r="15" stroke="currentColor" strokeWidth="1.2" opacity="0.9"/>
+                  
+                  {/* Six surrounding circles (Flower of Life pattern) */}
+                  <circle cx="50" cy="35" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  <circle cx="62.99" cy="42.5" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  <circle cx="62.99" cy="57.5" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  <circle cx="50" cy="65" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  <circle cx="37.01" cy="57.5" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  <circle cx="37.01" cy="42.5" r="15" stroke="currentColor" strokeWidth="1" opacity="0.7"/>
+                  
+                  {/* Second ring of circles */}
+                  <circle cx="50" cy="20" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  <circle cx="75.98" cy="35" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  <circle cx="75.98" cy="65" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  <circle cx="50" cy="80" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  <circle cx="24.02" cy="65" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  <circle cx="24.02" cy="35" r="15" stroke="currentColor" strokeWidth="0.8" opacity="0.4"/>
+                  
+                  {/* Center dot */}
+                  <circle cx="50" cy="50" r="3" fill="currentColor" opacity="0.9"/>
                 </svg>
               </div>
 

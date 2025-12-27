@@ -1,10 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import ChatInput from '@/components/ChatInput';
 import Message, { AlfredThinking } from '@/components/Message';
 import AuthModal from '@/components/AuthModal';
+
+// Dynamic import for 3D component (no SSR)
+const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
+  ssr: false,
+  loading: () => <div style={{ width: 280, height: 280 }} />
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -71,7 +78,6 @@ function UserMenu({
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -158,15 +164,13 @@ export default function AlfredChat() {
   const conversationId = useRef<string | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // APP INITIALIZATION — Loading screen with progress
+  // APP INITIALIZATION
   // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const initializeApp = async () => {
-      // Step 1: Start progress (0-30%)
       setLoadingProgress(10);
       
-      // Step 2: Load theme from storage (30%)
       await new Promise(r => setTimeout(r, 50));
       const savedTheme = localStorage.getItem('alfred-theme');
       if (savedTheme) {
@@ -174,7 +178,6 @@ export default function AlfredChat() {
       }
       setLoadingProgress(30);
       
-      // Step 3: Check auth (30-60%)
       await new Promise(r => setTimeout(r, 50));
       const token = localStorage.getItem('alfred-token');
       if (token) {
@@ -183,7 +186,6 @@ export default function AlfredChat() {
       setIsAuthChecked(true);
       setLoadingProgress(60);
       
-      // Step 4: Load user data if signed in (60-90%)
       if (token) {
         try {
           const [projectsRes, convsRes] = await Promise.all([
@@ -206,11 +208,9 @@ export default function AlfredChat() {
       }
       setLoadingProgress(90);
       
-      // Step 5: Final touches (90-100%)
       await new Promise(r => setTimeout(r, 100));
       setLoadingProgress(100);
       
-      // Step 6: Fade out loading screen
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
     };
@@ -236,8 +236,6 @@ export default function AlfredChat() {
 
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
     console.log('Sign in with:', method, email);
-    
-    // Mock successful sign in
     localStorage.setItem('alfred-token', 'demo-token');
     setIsSignedIn(true);
     setAuthModalOpen(false);
@@ -420,8 +418,16 @@ export default function AlfredChat() {
         <main className="chat-container">
           {!hasMessages ? (
             <div className="chat-empty">
-              <h1 className="chat-empty-brand">Alfred</h1>
-              <p className="chat-empty-tagline">A product architect with taste</p>
+              {isSignedIn ? (
+                /* Signed In: Show 3D Golden Spiral */
+                <GoldenSpiral3D />
+              ) : (
+                /* Not Signed In: Show Alfred title */
+                <>
+                  <h1 className="chat-empty-brand">Alfred</h1>
+                  <p className="chat-empty-tagline">A product architect with taste</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="chat-messages">
@@ -473,6 +479,14 @@ export default function AlfredChat() {
         onClose={() => setAuthModalOpen(false)}
         onSignIn={handleSignIn}
       />
+
+      <style jsx>{`
+        .spiral-loading {
+          width: 280px;
+          height: 280px;
+          margin: 0 auto;
+        }
+      `}</style>
     </>
   );
 }

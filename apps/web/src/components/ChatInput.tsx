@@ -414,11 +414,14 @@ export default function ChatInput({
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* SIGN IN BUTTON                                                                  */
+        /* SIGN IN BUTTON — With Sacred Geometry Icon                                      */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .sign-in-btn {
-          padding: 10px 24px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
           border-radius: 20px;
           background: var(--glass-bg);
           backdrop-filter: blur(20px);
@@ -428,7 +431,7 @@ export default function ChatInput({
           font-size: 13px;
           font-weight: 500;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           
           /* No tap flash */
           -webkit-tap-highlight-color: transparent;
