@@ -269,11 +269,18 @@ export default function AlfredChat() {
     setStreamingContent('');
 
     try {
+      // Build history from current messages (exclude the one we just added)
+      const history = messages.map(m => ({
+        role: m.role === 'alfred' ? 'assistant' : 'user',
+        content: m.content,
+      }));
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: content,
+          history,
           conversationId: conversationId.current,
         }),
       });
