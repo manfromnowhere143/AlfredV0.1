@@ -1,21 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import ChatInput from '@/components/ChatInput';
-import Message, { AlfredThinking } from '@/components/Message';
+import Message, { AlfredThinking, ArtifactProvider } from '@/components/Message';
 import AuthModal from '@/components/AuthModal';
 
-// Dynamic import for 3D component (no SSR)
 const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
   ssr: false,
   loading: () => <div style={{ width: 280, height: 280 }} />
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════════
 
 interface ChatMessage {
   id: string;
@@ -44,27 +40,16 @@ interface Conversation {
   timestamp: Date;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOADING SCREEN COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
-
 function LoadingScreen({ progress, isVisible }: { progress: number; isVisible: boolean }) {
   return (
     <div className={`loading-screen ${!isVisible ? 'fade-out' : ''}`}>
       <div className="loading-logo">Alfred</div>
       <div className="loading-progress-container">
-        <div 
-          className="loading-progress-bar" 
-          style={{ width: `${progress}%` }}
-        />
+        <div className="loading-progress-bar" style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// USER MENU COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
 
 function UserMenu({ 
   isSignedIn, 
@@ -84,7 +69,6 @@ function UserMenu({
         setIsOpen(false);
       }
     };
-    
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -93,14 +77,9 @@ function UserMenu({
 
   return (
     <div className="user-menu" ref={menuRef}>
-      <button 
-        className="user-avatar" 
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="User menu"
-      >
+      <button className="user-avatar" onClick={() => setIsOpen(!isOpen)} aria-label="User menu">
         {userInitial}
       </button>
-      
       <div className={`user-dropdown ${isOpen ? 'open' : ''}`}>
         <button className="user-dropdown-item" onClick={() => setIsOpen(false)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -116,13 +95,7 @@ function UserMenu({
           </svg>
           Settings
         </button>
-        <button 
-          className="user-dropdown-item danger" 
-          onClick={() => {
-            setIsOpen(false);
-            onLogout();
-          }}
-        >
+        <button className="user-dropdown-item danger" onClick={() => { setIsOpen(false); onLogout(); }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
             <polyline points="16 17 21 12 16 7" />
@@ -135,14 +108,10 @@ function UserMenu({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ALFRED CHAT PAGE — State of the Art
-// ═══════════════════════════════════════════════════════════════════════════════
-
 export default function AlfredChat() {
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STATE
-  // ─────────────────────────────────────────────────────────────────────────────
+  const { data: session, status } = useSession();
+  const isSignedIn = !!session?.user;
+  const isAuthChecked = status !== 'loading';
 
   const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -151,76 +120,55 @@ export default function AlfredChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  
-  // ─────────────────────────────────────────────────────────────────────────────
-  // REFS
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // APP INITIALIZATION
-  // ─────────────────────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const initializeApp = async () => {
       setLoadingProgress(10);
-      
       await new Promise(r => setTimeout(r, 50));
       const savedTheme = localStorage.getItem('alfred-theme');
       if (savedTheme) {
         document.documentElement.setAttribute('data-theme', savedTheme);
       }
       setLoadingProgress(30);
-      
       await new Promise(r => setTimeout(r, 50));
-      const token = localStorage.getItem('alfred-token');
-      if (token) {
-        setIsSignedIn(true);
-      }
-      setIsAuthChecked(true);
       setLoadingProgress(60);
-      
-      if (token) {
+      setLoadingProgress(90);
+      await new Promise(r => setTimeout(r, 100));
+      setLoadingProgress(100);
+      await new Promise(r => setTimeout(r, 200));
+      setIsAppReady(true);
+    };
+    initializeApp();
+  }, []);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      const loadUserData = async () => {
         try {
           const [projectsRes, convsRes] = await Promise.all([
             fetch('/api/projects'),
             fetch('/api/conversations')
           ]);
-          
           if (projectsRes.ok) {
             const data = await projectsRes.json();
-            setProjects(Array.isArray(data) ? data : []);
+            setProjects(data.data || []);
           }
-          
           if (convsRes.ok) {
             const data = await convsRes.json();
-            setConversations(Array.isArray(data) ? data : []);
+            setConversations(data.data || []);
           }
         } catch (error) {
           console.error('Failed to load user data:', error);
         }
-      }
-      setLoadingProgress(90);
-      
-      await new Promise(r => setTimeout(r, 100));
-      setLoadingProgress(100);
-      
-      await new Promise(r => setTimeout(r, 200));
-      setIsAppReady(true);
-    };
-
-    initializeApp();
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SCROLL TO BOTTOM
-  // ─────────────────────────────────────────────────────────────────────────────
+      };
+      loadUserData();
+    }
+  }, [isSignedIn]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -230,29 +178,31 @@ export default function AlfredChat() {
     scrollToBottom();
   }, [messages, streamingContent, scrollToBottom]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // AUTH HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────────
-
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
     console.log('Sign in with:', method, email);
-    localStorage.setItem('alfred-token', 'demo-token');
-    setIsSignedIn(true);
-    setAuthModalOpen(false);
+    if (method === 'google') {
+      await signIn('google');
+    } else if (method === 'email' && email) {
+      const result = await signIn('credentials', { email, redirect: false });
+      if (result?.ok) {
+        setAuthModalOpen(false);
+      } else {
+        console.error('Sign in failed:', result?.error);
+      }
+    } else if (method === 'apple') {
+      alert('Apple Sign In requires Apple Developer credentials. Coming soon!');
+    } else if (method === 'sso') {
+      alert('SSO coming soon!');
+    }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('alfred-token');
-    setIsSignedIn(false);
+  const handleLogout = async () => {
+    await signOut({ redirect: false });
     setProjects([]);
     setConversations([]);
     setMessages([]);
     conversationId.current = null;
   };
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SEND MESSAGE
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSend = async (content: string, attachments?: Attachment[]) => {
     if (!content.trim() && !attachments?.length) return;
@@ -269,7 +219,6 @@ export default function AlfredChat() {
     setStreamingContent('');
 
     try {
-      // Build history from current messages (exclude the one we just added)
       const history = messages.map(m => ({
         role: m.role === 'alfred' ? 'assistant' : 'user',
         content: m.content,
@@ -282,6 +231,7 @@ export default function AlfredChat() {
           message: content,
           history,
           conversationId: conversationId.current,
+          userId: (session?.user as any)?.id,
         }),
       });
 
@@ -303,7 +253,6 @@ export default function AlfredChat() {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') continue;
-              
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.content) {
@@ -334,24 +283,18 @@ export default function AlfredChat() {
 
     } catch (error) {
       console.error('Chat error:', error);
-      
       const errorMessage: ChatMessage = {
         id: `alfred-${Date.now()}`,
         role: 'alfred',
         content: 'I encountered an error. Please try again.',
         timestamp: new Date(),
       };
-      
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
       setStreamingContent('');
     }
   };
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CONVERSATION HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleNewConversation = () => {
     setMessages([]);
@@ -365,7 +308,7 @@ export default function AlfredChat() {
       if (res.ok) {
         const data = await res.json();
         conversationId.current = id;
-        setMessages(data.messages || []);
+        setMessages(data.data?.messages || []);
       }
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -378,19 +321,14 @@ export default function AlfredChat() {
     setSidebarOpen(false);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────────
-
   const hasMessages = messages.length > 0;
+  const userInitial = session?.user?.email?.[0]?.toUpperCase() || 'U';
 
   return (
     <>
-      {/* Loading Screen */}
       <LoadingScreen progress={loadingProgress} isVisible={!isAppReady} />
 
       <div className="alfred-app" style={{ opacity: isAppReady ? 1 : 0 }}>
-        {/* Sidebar */}
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -401,7 +339,6 @@ export default function AlfredChat() {
           onSelectConversation={handleSelectConversation}
         />
 
-        {/* Sidebar Trigger Button */}
         <button
           className={`sidebar-trigger ${sidebarOpen ? 'hidden' : ''}`}
           onClick={() => setSidebarOpen(true)}
@@ -414,22 +351,14 @@ export default function AlfredChat() {
           </div>
         </button>
 
-        {/* User Menu */}
-        <UserMenu 
-          isSignedIn={isSignedIn} 
-          onLogout={handleLogout}
-          userInitial="D"
-        />
+        <UserMenu isSignedIn={isSignedIn} onLogout={handleLogout} userInitial={userInitial} />
 
-        {/* Main Chat Area */}
         <main className="chat-container">
           {!hasMessages ? (
             <div className="chat-empty">
               {isSignedIn ? (
-                /* Signed In: Show 3D Golden Spiral */
                 <GoldenSpiral3D />
               ) : (
-                /* Not Signed In: Show Alfred title */
                 <>
                   <h1 className="chat-empty-brand">Alfred</h1>
                   <p className="chat-empty-tagline">A product architect with taste</p>
@@ -439,36 +368,32 @@ export default function AlfredChat() {
           ) : (
             <div className="chat-messages">
               <div className="chat-messages-inner">
-                {messages.map((message) => (
-                  <Message
-                    key={message.id}
-                    id={message.id}
-                    role={message.role}
-                    content={message.content}
-                    timestamp={message.timestamp}
-                  />
-                ))}
-
-                {isLoading && streamingContent && (
-                  <Message
-                    id="streaming"
-                    role="alfred"
-                    content={streamingContent}
-                    timestamp={new Date()}
-                    isStreaming
-                  />
-                )}
-
-                {isLoading && !streamingContent && (
-                  <AlfredThinking />
-                )}
-
+                <ArtifactProvider>
+                  {messages.map((message) => (
+                    <Message
+                      key={message.id}
+                      id={message.id}
+                      role={message.role}
+                      content={message.content}
+                      timestamp={message.timestamp}
+                    />
+                  ))}
+                  {isLoading && streamingContent && (
+                    <Message
+                      id="streaming"
+                      role="alfred"
+                      content={streamingContent}
+                      timestamp={new Date()}
+                      isStreaming
+                    />
+                  )}
+                </ArtifactProvider>
+                {isLoading && !streamingContent && <AlfredThinking />}
                 <div ref={messagesEndRef} />
               </div>
             </div>
           )}
 
-          {/* Input Area */}
           <ChatInput
             onSend={handleSend}
             disabled={isLoading}
@@ -480,7 +405,6 @@ export default function AlfredChat() {
         </main>
       </div>
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}

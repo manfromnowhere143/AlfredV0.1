@@ -137,7 +137,7 @@ export const messages = pgTable('messages', {
     content: string;
     metadata?: Record<string, string>;
   }>>(),
-  artifactsJson: jsonb('artifacts').$type<Array<{
+  artifacts: jsonb('artifacts').$type<Array<{
     id: string;
     type: string;
     title: string;
@@ -203,38 +203,6 @@ export const projects = pgTable('projects', {
   index('projects_type_idx').on(table.type),
   index('projects_created_at_idx').on(table.createdAt),
   uniqueIndex('projects_user_name_idx').on(table.userId, table.name),
-]);
-
-// ============================================================================
-// ARTIFACTS (NEW - for saving generated code/components)
-// ============================================================================
-
-export const artifacts = pgTable('artifacts', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  
-  // Ownership
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
-  
-  // Content
-  title: varchar('title', { length: 255 }).notNull(),
-  code: text('code').notNull(),
-  language: varchar('language', { length: 50 }).notNull().default('jsx'),
-  
-  // Versioning
-  version: integer('version').notNull().default(1),
-  
-  // Metadata
-  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  
-  // Timestamps
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-}, (table) => [
-  index('artifacts_project_id_idx').on(table.projectId),
-  index('artifacts_conversation_id_idx').on(table.conversationId),
-  index('artifacts_created_at_idx').on(table.createdAt),
 ]);
 
 // ============================================================================
@@ -460,7 +428,6 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
   project: one(projects, { fields: [conversations.projectId], references: [projects.id] }),
   messages: many(messages),
   decisions: many(projectDecisions),
-  artifacts: many(artifacts),
 }));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -472,12 +439,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   conversations: many(conversations),
   decisions: many(projectDecisions),
   memoryEntries: many(memoryEntries),
-  artifacts: many(artifacts),
-}));
-
-export const artifactsRelations = relations(artifacts, ({ one }) => ({
-  project: one(projects, { fields: [artifacts.projectId], references: [projects.id] }),
-  conversation: one(conversations, { fields: [artifacts.conversationId], references: [conversations.id] }),
 }));
 
 export const projectDecisionsRelations = relations(projectDecisions, ({ one }) => ({
@@ -507,18 +468,3 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
 export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
   user: one(users, { fields: [usageRecords.userId], references: [users.id] }),
 }));
-
-// ============================================================================
-// TYPE EXPORTS
-// ============================================================================
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-export type Project = typeof projects.$inferSelect;
-export type NewProject = typeof projects.$inferInsert;
-export type Conversation = typeof conversations.$inferSelect;
-export type NewConversation = typeof conversations.$inferInsert;
-export type Message = typeof messages.$inferSelect;
-export type NewMessage = typeof messages.$inferInsert;
-export type Artifact = typeof artifacts.$inferSelect;
-export type NewArtifact = typeof artifacts.$inferInsert;

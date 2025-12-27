@@ -8,6 +8,13 @@
       "when": 1766567810196,
       "tag": "0000_friendly_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766842806059,
+      "tag": "0001_sturdy_whirlwind",
+      "breakpoints": true
     }
   ]
 }

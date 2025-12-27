@@ -171,7 +171,7 @@ export default function Sidebar({
                 ) : conversations.map((c, i) => (
                   <button key={c.id} className="list-item" onClick={() => { onSelectConversation?.(c.id); onClose(); }} style={{ animationDelay: `${i * 30}ms` }}>
                     <span className="item-title">{c.title}</span>
-                    <span className="item-meta">{c.preview.slice(0, 25)}...</span>
+                    <span className="item-meta">{c.preview?.slice(0, 25) || ""}...</span>
                   </button>
                 ))}
               </div>
