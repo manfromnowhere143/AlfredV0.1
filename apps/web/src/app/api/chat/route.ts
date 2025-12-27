@@ -16,7 +16,7 @@ function getLLMClient() {
     llmClient = createLLMClient({
       apiKey,
       model: (process.env.ANTHROPIC_MODEL as any) || 'claude-sonnet-4-20250514',
-      maxTokens: 8192,
+      maxTokens: 32768,
       temperature: 0.7,
       maxRetries: 3,
     });
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
           };
 
           await client.stream(
-            { system: systemPrompt, messages: llmMessages, maxTokens: 8192 },
+            { system: systemPrompt, messages: llmMessages, maxTokens: 32768 },
             streamOptions
           );
 

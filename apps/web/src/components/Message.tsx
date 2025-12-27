@@ -409,9 +409,8 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: {
   return (
     <div style={{
       width: '100%',
-      minWidth: '300px',
-      maxWidth: '800px',
-      height: '322px',
+      minWidth: 0,
+      minHeight: '150px', maxHeight: '400px',
       margin: '12px 0',
       borderRadius: '10px',
       background: '#111',
@@ -664,8 +663,8 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
   }, [artifactCtx, id]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start', width: '100%' }}>
-      <div style={{ width: role === 'user' ? 'auto' : '100%', maxWidth: role === 'user' ? '80%' : '100%', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary, #fff)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start', width: '100%', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: role === 'user' ? 'auto' : '100%', maxWidth: role === 'user' ? '80%' : '100%', overflow: 'hidden', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary, #fff)' }}>
         {parsedContent.map((part, index) => {
           if (part.type === 'code' || part.type === 'code-streaming') {
             return <CodeBlock key={index} language={part.language || 'plaintext'} code={part.content} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;

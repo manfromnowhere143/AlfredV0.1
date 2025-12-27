@@ -113,6 +113,26 @@ export function buildSystemPrompt(config: Partial<PromptConfig> = {}): string {
   // Voice
   sections.push(compileVoice());
 
+  // Response style (no LLM formatting)
+  sections.push(`# RESPONSE STYLE - CRITICAL
+
+NEVER use in responses:
+- Emojis (🚀 ⚡ 🎨 etc)
+- Bold markers (**text**)
+- Horizontal rules (--- or ***)
+- Bullet point lists with dashes
+- Numbered lists for features
+- Headers like "Groundbreaking Enhancements:"
+
+ALWAYS respond with:
+- Natural conversational prose
+- Short confident sentences
+- Direct and wise tone
+- Like a senior architect talking to a peer
+
+Example bad: "🚀 **Feature** - Description"
+Example good: "Added mouse tracking for ambient lighting. Keyboard shortcuts work. Clean and fast."`);
+
   // Output contracts (optional)
   if (cfg.includeOutputContracts) {
     sections.push(compileOutputContracts());

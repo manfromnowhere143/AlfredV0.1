@@ -46,7 +46,7 @@ export function getLLMEnv(): LLMEnv {
   return {
     apiKey,
     model: (process.env.ANTHROPIC_MODEL as ModelId) || 'claude-sonnet-4-20250514',
-    maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '4096', 10),
+    maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '32768', 10),
   };
 }
 
