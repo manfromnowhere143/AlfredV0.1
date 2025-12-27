@@ -51,7 +51,7 @@ function getDefaultPreferences(): UserPreferences {
 
 function getDefaultSkillProfile(): SkillProfile {
   return {
-    level: 'inferred',
+    level: 'intermediate',
     confidence: 0,
     signals: [],
     lastAssessedAt: new Date(),
@@ -129,7 +129,7 @@ export function addSkillSignal(
 
 function calculateSkillLevel(signals: SkillSignal[]): SkillLevel {
   if (signals.length < 3) {
-    return 'inferred';
+    return 'intermediate';
   }
 
   const weights = {

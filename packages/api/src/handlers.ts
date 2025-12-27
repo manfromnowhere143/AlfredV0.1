@@ -3,6 +3,9 @@
  *
  * API request handlers that orchestrate core, memory, and RAG.
  * Pure functions. No framework dependencies.
+ * 
+ * Architecture: Unified Mind with Facets
+ * Alfred doesn't "switch modes" — he perceives and adapts fluidly.
  */
 
 import type {
@@ -27,12 +30,35 @@ import {
 
 import { createLogger, Logger } from './logger';
 
-import { DEFAULT_MODE, inferMode, announceModeSwtich } from '@alfred/core';
-import type { AlfredMode } from '@alfred/core';
+import {
+  detectFacet,
+  type Facet,
+} from '@alfred/core';
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// FACET → LEGACY MODE MAPPING
+// For API compatibility while using unified mind internally
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type LegacyMode = 'builder' | 'mentor' | 'reviewer';
+
+const FACET_TO_MODE: Record<Facet, LegacyMode> = {
+  build: 'builder',
+  teach: 'mentor',
+  review: 'reviewer',
+};
+
+const MODE_TO_FACET: Record<LegacyMode, Facet> = {
+  builder: 'build',
+  mentor: 'teach',
+  reviewer: 'review',
+};
+
+const DEFAULT_FACET: Facet = 'teach';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // HANDLER CONTEXT
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export interface HandlerContext {
   requestId: string;
@@ -62,9 +88,9 @@ export function createHandlerContext(
   };
 }
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // RESPONSE BUILDERS
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function buildMeta(ctx: HandlerContext, tokensUsed?: number): ResponseMeta {
   return {
@@ -109,9 +135,9 @@ function errorResponse(
   };
 }
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // HANDLER WRAPPER
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export type Handler<TReq, TRes> = (
   ctx: HandlerContext,
@@ -143,77 +169,82 @@ export function withErrorHandling<TReq, TRes>(
   };
 }
 
-// ============================================================================
-// CONVERSATION HANDLERS
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONVERSATION STATE
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// In-memory storage (replace with real storage in production)
 const conversations = new Map<string, ConversationState>();
 
 interface ConversationState {
   id: string;
   userId?: string;
-  mode: AlfredMode;
+  facet: Facet;
   messages: Array<{ role: 'user' | 'alfred'; content: string }>;
   createdAt: Date;
 }
 
-export const handleStartConversation: Handler<StartConversationRequest, ApiResponse<StartConversationResponse>> = async (ctx, request) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONVERSATION HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const handleStartConversation: Handler<
+  StartConversationRequest,
+  ApiResponse<StartConversationResponse>
+> = async (ctx, request) => {
   const conversationId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const mode: AlfredMode = (request.mode as AlfredMode) || DEFAULT_MODE;
+  
+  // Convert legacy mode to facet, or use default
+  const requestedMode = request.mode as LegacyMode | undefined;
+  const facet: Facet = requestedMode ? MODE_TO_FACET[requestedMode] : DEFAULT_FACET;
   const userId = request.userId as string | undefined;
 
   const state: ConversationState = {
     id: conversationId,
     userId,
-    mode,
+    facet,
     messages: [],
     createdAt: new Date(),
   };
 
   conversations.set(conversationId, state);
 
-  ctx.logger.info('Conversation started', { conversationId, mode });
+  ctx.logger.info('Conversation started', { conversationId, facet });
 
-  const greeting = generateGreeting(mode);
+  // Alfred's greeting based on facet
+  const greetings: Record<Facet, string> = {
+    build: 'Alfred. What are we building?',
+    teach: 'Alfred here. What would you like to learn?',
+    review: 'Alfred. Show me what you want reviewed.',
+  };
+  const greeting = greetings[facet];
 
   return successResponse(ctx, {
     conversationId,
     sessionId,
-    mode,
+    mode: FACET_TO_MODE[facet], // Return legacy mode for API compatibility
     greeting,
   });
 };
 
-function generateGreeting(mode: AlfredMode): string {
-  const greetings: Record<AlfredMode, string> = {
-    builder: 'Alfred. What are we building?',
-    mentor: 'Alfred here. What would you like to learn?',
-    reviewer: 'Alfred. Show me what you want reviewed.',
-  };
-  return greetings[mode];
-}
-
-export const handleSendMessage: Handler<SendMessageRequest, ApiResponse<SendMessageResponse>> = async (ctx, request) => {
+export const handleSendMessage: Handler<
+  SendMessageRequest,
+  ApiResponse<SendMessageResponse>
+> = async (ctx, request) => {
   const conversationId = request.conversationId as string;
   const content = request.content as string;
-  
+
   const conversation = conversations.get(conversationId);
   if (!conversation) {
     throw notFoundError('conversation', conversationId);
   }
 
-  // Check for mode switch
-  const inferredMode = inferMode(content);
-  let modeChanged = false;
-  let currentMode = conversation.mode;
-
-  if (inferredMode && inferredMode.mode !== conversation.mode && inferredMode.confidence >= 0.8) {
-    modeChanged = true;
-    currentMode = inferredMode.mode;
-    conversation.mode = currentMode;
-  }
+  // Unified mind: detect facet from content, adapt fluidly
+  const detectedFacet = detectFacet(content);
+  const previousFacet = conversation.facet;
+  
+  // Alfred adapts without announcing — just update internal state
+  conversation.facet = detectedFacet;
 
   // Store user message
   conversation.messages.push({
@@ -221,8 +252,9 @@ export const handleSendMessage: Handler<SendMessageRequest, ApiResponse<SendMess
     content,
   });
 
-  // Generate response (placeholder - would call LLM)
-  const responseContent = generateResponse(currentMode, modeChanged);
+  // Generate response (placeholder — would call LLM with facet context)
+  // Future: use getFacetAdjustments(detectedFacet) to tune LLM parameters
+  const responseContent = generateResponse(detectedFacet);
 
   // Store alfred message
   conversation.messages.push({
@@ -235,93 +267,89 @@ export const handleSendMessage: Handler<SendMessageRequest, ApiResponse<SendMess
   return successResponse(ctx, {
     messageId,
     content: responseContent,
-    mode: currentMode,
-    modeChanged,
-    suggestions: generateSuggestions(currentMode),
+    mode: FACET_TO_MODE[detectedFacet], // Legacy API compatibility
+    modeChanged: detectedFacet !== previousFacet,
+    suggestions: generateSuggestions(detectedFacet),
   });
 };
 
-function generateResponse(
-  mode: AlfredMode,
-  modeChanged: boolean
-): string {
-  let response = '';
-  
-  if (modeChanged) {
-    response = announceModeSwtich(mode) + '\n\n';
-  }
-
-  switch (mode) {
-    case 'builder':
-      response += 'Understood. Let me work on that.';
-      break;
-    case 'mentor':
-      response += "Let me explain the approach and reasoning.";
-      break;
-    case 'reviewer':
-      response += "I'll analyze this against best practices.";
-      break;
-  }
-
-  return response;
-}
-
-function generateSuggestions(mode: AlfredMode): string[] {
-  const suggestions: Record<AlfredMode, string[]> = {
-    builder: ['Add more detail', 'Show me the code', 'What about tests?'],
-    mentor: ['Explain more', 'Show an example', 'What are alternatives?'],
-    reviewer: ['Check security', 'Review performance', 'Suggest improvements'],
+function generateResponse(facet: Facet): string {
+  // Alfred doesn't announce mode switches — he just responds appropriately
+  const responses: Record<Facet, string> = {
+    build: 'Understood. Let me work on that.',
+    teach: 'Let me explain the approach and reasoning.',
+    review: "I'll analyze this against best practices.",
   };
-  return suggestions[mode];
+
+  return responses[facet];
 }
 
-// ============================================================================
-// MODE HANDLERS
-// ============================================================================
+function generateSuggestions(facet: Facet): string[] {
+  const suggestions: Record<Facet, string[]> = {
+    build: ['Add more detail', 'Show me the code', 'What about tests?'],
+    teach: ['Explain more', 'Show an example', 'What are alternatives?'],
+    review: ['Check security', 'Review performance', 'Suggest improvements'],
+  };
+  return suggestions[facet];
+}
 
-export const handleSwitchMode: Handler<SwitchModeRequest, ApiResponse<SwitchModeResponse>> = async (ctx, request) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODE HANDLERS (Legacy API — internally uses facets)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const handleSwitchMode: Handler<
+  SwitchModeRequest,
+  ApiResponse<SwitchModeResponse>
+> = async (ctx, request) => {
   const conversationId = request.conversationId as string;
-  const newMode = request.mode as AlfredMode;
+  const newMode = request.mode as LegacyMode;
   const reason = request.reason as string | undefined;
-  
+
   const conversation = conversations.get(conversationId);
   if (!conversation) {
     throw notFoundError('conversation', conversationId);
   }
 
-  const previousMode = conversation.mode;
-  conversation.mode = newMode;
+  const previousFacet = conversation.facet;
+  const newFacet = MODE_TO_FACET[newMode];
+  conversation.facet = newFacet;
 
-  const announcement = announceModeSwtich(newMode, reason);
+  // Unified mind: no announcements, just acknowledgment if reason given
+  const announcement = reason ? `Understood. ${reason}` : '';
 
-  ctx.logger.info('Mode switched', {
+  ctx.logger.info('Facet adjusted', {
     conversationId,
-    previousMode,
-    newMode,
+    previousFacet,
+    newFacet,
   });
 
   return successResponse(ctx, {
-    previousMode,
+    previousMode: FACET_TO_MODE[previousFacet],
     currentMode: newMode,
     announcement,
   });
 };
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // REVIEW HANDLERS
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
-export const handleReviewCode: Handler<ReviewCodeRequest, ApiResponse<ReviewCodeResponse>> = async (ctx, request) => {
+export const handleReviewCode: Handler<
+  ReviewCodeRequest,
+  ApiResponse<ReviewCodeResponse>
+> = async (ctx, request) => {
   const conversationId = request.conversationId as string;
   const code = request.code as string;
-  
+
   const conversation = conversations.get(conversationId);
   if (!conversation) {
     throw notFoundError('conversation', conversationId);
   }
 
+  // Automatically engage review facet
+  conversation.facet = 'review';
+
   const reviewId = `review_${Date.now()}`;
-  
   const issues = analyzeCode(code);
 
   return successResponse(ctx, {
@@ -329,9 +357,14 @@ export const handleReviewCode: Handler<ReviewCodeRequest, ApiResponse<ReviewCode
     summary: `Found ${issues.length} issues in the code.`,
     issues,
     suggestions: ['Consider adding types', 'Add error handling'],
-    overallQuality: issues.length === 0 ? 'excellent' : 
-                    issues.length < 3 ? 'good' : 
-                    issues.length < 6 ? 'needs_work' : 'poor',
+    overallQuality:
+      issues.length === 0
+        ? 'excellent'
+        : issues.length < 3
+          ? 'good'
+          : issues.length < 6
+            ? 'needs_work'
+            : 'poor',
   });
 };
 
@@ -368,11 +401,14 @@ function analyzeCode(code: string): ReviewCodeResponse['issues'] {
   return issues;
 }
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // HEALTH HANDLERS
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
-export const handleHealthCheck: Handler<void, ApiResponse<HealthCheckResponse>> = async (ctx) => {
+export const handleHealthCheck: Handler<
+  void,
+  ApiResponse<HealthCheckResponse>
+> = async (ctx) => {
   const uptime = process.uptime();
 
   return successResponse(ctx, {
@@ -387,9 +423,9 @@ export const handleHealthCheck: Handler<void, ApiResponse<HealthCheckResponse>> 
   });
 };
 
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export const handlers = {
   startConversation: withErrorHandling(handleStartConversation),

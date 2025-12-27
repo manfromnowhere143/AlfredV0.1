@@ -1,13 +1,10 @@
 import { NextRequest } from 'next/server';
-import { inferMode, getSystemPrompt } from '@alfred/core';
+import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel, type Facet, type SkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { getDb } from '@/lib/db';
 import { createConversation, createMessage, updateConversation, getOrCreateUser } from '@alfred/database';
 import { recordSkillSignals, recordStackPreferences, getContextForPrompt } from '@/lib/memory-service';
 import { buildRAGContext } from '@/lib/rag-service';
-
-type AlfredMode = 'builder' | 'mentor' | 'reviewer';
-type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
 
 // Singleton LLM client
 let llmClient: ReturnType<typeof createLLMClient> | null = null;
@@ -28,44 +25,35 @@ function getLLMClient() {
   return llmClient;
 }
 
-// Skill level inference from conversation history
-function inferSkillLevel(messages: Array<{ role: string; content: string }>): SkillLevel {
-  const text = messages.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase();
-  const expSignals = ['architecture', 'refactor', 'dependency injection', 'monorepo', 'ci/cd', 'kubernetes', 'terraform'];
-  const begSignals = ['how do i', 'what is', "don't understand", 'help me', 'tutorial', 'explain'];
-  const expScore = expSignals.filter(s => text.includes(s)).length;
-  const begScore = begSignals.filter(s => text.includes(s)).length;
-  if (expScore >= 2) return 'experienced';
-  if (begScore >= 2) return 'beginner';
-  return 'intermediate';
-}
-
 export async function POST(request: NextRequest) {
   try {
     const client = getLLMClient();
     
     const body = await request.json();
-    const { message, mode: requestedMode, history = [], conversationId, userId: clientUserId } = body;
+    const { message, history = [], conversationId, userId: clientUserId } = body;
 
     if (!message) {
       return new Response(JSON.stringify({ error: 'Message required' }), { status: 400 });
     }
 
-    // Infer mode and skill
-    const inference = inferMode(message);
-    const mode: AlfredMode = requestedMode || inference?.mode || 'mentor';
-    const confidence = inference?.confidence ?? 0.5;
+    // Detect facet from message (unified mind)
+    const detectedFacet = detectFacet(message);
     
     const allMessages = [
       ...history.map((m: any) => ({ role: m.role, content: m.content })),
       { role: 'user', content: message }
     ];
-    const skillLevel = inferSkillLevel(allMessages);
     
-    // Base system prompt
-    let systemPrompt = getSystemPrompt(mode, { skillLevel });
+    // Use core's skill inference
+    const userMessages = allMessages.filter(m => m.role === 'user').map(m => m.content);
+    const skillLevel = coreInferSkillLevel(userMessages);
+    
+    // Build system prompt with facet-aware config
+    let systemPrompt = buildSystemPrompt({ 
+      skillLevel,
+    });
 
-    console.log(`[Alfred] Mode: ${mode} (${confidence.toFixed(2)}) | Skill: ${skillLevel}`);
+    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel}`);
 
     // Database operations
     let convId = conversationId;
@@ -109,7 +97,7 @@ export async function POST(request: NextRequest) {
       // Create conversation if needed
       if (!convId) {
         const conv = await createConversation(db, { 
-          mode,
+          mode: detectedFacet,
           userId: userId || undefined,
         });
         if (conv) {
@@ -124,7 +112,7 @@ export async function POST(request: NextRequest) {
           conversationId: convId,
           role: 'user',
           content: message,
-          mode,
+          mode: detectedFacet,
         });
 
         // Record skill signals and stack preferences (async, don't wait)
@@ -158,7 +146,8 @@ export async function POST(request: NextRequest) {
           const streamOptions: StreamOptions = {
             onToken: (token: string) => {
               fullResponse += token;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: token })}\n\n`));
+              // IMPORTANT: Frontend expects { content: ... } not { text: ... }
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: token, conversationId: convId })}\n\n`));
             },
             onError: (error: Error) => {
               console.error('[Alfred] Stream error:', error);
@@ -183,7 +172,7 @@ export async function POST(request: NextRequest) {
                 conversationId: convId,
                 role: 'alfred',
                 content: fullResponse,
-                mode,
+                mode: detectedFacet,
               });
               await updateConversation(db, convId, { lastMessageAt: new Date() });
             } catch (dbError) {
@@ -209,7 +198,8 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'X-Alfred-Mode': mode,
+        'Connection': 'keep-alive',
+        'X-Alfred-Facet': detectedFacet,
         'X-Alfred-Skill': skillLevel,
         'X-Alfred-Conversation': convId || '',
         'X-Alfred-User': userId || '',
