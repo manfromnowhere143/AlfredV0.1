@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { db, users, conversations, messages, eq } from '@alfred/database';
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     const client = getLLMClient();
     
     // Get authenticated user from session
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     const sessionUserId = (session?.user as any)?.id;
     
     const body = await request.json();
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
             try {
               await db.insert(messages).values({
                 conversationId: convId,
-                role: 'assistant',
+                role: 'alfred',
                 content: fullResponse,
                 mode: detectedFacet,
               });

@@ -8,16 +8,31 @@ import ChatInput from '@/components/ChatInput';
 import Message, { AlfredThinking, ArtifactProvider } from '@/components/Message';
 import AuthModal from '@/components/AuthModal';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DYNAMIC IMPORTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
   ssr: false,
   loading: () => <div style={{ width: 280, height: 280 }} />
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'alfred';
   content: string;
   timestamp: Date;
+}
+
+interface DBMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'alfred';
+  content: string;
+  createdAt: string;
 }
 
 interface Attachment {
@@ -39,6 +54,30 @@ interface Conversation {
   preview: string;
   timestamp: Date;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function mapDBMessageToChat(msg: DBMessage): ChatMessage {
+  return {
+    id: msg.id,
+    role: msg.role === 'assistant' ? 'alfred' : (msg.role as 'user' | 'alfred'),
+    content: msg.content,
+    timestamp: new Date(msg.createdAt),
+  };
+}
+
+function mapChatToHistory(messages: ChatMessage[]) {
+  return messages.map(m => ({
+    role: m.role === 'alfred' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function LoadingScreen({ progress, isVisible }: { progress: number; isVisible: boolean }) {
   return (
@@ -108,11 +147,19 @@ function UserMenu({
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export default function AlfredChat() {
   const { data: session, status } = useSession();
   const isSignedIn = !!session?.user;
   const isAuthChecked = status !== 'loading';
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // STATE
+  // ─────────────────────────────────────────────────────────────────────────────
+  
   const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -125,6 +172,10 @@ export default function AlfredChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // INITIALIZATION
+  // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -146,29 +197,47 @@ export default function AlfredChat() {
     initializeApp();
   }, []);
 
-  useEffect(() => {
-    if (isSignedIn) {
-      const loadUserData = async () => {
-        try {
-          const [projectsRes, convsRes] = await Promise.all([
-            fetch('/api/projects'),
-            fetch('/api/conversations')
-          ]);
-          if (projectsRes.ok) {
-            const data = await projectsRes.json();
-            setProjects(data.data || []);
-          }
-          if (convsRes.ok) {
-            const data = await convsRes.json();
-            setConversations(data.data || []);
-          }
-        } catch (error) {
-          console.error('Failed to load user data:', error);
-        }
-      };
-      loadUserData();
+  // ─────────────────────────────────────────────────────────────────────────────
+  // LOAD USER DATA
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const loadUserData = useCallback(async () => {
+    if (!isSignedIn) return;
+    
+    try {
+      const [projectsRes, convsRes] = await Promise.all([
+        fetch('/api/projects'),
+        fetch('/api/conversations')
+      ]);
+      
+      if (projectsRes.ok) {
+        const data = await projectsRes.json();
+        setProjects(data.data || []);
+      }
+      
+      if (convsRes.ok) {
+        const data = await convsRes.json();
+        // Map conversations with proper date handling
+        const mappedConvs = (data.data || []).map((c: any) => ({
+          id: c.id,
+          title: c.title || 'Untitled',
+          preview: c.summary || c.title || '',
+          timestamp: new Date(c.updatedAt || c.createdAt),
+        }));
+        setConversations(mappedConvs);
+      }
+    } catch (error) {
+      console.error('[Alfred] Failed to load user data:', error);
     }
   }, [isSignedIn]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SCROLL TO BOTTOM
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -178,8 +247,13 @@ export default function AlfredChat() {
     scrollToBottom();
   }, [messages, streamingContent, scrollToBottom]);
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // AUTH HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
-    console.log('Sign in with:', method, email);
+    console.log('[Alfred] Sign in with:', method, email);
+    
     if (method === 'google') {
       await signIn('google', { callbackUrl: '/' });
     } else if (method === 'email' && email) {
@@ -187,10 +261,10 @@ export default function AlfredChat() {
       if (result?.ok) {
         setAuthModalOpen(false);
       } else {
-        console.error('Sign in failed:', result?.error);
+        console.error('[Alfred] Sign in failed:', result?.error);
       }
     } else if (method === 'apple') {
-      alert('Apple Sign In requires Apple Developer credentials. Coming soon!');
+      alert('Apple Sign In coming soon!');
     } else if (method === 'sso') {
       alert('SSO coming soon!');
     }
@@ -203,6 +277,10 @@ export default function AlfredChat() {
     setMessages([]);
     conversationId.current = null;
   };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SEND MESSAGE
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSend = async (content: string, attachments?: Attachment[]) => {
     if (!content.trim() && !attachments?.length) return;
@@ -219,10 +297,7 @@ export default function AlfredChat() {
     setStreamingContent('');
 
     try {
-      const history = messages.map(m => ({
-        role: m.role === 'alfred' ? 'assistant' : 'user',
-        content: m.content,
-      }));
+      const history = mapChatToHistory(messages);
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -231,7 +306,6 @@ export default function AlfredChat() {
           message: content,
           history,
           conversationId: conversationId.current,
-          userId: (session?.user as any)?.id,
         }),
       });
 
@@ -259,8 +333,10 @@ export default function AlfredChat() {
                   fullContent += parsed.content;
                   setStreamingContent(fullContent);
                 }
-                if (parsed.conversationId) {
+                if (parsed.conversationId && !conversationId.current) {
                   conversationId.current = parsed.conversationId;
+                  // Refresh conversation list
+                  loadUserData();
                 }
               } catch {
                 fullContent += data;
@@ -282,7 +358,7 @@ export default function AlfredChat() {
       setStreamingContent('');
 
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('[Alfred] Chat error:', error);
       const errorMessage: ChatMessage = {
         id: `alfred-${Date.now()}`,
         role: 'alfred',
@@ -296,6 +372,10 @@ export default function AlfredChat() {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CONVERSATION HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const handleNewConversation = () => {
     setMessages([]);
     conversationId.current = null;
@@ -308,18 +388,30 @@ export default function AlfredChat() {
       if (res.ok) {
         const data = await res.json();
         conversationId.current = id;
-        setMessages(data.data?.messages || []);
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // MAP DB MESSAGES TO CHAT FORMAT
+        // ═══════════════════════════════════════════════════════════════════
+        const dbMessages: DBMessage[] = data.data?.messages || [];
+        const mappedMessages = dbMessages.map(mapDBMessageToChat);
+        setMessages(mappedMessages);
+        
+        console.log(`[Alfred] Loaded ${mappedMessages.length} messages for conversation ${id}`);
       }
     } catch (error) {
-      console.error('Failed to load conversation:', error);
+      console.error('[Alfred] Failed to load conversation:', error);
     }
     setSidebarOpen(false);
   };
 
   const handleSelectProject = (id: string) => {
-    console.log('Select project:', id);
+    console.log('[Alfred] Select project:', id);
     setSidebarOpen(false);
   };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const hasMessages = messages.length > 0;
   const userInitial = session?.user?.email?.[0]?.toUpperCase() || 'U';
