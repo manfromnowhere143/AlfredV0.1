@@ -1,11 +1,8 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel, type Facet, type SkillLevel } from '@alfred/core';
+import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
-import { getDb } from '@/lib/db';
-import { createConversation, createMessage, updateConversation, getOrCreateUser } from '@alfred/database';
-import { recordSkillSignals, recordStackPreferences, getContextForPrompt } from '@/lib/memory-service';
-import { buildRAGContext } from '@/lib/rag-service';
+import { db, users, conversations, messages, eq } from '@alfred/database';
 
 // Singleton LLM client
 let llmClient: ReturnType<typeof createLLMClient> | null = null;
@@ -30,7 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     const client = getLLMClient();
     
-    // Get authenticated user from session (secure - don't trust client)
+    // Get authenticated user from session
     const session = await getServerSession();
     const sessionUserId = (session?.user as any)?.id;
     
@@ -41,107 +38,60 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: 'Message required' }), { status: 400 });
     }
 
-    // Detect facet from message (unified mind)
     const detectedFacet = detectFacet(message);
-    
     const allMessages = [
       ...history.map((m: any) => ({ role: m.role, content: m.content })),
       { role: 'user', content: message }
     ];
-    
-    // Use core's skill inference
     const userMessages = allMessages.filter(m => m.role === 'user').map(m => m.content);
     const skillLevel = coreInferSkillLevel(userMessages);
     
-    // Build system prompt with facet-aware config
-    let systemPrompt = buildSystemPrompt({ 
-      skillLevel,
-    });
+    let systemPrompt = buildSystemPrompt({ skillLevel });
 
     console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | User: ${sessionUserId || 'anonymous'}`);
 
-    // Database operations
     let convId = conversationId;
     let userId = sessionUserId;
 
+    // Database operations
     try {
-      const db = await getDb();
-      
-      // Use session user or create anonymous
-      if (!userId) {
-        const user = await getOrCreateUser(db, { externalId: 'anonymous' });
-        if (user) {
-          userId = user.id;
-        }
-      }
-
-      // Get user context from memory
-      if (userId) {
-        try {
-          const userContext = await getContextForPrompt(db, userId);
-          if (userContext) {
-            systemPrompt += userContext;
-            console.log('[Alfred] Added user context to prompt');
-          }
-        } catch (memError) {
-          console.warn('[Alfred] Memory context unavailable:', memError);
-        }
-      }
-
-      // Get RAG context
-      try {
-        const ragContext = await buildRAGContext(db, message);
-        if (ragContext) {
-          systemPrompt += ragContext;
-          console.log('[Alfred] Added RAG context to prompt');
-        }
-      } catch (ragError) {
-        console.warn('[Alfred] RAG context unavailable:', ragError);
-      }
-
-      // Create conversation if needed (with title from first message)
+      // Create conversation if needed
       if (!convId && userId) {
-        const conv = await createConversation(db, { 
-          mode: detectedFacet,
-          userId: userId,
-          title: message.slice(0, 50),
-        });
-        if (conv) {
-          convId = conv.id;
-          console.log(`[Alfred] ✅ New conversation: ${convId} for user: ${userId}`);
+        const [newConv] = await db
+          .insert(conversations)
+          .values({
+            userId,
+            title: message.slice(0, 50),
+            mode: detectedFacet,
+          })
+          .returning();
+        
+        if (newConv) {
+          convId = newConv.id;
+          console.log(`[Alfred] ✅ New conversation: ${convId}`);
         }
       }
 
       // Save user message
       if (convId) {
-        const savedMsg = await createMessage(db, {
+        await db.insert(messages).values({
           conversationId: convId,
           role: 'user',
           content: message,
           mode: detectedFacet,
         });
-        console.log(`[Alfred] ✅ Saved user message to: ${convId}`);
-
-        // Record skill signals and stack preferences (async, don't wait)
-        if (userId) {
-          recordSkillSignals(db, userId, message, convId, savedMsg?.id).catch(e => 
-            console.warn('[Alfred] Failed to record skill signals:', e)
-          );
-          recordStackPreferences(db, userId, message, convId).catch(e =>
-            console.warn('[Alfred] Failed to record stack preferences:', e)
-          );
-        }
+        console.log(`[Alfred] ✅ Saved user message`);
       }
     } catch (dbError) {
       console.error('[Alfred] ❌ Database error:', dbError);
     }
 
     // Build messages for LLM
-    const messages = history.map((m: { role: string; content: string }) => ({
+    const llmMessages = history.map((m: { role: string; content: string }) => ({
       role: m.role === 'user' ? 'user' as const : 'assistant' as const,
       content: m.content,
     }));
-    messages.push({ role: 'user' as const, content: message });
+    llmMessages.push({ role: 'user' as const, content: message });
 
     // Stream response
     const encoder = new TextEncoder();
@@ -162,35 +112,30 @@ export async function POST(request: NextRequest) {
           };
 
           await client.stream(
-            {
-              system: systemPrompt,
-              messages,
-              maxTokens: 8192,
-            },
+            { system: systemPrompt, messages: llmMessages, maxTokens: 8192 },
             streamOptions
           );
 
-          // Save response to database
+          // Save assistant response
           if (convId && fullResponse) {
             try {
-              const db = await getDb();
-              await createMessage(db, {
+              await db.insert(messages).values({
                 conversationId: convId,
                 role: 'assistant',
                 content: fullResponse,
                 mode: detectedFacet,
               });
-              await updateConversation(db, convId, { lastMessageAt: new Date() });
-              console.log(`[Alfred] ✅ Saved assistant response to: ${convId}`);
+              await db
+                .update(conversations)
+                .set({ updatedAt: new Date(), messageCount: history.length + 2 })
+                .where(eq(conversations.id, convId));
+              console.log(`[Alfred] ✅ Saved assistant response`);
             } catch (dbError) {
               console.error('[Alfred] ❌ Failed to save response:', dbError);
             }
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            conversationId: convId,
-            userId,
-          })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId, userId })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
