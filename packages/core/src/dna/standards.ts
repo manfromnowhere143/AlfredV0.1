@@ -123,6 +123,59 @@ export const STANDARDS = {
         ],
       },
     },
+
+    /**
+     * ARTIFACT STANDARDS — Never ship broken artifacts
+     * Added after learning from white-page failures
+     */
+    artifacts: {
+      completeness: {
+        rule: 'Every artifact must render immediately. No white pages. Ever.',
+        specifics: [
+          'Include ALL required dependencies inline or via CDN',
+          'Self-contained: no external file imports',
+          'Complete HTML structure with proper head/body',
+          'All CSS included inline or via CDN',
+          'All JS/React dependencies loaded before component',
+        ],
+      },
+      validation: {
+        rule: 'Validate before display. Fix automatically if broken.',
+        specifics: [
+          'Parse JSX/TSX for syntax errors before render',
+          'Check for undefined component references',
+          'Verify all imports resolve to available libraries',
+          'Catch render errors and trigger self-heal',
+        ],
+      },
+      selfHealing: {
+        rule: 'If artifact fails, diagnose and fix automatically.',
+        specifics: [
+          'Capture error message from iframe',
+          'Identify root cause (missing dep, syntax, undefined)',
+          'Generate fix request to Alfred',
+          'Re-render without user intervention',
+          'Maximum 2 auto-fix attempts before showing error',
+        ],
+      },
+      libraries: {
+        rule: 'Only use libraries available in artifact sandbox.',
+        available: [
+          'react',
+          'react-dom',
+          'framer-motion (via CDN)',
+          'lucide-react (via CDN)',
+          'tailwindcss (via CDN)',
+          'recharts (via CDN)',
+        ],
+        forbidden: [
+          '@heroicons/react (use lucide-react instead)',
+          'next/image (use img tag)',
+          'next/link (use a tag)',
+          'External file imports',
+        ],
+      },
+    },
   
     /**
      * Stack preferences — defaults, not dogma
@@ -161,6 +214,14 @@ export const STANDARDS = {
   - **Clarity over brevity**: ${STANDARDS.code.clarity.rule}
   - **Naming**: ${STANDARDS.code.naming.rule}
   - **Dependencies**: ${STANDARDS.code.dependencies.rule}
+
+  ### Artifact Standards (CRITICAL)
+  
+  - **Completeness**: ${STANDARDS.artifacts.completeness.rule}
+  - **Validation**: ${STANDARDS.artifacts.validation.rule}
+  - **Self-Healing**: ${STANDARDS.artifacts.selfHealing.rule}
+  - **Available libraries**: ${STANDARDS.artifacts.libraries.available.join(', ')}
+  - **Forbidden in artifacts**: ${STANDARDS.artifacts.libraries.forbidden.join(', ')}
   
   ### Stack Preferences
   
@@ -168,7 +229,8 @@ export const STANDARDS = {
   - **Backend**: ${STANDARDS.stack.backend.join(', ')}
   - **Infrastructure**: ${STANDARDS.stack.infrastructure.join(', ')}
   
-  You are not dogmatic about stack. You are dogmatic about quality.`;
+  You are not dogmatic about stack. You are dogmatic about quality.
+  Artifacts must ALWAYS render. A white page is a failure.`;
   }
   
   export type Standards = typeof STANDARDS;

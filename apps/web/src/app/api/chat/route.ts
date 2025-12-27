@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel, type Facet, type SkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { getDb } from '@/lib/db';
@@ -29,8 +30,12 @@ export async function POST(request: NextRequest) {
   try {
     const client = getLLMClient();
     
+    // Get authenticated user from session (secure - don't trust client)
+    const session = await getServerSession();
+    const sessionUserId = (session?.user as any)?.id;
+    
     const body = await request.json();
-    const { message, history = [], conversationId, userId: clientUserId } = body;
+    const { message, history = [], conversationId } = body;
 
     if (!message) {
       return new Response(JSON.stringify({ error: 'Message required' }), { status: 400 });
@@ -53,16 +58,16 @@ export async function POST(request: NextRequest) {
       skillLevel,
     });
 
-    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel}`);
+    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | User: ${sessionUserId || 'anonymous'}`);
 
     // Database operations
     let convId = conversationId;
-    let userId = clientUserId;
+    let userId = sessionUserId;
 
     try {
       const db = await getDb();
       
-      // Get or create user
+      // Use session user or create anonymous
       if (!userId) {
         const user = await getOrCreateUser(db, { externalId: 'anonymous' });
         if (user) {
@@ -94,15 +99,16 @@ export async function POST(request: NextRequest) {
         console.warn('[Alfred] RAG context unavailable:', ragError);
       }
 
-      // Create conversation if needed
-      if (!convId) {
+      // Create conversation if needed (with title from first message)
+      if (!convId && userId) {
         const conv = await createConversation(db, { 
           mode: detectedFacet,
-          userId: userId || undefined,
+          userId: userId,
+          title: message.slice(0, 50),
         });
         if (conv) {
           convId = conv.id;
-          console.log(`[Alfred] New conversation: ${convId}`);
+          console.log(`[Alfred] ✅ New conversation: ${convId} for user: ${userId}`);
         }
       }
 
@@ -114,6 +120,7 @@ export async function POST(request: NextRequest) {
           content: message,
           mode: detectedFacet,
         });
+        console.log(`[Alfred] ✅ Saved user message to: ${convId}`);
 
         // Record skill signals and stack preferences (async, don't wait)
         if (userId) {
@@ -126,7 +133,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (dbError) {
-      console.warn('[Alfred] Database unavailable:', dbError);
+      console.error('[Alfred] ❌ Database error:', dbError);
     }
 
     // Build messages for LLM
@@ -146,7 +153,6 @@ export async function POST(request: NextRequest) {
           const streamOptions: StreamOptions = {
             onToken: (token: string) => {
               fullResponse += token;
-              // IMPORTANT: Frontend expects { content: ... } not { text: ... }
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: token, conversationId: convId })}\n\n`));
             },
             onError: (error: Error) => {
@@ -170,13 +176,14 @@ export async function POST(request: NextRequest) {
               const db = await getDb();
               await createMessage(db, {
                 conversationId: convId,
-                role: 'alfred',
+                role: 'assistant',
                 content: fullResponse,
                 mode: detectedFacet,
               });
               await updateConversation(db, convId, { lastMessageAt: new Date() });
+              console.log(`[Alfred] ✅ Saved assistant response to: ${convId}`);
             } catch (dbError) {
-              console.warn('[Alfred] Failed to save response:', dbError);
+              console.error('[Alfred] ❌ Failed to save response:', dbError);
             }
           }
 

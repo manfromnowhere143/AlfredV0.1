@@ -181,9 +181,9 @@ export default function AlfredChat() {
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
     console.log('Sign in with:', method, email);
     if (method === 'google') {
-      await signIn('google');
+      await signIn('google', { callbackUrl: '/' });
     } else if (method === 'email' && email) {
-      const result = await signIn('credentials', { email, redirect: false });
+      const result = await signIn('email', { email, redirect: false });
       if (result?.ok) {
         setAuthModalOpen(false);
       } else {
