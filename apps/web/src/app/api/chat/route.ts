@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHAT API ROUTE - /api/chat
-// Production-grade with persistent file context across conversation
+// Production-grade with persistent file context + video support
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -8,7 +8,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
-import { db, conversations, messages, files, eq, asc } from '@alfred/database';
+import { db, conversations, messages, files, eq, asc, desc } from '@alfred/database';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -62,6 +62,12 @@ interface LLMMessage {
 
 const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const SUPPORTED_DOCUMENT_TYPES = ['application/pdf'];
+const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/mov'];
+
+// Limits to prevent 413 errors
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB per image
+const MAX_IMAGES_PER_REQUEST = 5; // Max images to send to Claude
+const MAX_HISTORY_MESSAGES = 20; // Limit conversation history
 
 const CODE_FORMATTING_RULES = `
 ██████████████████████████████████████████████████████████████████████████████
@@ -112,20 +118,29 @@ function getLLMClient() {
 // FILE UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function isSupported(mimeType: string): boolean {
-  return SUPPORTED_IMAGE_TYPES.includes(mimeType) || SUPPORTED_DOCUMENT_TYPES.includes(mimeType);
+function isImage(mimeType: string): boolean {
+  return SUPPORTED_IMAGE_TYPES.includes(mimeType);
+}
+
+function isVideo(mimeType: string): boolean {
+  return SUPPORTED_VIDEO_TYPES.includes(mimeType) || mimeType.startsWith('video/');
+}
+
+function isPDF(mimeType: string): boolean {
+  return mimeType === 'application/pdf';
 }
 
 function normalizeMimeType(type: string, filename: string): string {
-  if (SUPPORTED_IMAGE_TYPES.includes(type) || SUPPORTED_DOCUMENT_TYPES.includes(type)) {
+  if (SUPPORTED_IMAGE_TYPES.includes(type) || SUPPORTED_DOCUMENT_TYPES.includes(type) || type.startsWith('video/')) {
     return type;
   }
   const ext = filename.split('.').pop()?.toLowerCase();
   const mimeMap: Record<string, string> = {
     'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
     'gif': 'image/gif', 'webp': 'image/webp', 'pdf': 'application/pdf',
+    'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime',
   };
-  return mimeMap[ext || ''] || 'image/jpeg';
+  return mimeMap[ext || ''] || type;
 }
 
 async function readFileFromDisk(url: string): Promise<string | null> {
@@ -145,7 +160,8 @@ async function readFileFromDisk(url: string): Promise<string | null> {
 
 async function buildMessageContent(
   text: string,
-  fileAttachments?: FileAttachment[]
+  fileAttachments?: FileAttachment[],
+  skipVideos: boolean = true
 ): Promise<string | ContentBlock[]> {
   if (!fileAttachments || fileAttachments.length === 0) {
     return text || 'Hello';
@@ -153,12 +169,34 @@ async function buildMessageContent(
 
   const content: ContentBlock[] = [];
   let processedFiles = 0;
+  let skippedFiles = 0;
 
   for (const file of fileAttachments) {
     const mimeType = normalizeMimeType(file.type, file.name);
     
-    if (!isSupported(mimeType)) {
-      console.log(`[Chat] Skipping unsupported: ${file.name} (${file.type})`);
+    // Skip videos - they can't be sent to Claude Vision
+    if (isVideo(mimeType)) {
+      console.log(`[Chat] ⏭️ Skipping video (not supported): ${file.name}`);
+      skippedFiles++;
+      continue;
+    }
+
+    // Skip if too large
+    if (file.size > MAX_IMAGE_SIZE) {
+      console.log(`[Chat] ⏭️ Skipping large file (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
+      skippedFiles++;
+      continue;
+    }
+
+    // Skip if we've hit the limit
+    if (processedFiles >= MAX_IMAGES_PER_REQUEST) {
+      console.log(`[Chat] ⏭️ Max images reached, skipping: ${file.name}`);
+      skippedFiles++;
+      continue;
+    }
+
+    if (!isImage(mimeType) && !isPDF(mimeType)) {
+      console.log(`[Chat] ⏭️ Unsupported type: ${file.name} (${mimeType})`);
       continue;
     }
 
@@ -171,11 +209,11 @@ async function buildMessageContent(
     }
 
     if (!base64Data) {
-      console.log(`[Chat] No data for file: ${file.name}`);
+      console.log(`[Chat] ⚠️ No data for file: ${file.name}`);
       continue;
     }
 
-    if (SUPPORTED_IMAGE_TYPES.includes(mimeType)) {
+    if (isImage(mimeType)) {
       content.push({
         type: 'image',
         source: {
@@ -186,7 +224,7 @@ async function buildMessageContent(
       });
       processedFiles++;
       console.log(`[Chat] ✅ Added image: ${file.name}`);
-    } else if (mimeType === 'application/pdf') {
+    } else if (isPDF(mimeType)) {
       content.push({
         type: 'document',
         source: { type: 'base64', mediaType: 'application/pdf', data: base64Data },
@@ -210,18 +248,22 @@ async function buildMessageContent(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY LOADING - Using direct db.select() calls
+// HISTORY LOADING - With limits to prevent 413 errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadConversationHistory(conversationId: string): Promise<LLMMessage[]> {
   const llmMessages: LLMMessage[] = [];
   
   try {
+    // Get recent messages only
     const dbMessages = await db
       .select()
       .from(messages)
       .where(eq(messages.conversationId, conversationId))
-      .orderBy(asc(messages.createdAt));
+      .orderBy(asc(messages.createdAt))
+      .limit(MAX_HISTORY_MESSAGES);
+
+    let imagesInHistory = 0;
 
     for (const msg of dbMessages) {
       const role: 'user' | 'assistant' = msg.role === 'user' ? 'user' : 'assistant';
@@ -232,19 +274,26 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
           .from(files)
           .where(eq(files.messageId, msg.id));
 
-        if (msgFiles.length > 0) {
-          const attachments: FileAttachment[] = msgFiles.map(f => ({
-            id: f.id,
-            name: f.originalName,
-            type: f.mimeType,
-            size: f.size,
-            url: f.url,
-          }));
+        // Filter to only include images (not videos) and limit count
+        const imageFiles = msgFiles.filter(f => isImage(f.mimeType) && !isVideo(f.mimeType));
+        
+        if (imageFiles.length > 0 && imagesInHistory < MAX_IMAGES_PER_REQUEST) {
+          const attachments: FileAttachment[] = imageFiles
+            .slice(0, MAX_IMAGES_PER_REQUEST - imagesInHistory)
+            .map(f => ({
+              id: f.id,
+              name: f.originalName,
+              type: f.mimeType,
+              size: f.size,
+              url: f.url,
+            }));
           
           const content = await buildMessageContent(msg.content, attachments);
           llmMessages.push({ role, content });
-          console.log(`[Alfred] ✅ Reconstructed message with ${msgFiles.length} file(s)`);
+          imagesInHistory += attachments.length;
+          console.log(`[Alfred] ✅ Reconstructed message with ${attachments.length} image(s)`);
         } else if (msg.content?.trim()) {
+          // Include text-only version if we've hit image limit
           llmMessages.push({ role, content: msg.content });
         }
       } else {
@@ -302,33 +351,85 @@ export async function POST(request: NextRequest) {
     if (hasFiles) {
       const fileList = incomingFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
       
-      const imageFiles = incomingFiles.filter((f: FileAttachment) => f.type?.startsWith('image/'));
+      // Separate images and videos
+      const imageFiles = incomingFiles.filter((f: FileAttachment) => {
+        const mime = normalizeMimeType(f.type, f.name);
+        return isImage(mime);
+      });
       
-      let imageContext = '';
+      const videoFiles = incomingFiles.filter((f: FileAttachment) => {
+        const mime = normalizeMimeType(f.type, f.name);
+        return isVideo(mime);
+      });
+      
+      let mediaContext = '';
+      
+      // Image instructions
       if (imageFiles.length > 0) {
         const imgList = imageFiles.map((f: FileAttachment) => 
           `  - ${f.name}: /api/files/serve?id=${f.id}`
         ).join('\n');
         
-        imageContext = `
+        mediaContext += `
 
-IMAGE EMBEDDING INSTRUCTIONS:
-You can SEE these images via Vision API. To DISPLAY them in React/HTML preview:
-
+IMAGE FILES (you can SEE these):
 ${imgList}
 
-When creating React code that shows this image, use EXACTLY:
+To DISPLAY images in React preview:
 <img src="/api/files/serve?id=${imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
+`;
+      }
+      
+      // Video instructions - Claude can't see these but can use the URL
+      if (videoFiles.length > 0) {
+        const vidList = videoFiles.map((f: FileAttachment) => 
+          `  - ${f.name}: /api/files/serve?id=${f.id}`
+        ).join('\n');
+        
+        mediaContext += `
 
-RULES:
-1. You CAN see and describe these images - use your vision
-2. To DISPLAY in React: use /api/files/serve?id={FILE_ID}
-3. NEVER say you cannot access files - you have full visual access
-4. NEVER use external URLs like unsplash or placeholder.com
-5. Use the serve endpoint above for any image display`;
+VIDEO FILES (use URL in code, you cannot preview these):
+${vidList}
+
+To DISPLAY videos in React preview (hero video, background, etc.):
+<video 
+  src="/api/files/serve?id=${videoFiles[0]?.id}" 
+  autoPlay 
+  muted 
+  loop 
+  playsInline
+  className="absolute inset-0 w-full h-full object-cover"
+/>
+
+For hero sections with video backgrounds:
+\`\`\`jsx
+<div className="relative h-screen overflow-hidden">
+  <video 
+    src="/api/files/serve?id=${videoFiles[0]?.id}"
+    autoPlay muted loop playsInline
+    className="absolute inset-0 w-full h-full object-cover"
+  />
+  <div className="absolute inset-0 bg-black/50" />
+  <div className="relative z-10">
+    {/* Content here */}
+  </div>
+</div>
+\`\`\`
+`;
       }
 
-      systemPrompt += `\n\nThe user has attached files:\n${fileList}${imageContext}\n\nAnalyze and work with these files.`;
+      if (mediaContext) {
+        systemPrompt += `\n\nThe user has attached files:\n${fileList}${mediaContext}
+
+RULES:
+1. Use /api/files/serve?id={FILE_ID} for all media
+2. NEVER use external URLs (unsplash, placeholder, etc.)
+3. NEVER say you cannot access files
+4. For videos: use <video> tag with the serve URL
+5. For images: use <img> tag with the serve URL`;
+      } else {
+        systemPrompt += `\n\nThe user has attached files:\n${fileList}\n\nAnalyze and work with these files.`;
+      }
     }
 
     console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | User: ${userId || 'anon'}`);
@@ -388,7 +489,7 @@ RULES:
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BUILD LLM MESSAGES - Load history from DB with file reconstruction
+    // BUILD LLM MESSAGES - Load history with limits
     // ─────────────────────────────────────────────────────────────────────────
     let llmMessages: LLMMessage[] = [];
 
@@ -398,7 +499,13 @@ RULES:
       console.log(`[Alfred] Loaded ${llmMessages.length} messages from history`);
     }
 
-    const currentContent = await buildMessageContent(message, incomingFiles);
+    // Build current message - only include images, not videos
+    const imageOnlyFiles = incomingFiles.filter((f: FileAttachment) => {
+      const mime = normalizeMimeType(f.type, f.name);
+      return isImage(mime);
+    });
+    
+    const currentContent = await buildMessageContent(message, imageOnlyFiles);
     llmMessages.push({ role: 'user', content: currentContent });
 
     console.log(`[Alfred] Sending ${llmMessages.length} messages to Claude`);
