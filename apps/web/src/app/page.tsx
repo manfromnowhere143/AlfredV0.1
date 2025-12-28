@@ -460,7 +460,7 @@ export default function AlfredChat() {
           ) : (
             <div className="chat-messages">
               <div className="chat-messages-inner">
-                <ArtifactProvider>
+                <ArtifactProvider conversationId={conversationId.current}>
                   {messages.map((message) => (
                     <Message
                       key={message.id}

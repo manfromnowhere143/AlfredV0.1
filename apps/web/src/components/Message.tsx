@@ -25,10 +25,17 @@ interface ArtifactContextType {
 
 const ArtifactContext = createContext<ArtifactContextType | null>(null);
 
-export function ArtifactProvider({ children }: { children: ReactNode }) {
+export function ArtifactProvider({ children, conversationId }: { children: ReactNode; conversationId?: string | null }) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Clear artifacts when conversation changes
+  useEffect(() => {
+    setArtifacts([]);
+    setIsGalleryOpen(false);
+    setCurrentIndex(0);
+  }, [conversationId]);
 
   const addArtifact = useCallback((artifact: Artifact) => {
     setArtifacts(prev => {
