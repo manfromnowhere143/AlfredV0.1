@@ -5,6 +5,48 @@ import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel 
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
 import { db, users, conversations, messages, eq } from '@alfred/database';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MANDATORY CODE FORMATTING RULES
+// This MUST be prepended to every system prompt to ensure proper code blocks
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CODE_FORMATTING_RULES = `
+██████████████████████████████████████████████████████████████████████████████
+██  MANDATORY CODE FORMATTING - FAILURE TO COMPLY BREAKS THE UI             ██
+██████████████████████████████████████████████████████████████████████████████
+
+EVERY piece of code you write MUST be wrapped in markdown code blocks.
+This is not optional. The UI parser REQUIRES this exact format:
+
+\`\`\`jsx
+// your code here
+export default function ComponentName() {
+  return <div>Content</div>;
+}
+\`\`\`
+
+WRONG (BREAKS UI - code will not render in container):
+<script>code here</script>
+<div>raw html</div>
+function Component() { return <div/> }
+
+RIGHT (WORKS - code renders in proper container with PREVIEW button):
+\`\`\`jsx
+function Component() { return <div/> }
+\`\`\`
+
+Rules:
+1. Start with \`\`\`jsx (or \`\`\`html, \`\`\`typescript, \`\`\`css, etc.)
+2. Newline after the opening backticks
+3. Your complete, runnable code
+4. Newline then \`\`\` to close
+5. NEVER output raw HTML, JSX, or JavaScript without code blocks
+6. Even small code snippets need code blocks
+
+██████████████████████████████████████████████████████████████████████████████
+
+`;
+
 // Singleton LLM client
 let llmClient: ReturnType<typeof createLLMClient> | null = null;
 
@@ -47,7 +89,9 @@ export async function POST(request: NextRequest) {
     const userMessages = allMessages.filter(m => m.role === 'user').map(m => m.content);
     const skillLevel = coreInferSkillLevel(userMessages);
     
-    let systemPrompt = buildSystemPrompt({ skillLevel });
+    // Build system prompt with MANDATORY formatting rules prepended
+    const baseSystemPrompt = buildSystemPrompt({ skillLevel });
+    const systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
 
     console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | User: ${sessionUserId || 'anonymous'}`);
 

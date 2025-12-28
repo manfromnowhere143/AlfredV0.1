@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, ReactNode, createContext, useContext, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, ReactNode, createContext, useContext, useCallback } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ARTIFACT CONTEXT
@@ -350,7 +350,7 @@ function generatePreviewHTML(code: string, language: string): string {
         const computedStyles = useMemo(() => {
           let base = {};
           if (phase === 'initial' && initial) base = toCSS(initial);
-          else if (phase === 'animate' && animate) base = toCSS(animate);
+          else if (phase === 'animate' && animate) Object.assign(base, toCSS(animate));
           if (whileInView && isInView) Object.assign(base, toCSS(whileInView));
           if (whileHover && isHovered) Object.assign(base, toCSS(whileHover));
           if (whileTap && isTapped) Object.assign(base, toCSS(whileTap));
@@ -652,6 +652,136 @@ function ArtifactGallery() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TEXT FORMATTING - Clean markdown, elegant typography
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function formatText(text: string): React.ReactNode[] {
+  // Clean up excessive markdown artifacts
+  let cleaned = text
+    .replace(/^[-─━]{3,}$/gm, '') // Remove horizontal rules (---, ───, ━━━)
+    .replace(/^\*{3,}$/gm, '')    // Remove *** dividers
+    .replace(/^#{1,6}\s*/gm, '')  // Remove heading markers (keep text)
+    .replace(/\n{3,}/g, '\n\n')   // Collapse multiple newlines
+    .trim();
+
+  const elements: React.ReactNode[] = [];
+  let key = 0;
+
+  // Split into paragraphs
+  const paragraphs = cleaned.split(/\n\n+/);
+
+  paragraphs.forEach((para, pIndex) => {
+    if (!para.trim()) return;
+
+    // Process inline formatting
+    const lines = para.split('\n');
+    const lineElements: React.ReactNode[] = [];
+
+    lines.forEach((line, lIndex) => {
+      if (!line.trim()) return;
+
+      // Check for bullet points
+      const bulletMatch = line.match(/^[\s]*[-•*]\s+(.+)$/);
+      if (bulletMatch) {
+        lineElements.push(
+          <div key={`${pIndex}-${lIndex}`} style={{ display: 'flex', gap: '10px', marginLeft: '4px', marginBottom: '6px' }}>
+            <span style={{ color: 'var(--accent, #C9B99A)', opacity: 0.6, fontSize: '8px', marginTop: '8px' }}>●</span>
+            <span>{processInlineFormatting(bulletMatch[1], `${pIndex}-${lIndex}`)}</span>
+          </div>
+        );
+        return;
+      }
+
+      // Check for numbered lists
+      const numberedMatch = line.match(/^[\s]*(\d+)[.)]\s+(.+)$/);
+      if (numberedMatch) {
+        lineElements.push(
+          <div key={`${pIndex}-${lIndex}`} style={{ display: 'flex', gap: '10px', marginLeft: '4px', marginBottom: '6px' }}>
+            <span style={{ color: 'var(--accent, #C9B99A)', opacity: 0.8, fontSize: '13px', fontWeight: 500, minWidth: '18px' }}>{numberedMatch[1]}.</span>
+            <span>{processInlineFormatting(numberedMatch[2], `${pIndex}-${lIndex}`)}</span>
+          </div>
+        );
+        return;
+      }
+
+      // Regular line
+      lineElements.push(
+        <span key={`${pIndex}-${lIndex}`}>
+          {processInlineFormatting(line, `${pIndex}-${lIndex}`)}
+          {lIndex < lines.length - 1 && <br />}
+        </span>
+      );
+    });
+
+    if (lineElements.length > 0) {
+      elements.push(
+        <p key={pIndex} style={{ margin: 0, marginBottom: pIndex < paragraphs.length - 1 ? '16px' : 0 }}>
+          {lineElements}
+        </p>
+      );
+    }
+  });
+
+  return elements.length > 0 ? elements : [<span key="empty">{text}</span>];
+}
+
+function processInlineFormatting(text: string, keyPrefix: string): React.ReactNode[] {
+  const elements: React.ReactNode[] = [];
+  
+  // Regex to match **bold**, *italic*, `code`, and regular text
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  let lastIndex = 0;
+  let match;
+  let partKey = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before match
+    if (match.index > lastIndex) {
+      elements.push(<span key={`${keyPrefix}-${partKey++}`}>{text.slice(lastIndex, match.index)}</span>);
+    }
+
+    if (match[2]) {
+      // Bold **text** - slightly bolder, inherit color
+      elements.push(
+        <span key={`${keyPrefix}-${partKey++}`} style={{ fontWeight: 600 }}>
+          {match[2]}
+        </span>
+      );
+    } else if (match[3]) {
+      // Italic *text* - inherit color
+      elements.push(
+        <span key={`${keyPrefix}-${partKey++}`} style={{ fontStyle: 'italic', opacity: 0.9 }}>
+          {match[3]}
+        </span>
+      );
+    } else if (match[4]) {
+      // Inline code `text` - theme-aware background
+      elements.push(
+        <code key={`${keyPrefix}-${partKey++}`} style={{ 
+          fontFamily: "'SF Mono', 'Fira Code', monospace",
+          fontSize: '0.9em',
+          background: 'var(--code-bg, rgba(128,128,128,0.15))',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          color: 'var(--accent, #C9B99A)'
+        }}>
+          {match[4]}
+        </code>
+      );
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    elements.push(<span key={`${keyPrefix}-${partKey++}`}>{text.slice(lastIndex)}</span>);
+  }
+
+  return elements.length > 0 ? elements : [<span key={`${keyPrefix}-0`}>{text}</span>];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MESSAGE COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -684,15 +814,40 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start', width: '100%', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: role === 'user' ? 'auto' : '100%', maxWidth: role === 'user' ? '80%' : '100%', overflow: 'hidden', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary, #fff)' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '12px', 
+        width: role === 'user' ? 'auto' : '100%', 
+        maxWidth: role === 'user' ? '80%' : '100%', 
+        overflow: 'hidden', 
+        // Elegant typography
+        fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        fontSize: '15px', 
+        lineHeight: 1.75,
+        fontWeight: 400,
+        letterSpacing: '-0.01em',
+        // Theme-aware colors using CSS variables with fallbacks
+        color: role === 'user' 
+          ? 'var(--text-primary, var(--foreground, inherit))' 
+          : 'var(--text-secondary, var(--foreground, inherit))',
+        fontFeatureSettings: '"cv01", "cv02", "cv03", "cv04"',
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+      }}>
         {parsedContent.map((part, index) => {
           if (part.type === 'code' || part.type === 'code-streaming') {
             return <CodeBlock key={index} language={part.language || 'plaintext'} code={part.content} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;
           }
-          return <p key={index} style={{ margin: 0, padding: '3px 0' }}>{part.content}</p>;
+          // Use elegant text formatting
+          return (
+            <div key={index} style={{ padding: '2px 0' }}>
+              {formatText(part.content)}
+            </div>
+          );
         })}
         {isStreaming && parsedContent.every(p => p.type === 'text') && (
-          <span style={{ display: 'inline-block', width: 2, height: 16, background: '#fff', marginLeft: 2, animation: 'alfredBlink 0.8s step-end infinite', verticalAlign: 'text-bottom' }} />
+          <span style={{ display: 'inline-block', width: 2, height: 16, background: 'var(--accent, rgba(201,185,154,0.8))', marginLeft: 2, animation: 'alfredBlink 0.8s step-end infinite', verticalAlign: 'text-bottom' }} />
         )}
       </div>
     </div>
