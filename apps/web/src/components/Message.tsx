@@ -139,14 +139,20 @@ function generatePreviewHTML(code: string, language: string): string {
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <script src="https://cdn.tailwindcss.com"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { min-height: 100%; }
+    html, body { min-height: 100%; touch-action: pan-x pan-y; -webkit-touch-callout: none; }
     body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   </style>
+  <script>
+    document.addEventListener('touchmove', function(e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+    document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
+    document.addEventListener('gestureend', function(e) { e.preventDefault(); });
+  <\/script>
 </head>
 <body>${code}</body>
 </html>`;
@@ -167,7 +173,7 @@ function generatePreviewHTML(code: string, language: string): string {
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\/script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin><\/script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"><\/script>
@@ -186,6 +192,7 @@ function generatePreviewHTML(code: string, language: string): string {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { min-height: 100%; }
+    html, body { touch-action: pan-x pan-y; -webkit-touch-callout: none; }
     body { 
       min-height: 100vh;
       font-family: 'Inter', system-ui, sans-serif;
@@ -208,6 +215,12 @@ function generatePreviewHTML(code: string, language: string): string {
     .animate-slideDown { animation: slideDown 0.5s ease-out; }
     .animate-scaleIn { animation: scaleIn 0.3s ease-out; }
   </style>
+  <script>
+    document.addEventListener('touchmove', function(e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+    document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
+    document.addEventListener('gestureend', function(e) { e.preventDefault(); });
+  <\/script>
 </head>
 <body>
   <div id="root"></div>
@@ -601,7 +614,7 @@ function ArtifactGallery() {
         </div>
       </div>
       <style>{`
-        .alfred-gallery-root{position:fixed!important;inset:0!important;z-index:99999!important;background:#000!important;display:flex!important;flex-direction:column!important}
+        .alfred-gallery-root{position:fixed!important;inset:0!important;z-index:99999!important;background:#000!important;display:flex!important;flex-direction:column!important;touch-action:none!important;-webkit-touch-callout:none!important;overscroll-behavior:none!important}
         .alfred-gallery-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:100%!important}
         .alfred-gallery-head{display:flex!important;align-items:center!important;justify-content:space-between!important;padding:12px 16px!important;border-bottom:1px solid rgba(255,255,255,0.1)!important;flex-shrink:0!important;background:#000!important}
         .alfred-gallery-headleft,.alfred-gallery-headright{display:flex!important;align-items:center!important;gap:8px!important}
@@ -620,8 +633,8 @@ function ArtifactGallery() {
         .alfred-gallery-codeline{display:flex!important;padding:1px 16px!important;font-family:'SF Mono',monospace!important;font-size:11px!important;line-height:18px!important}
         .alfred-gallery-codenum{width:32px!important;color:#333!important;text-align:right!important;padding-right:12px!important;user-select:none!important}
         .alfred-gallery-codetxt{color:#ccc!important;white-space:pre!important}
-        .alfred-gallery-preview{flex:1!important;position:relative!important;background:#000!important;min-height:0!important;height:100%!important}
-        .alfred-gallery-iframe{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:none!important;background:#000!important;opacity:0!important;transition:opacity 0.3s ease!important}
+        .alfred-gallery-preview{flex:1!important;position:relative!important;background:#000!important;min-height:0!important;height:100%!important;touch-action:none!important}
+        .alfred-gallery-iframe{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:none!important;background:#000!important;opacity:0!important;transition:opacity 0.3s ease!important;touch-action:none!important}
         .alfred-gallery-iframe.loaded{opacity:1!important}
         .alfred-gallery-loading{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;background:#000!important}
         .alfred-gallery-spinner{width:24px!important;height:24px!important;border:2px solid rgba(255,255,255,0.1)!important;border-top-color:#666!important;border-radius:50%!important;animation:alfredSpin 0.6s linear infinite!important}

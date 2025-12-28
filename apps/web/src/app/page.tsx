@@ -198,6 +198,34 @@ export default function AlfredChat() {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // PREVENT PINCH ZOOM ON iOS - STATE OF THE ART
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    const preventGestureZoom = (e: Event) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('touchmove', preventZoom, { passive: false });
+    document.addEventListener('gesturestart', preventGestureZoom);
+    document.addEventListener('gesturechange', preventGestureZoom);
+    document.addEventListener('gestureend', preventGestureZoom);
+
+    return () => {
+      document.removeEventListener('touchmove', preventZoom);
+      document.removeEventListener('gesturestart', preventGestureZoom);
+      document.removeEventListener('gesturechange', preventGestureZoom);
+      document.removeEventListener('gestureend', preventGestureZoom);
+    };
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // LOAD USER DATA
   // ─────────────────────────────────────────────────────────────────────────────
 
