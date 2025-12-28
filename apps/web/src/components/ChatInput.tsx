@@ -410,7 +410,7 @@ export default function ChatInput({
         
         if (res.ok) {
           const data = await res.json();
-          setAttachments(prev => prev.map(a => a.id === id ? { ...a, url: data.url, status: 'ready', progress: 100 } : a));
+          setAttachments(prev => prev.map(a => a.id === id ? { ...a, id: data.id, url: data.url, status: 'ready', progress: 100 } : a));
         } else {
           const base64 = await toBase64(file);
           setAttachments(prev => prev.map(a => a.id === id ? { ...a, base64, status: 'ready', progress: 100 } : a));
