@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     const { role, content } = await req.json();
     const [msg] = await db.insert(messages).values({ role, content, conversationId: params.id }).returning();
-    await db.update(conversations).set({ preview: content.slice(0, 50), updatedAt: new Date() }).where(eq(conversations.id, params.id));
+    await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, params.id));
     return NextResponse.json({ success: true, data: msg }, { status: 201 });
   } catch (error) {
     console.error('Error:', error);

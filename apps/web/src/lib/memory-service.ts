@@ -3,14 +3,16 @@
  * 
  * Bridges @alfred/memory with database persistence.
  * Extracts skill signals, tracks preferences, provides context.
+ * 
+ * TODO: Re-enable when database functions are implemented
  */
 
-import type { DatabaseClient } from '@alfred/database';
-import { 
-  createMemoryEntry, 
-  getMemoryEntriesByUserId,
-  reinforceMemoryEntry,
-} from '@alfred/database';
+// import type { DatabaseClient } from '@alfred/database';
+// import { 
+//   createMemoryEntry, 
+//   getMemoryEntriesByUserId,
+//   reinforceMemoryEntry,
+// } from '@alfred/database';
 import type { AlfredMode } from '@alfred/core';
 
 // ============================================================================
@@ -42,7 +44,6 @@ const EXPERIENCED_SIGNALS = [
   'architecture', 'refactor', 'dependency injection', 'monorepo', 'ci/cd',
   'kubernetes', 'terraform', 'microservices', 'event sourcing', 'cqrs',
   'design pattern', 'solid principles', 'dry', 'separation of concerns',
-  'abstraction', 'polymorphism', 'composition over inheritance',
 ];
 
 const INTERMEDIATE_SIGNALS = [
@@ -93,10 +94,6 @@ export function extractStackPreferences(message: string): string[] {
   return STACK_KEYWORDS.filter(stack => lowerMessage.includes(stack));
 }
 
-// ============================================================================
-// SKILL LEVEL CALCULATION
-// ============================================================================
-
 export function calculateSkillLevel(signals: Array<{ weight: number }>): { level: SkillLevel; confidence: number } {
   if (signals.length < 3) {
     return { level: 'inferred', confidence: 0.3 };
@@ -118,124 +115,10 @@ export function calculateSkillLevel(signals: Array<{ weight: number }>): { level
 }
 
 // ============================================================================
-// MEMORY SERVICE
+// DATABASE FUNCTIONS - TODO: Implement when database exports are ready
 // ============================================================================
 
-export async function recordSkillSignals(
-  db: DatabaseClient,
-  userId: string,
-  message: string,
-  conversationId?: string,
-  messageId?: string
-): Promise<void> {
-  const signals = extractSkillSignals(message);
-  
-  for (const signal of signals) {
-    await createMemoryEntry(db, {
-      userId,
-      type: 'skill_signal' as MemoryType,
-      content: JSON.stringify(signal),
-      confidence: signal.weight,
-      sourceConversationId: conversationId,
-      sourceMessageId: messageId,
-      metadata: { signalType: signal.type, value: signal.value },
-    });
-  }
-}
-
-export async function recordStackPreferences(
-  db: DatabaseClient,
-  userId: string,
-  message: string,
-  conversationId?: string
-): Promise<void> {
-  const stacks = extractStackPreferences(message);
-  
-  for (const stack of stacks) {
-    const existing = await getMemoryEntriesByUserId(db, userId, {
-      type: 'stack_preference',
-      minConfidence: 0.1,
-    });
-
-    const existingStack = existing.find(e => {
-      const meta = e.metadata as { stack?: string } | null;
-      return meta?.stack === stack;
-    });
-
-    if (existingStack) {
-      await reinforceMemoryEntry(db, existingStack.id, 0.1);
-    } else {
-      await createMemoryEntry(db, {
-        userId,
-        type: 'stack_preference' as MemoryType,
-        content: stack,
-        confidence: 0.5,
-        sourceConversationId: conversationId,
-        metadata: { stack },
-      });
-    }
-  }
-}
-
-export async function getUserContext(
-  db: DatabaseClient,
-  userId: string
-): Promise<UserContext> {
-  const skillSignals = await getMemoryEntriesByUserId(db, userId, {
-    type: 'skill_signal',
-    minConfidence: 0.3,
-    limit: 50,
-  });
-
-  const stackPrefs = await getMemoryEntriesByUserId(db, userId, {
-    type: 'stack_preference',
-    minConfidence: 0.3,
-    limit: 20,
-  });
-
-  const signalWeights = skillSignals.map(s => {
-    const parsed = JSON.parse(s.content) as { weight: number };
-    return { weight: parsed.weight * s.confidence };
-  });
-  const { level, confidence } = calculateSkillLevel(signalWeights);
-
-  const recentTopics = skillSignals.slice(0, 10).map(s => {
-    const parsed = JSON.parse(s.content) as { value: string };
-    return parsed.value;
-  });
-
-  const stackPreferences = stackPrefs.map(s => s.content);
-
-  return {
-    skillLevel: level,
-    skillConfidence: confidence,
-    preferredMode: 'builder',
-    recentTopics: [...new Set(recentTopics)],
-    stackPreferences: [...new Set(stackPreferences)],
-  };
-}
-
-export async function getContextForPrompt(
-  db: DatabaseClient,
-  userId: string
-): Promise<string> {
-  const context = await getUserContext(db, userId);
-  
-  const parts: string[] = [];
-  
-  if (context.skillLevel !== 'inferred') {
-    parts.push(`User skill level: ${context.skillLevel} (confidence: ${(context.skillConfidence * 100).toFixed(0)}%)`);
-  }
-  
-  if (context.stackPreferences.length > 0) {
-    parts.push(`Preferred stack: ${context.stackPreferences.slice(0, 5).join(', ')}`);
-  }
-  
-  if (context.recentTopics.length > 0) {
-    parts.push(`Recent topics: ${context.recentTopics.slice(0, 5).join(', ')}`);
-  }
-  
-  return parts.length > 0 
-    ? `\n\n<user_context>\n${parts.join('\n')}\n</user_context>`
-    : '';
-}
+// export async function recordSkillSignals(...) { }
+// export async function recordStackPreferences(...) { }
+// export async function getUserContext(...) { }
+// export async function getContextForPrompt(...) { }

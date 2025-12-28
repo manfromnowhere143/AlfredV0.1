@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
     const [artifact] = await db.insert(artifacts).values({ title, code, language: language || 'jsx', projectId, conversationId }).returning();
-    await db.update(projects).set({ lastActiveAt: new Date() }).where(eq(projects.id, projectId));
+    await db.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId));
     return NextResponse.json({ success: true, data: artifact }, { status: 201 });
   } catch (error) {
     console.error('Error:', error);

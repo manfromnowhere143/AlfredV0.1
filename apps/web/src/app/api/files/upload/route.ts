@@ -1,35 +1,27 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// FILE UPLOAD API - app/api/files/upload/route.ts
-// Local storage for development - upgrade to R2 for production
+// FILE UPLOAD API - /api/files/upload
+// Saves to local storage + database for persistent file references
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { authOptions } from '@/lib/auth';
+import { writeFile, mkdir, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { db, files, eq } from '@alfred/database';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONFIGURATION
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
+const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 
-const ALLOWED_TYPES = new Set([
-  // Images
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-  // Videos
-  'video/mp4', 'video/webm', 'video/quicktime',
-  // Documents
-  'application/pdf',
-  // Code/Text
-  'text/plain', 'text/markdown', 'text/csv', 'text/html', 'text/css',
-  'application/json', 'text/javascript',
-]);
+type FileCategory = 'image' | 'video' | 'document' | 'code' | 'audio';
 
-const FILE_CATEGORIES: Record<string, string> = {
+const MIME_TO_CATEGORY: Record<string, FileCategory> = {
   'image/jpeg': 'image',
   'image/png': 'image',
   'image/gif': 'image',
@@ -38,6 +30,9 @@ const FILE_CATEGORIES: Record<string, string> = {
   'video/mp4': 'video',
   'video/webm': 'video',
   'video/quicktime': 'video',
+  'audio/mpeg': 'audio',
+  'audio/wav': 'audio',
+  'audio/webm': 'audio',
   'application/pdf': 'document',
   'text/plain': 'code',
   'text/markdown': 'code',
@@ -48,150 +43,159 @@ const FILE_CATEGORIES: Record<string, string> = {
   'application/json': 'code',
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// UTILITIES
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// POST - Upload file
+// ─────────────────────────────────────────────────────────────────────────────
 
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[^a-zA-Z0-9.-]/g, '_')
-    .replace(/_+/g, '_')
-    .slice(0, 100);
-}
-
-function getFileCategory(mimeType: string): string {
-  return FILE_CATEGORIES[mimeType] || 'document';
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// POST - Upload File
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // ─────────────────────────────────────────────────────────────────────────
-    // Auth Check
-    // ─────────────────────────────────────────────────────────────────────────
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const userId = (session?.user as any)?.id;
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const userId = (session.user as any).id;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Parse Form Data
-    // ─────────────────────────────────────────────────────────────────────────
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const conversationId = formData.get('conversationId') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    console.log(`[Upload] Starting: ${file.name} (${file.size} bytes)`);
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Validation
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    if (!ALLOWED_TYPES.has(file.type)) {
-      return NextResponse.json({ 
-        error: `File type not allowed: ${file.type}` 
-      }, { status: 400 });
+    const category = MIME_TO_CATEGORY[file.type];
+    if (!category) {
+      return NextResponse.json({ error: `File type not allowed: ${file.type}` }, { status: 400 });
     }
 
-    const category = getFileCategory(file.type);
     const maxSize = category === 'image' ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
-    
     if (file.size > maxSize) {
-      return NextResponse.json({ 
-        error: `File too large. Max size: ${maxSize / 1024 / 1024}MB` 
-      }, { status: 400 });
+      return NextResponse.json({ error: `File too large. Max: ${maxSize / 1024 / 1024}MB` }, { status: 400 });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Generate unique filename
-    // ─────────────────────────────────────────────────────────────────────────
+    // Create user directory
+    const userDir = path.join(UPLOAD_DIR, userId);
+    if (!existsSync(userDir)) {
+      await mkdir(userDir, { recursive: true });
+    }
+
+    // Generate filename
     const timestamp = Date.now();
-    const randomId = Math.random().toString(36).slice(2, 8);
-    const safeName = sanitizeFilename(file.name);
-    const uniqueName = `${timestamp}-${randomId}-${safeName}`;
-    const fileId = `${timestamp}-${randomId}`;
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 50);
+    const filename = `${timestamp}-${randomId}-${safeName}`;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Save to local public/uploads folder
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', userId);
-    
-    // Create directory if it doesn't exist
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
+    // Save to disk
+    const filepath = path.join(userDir, filename);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await writeFile(filepath, buffer);
+
+    const url = `/uploads/${userId}/${filename}`;
+
+    // Generate base64 for Claude
+    let base64: string | undefined;
+    if (category === 'image' || file.type === 'application/pdf') {
+      base64 = buffer.toString('base64');
     }
-    
-    const filePath = path.join(uploadDir, uniqueName);
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    
-    await writeFile(filePath, buffer);
-    
-    const url = `/uploads/${userId}/${uniqueName}`;
-    console.log(`[Upload] Success: ${url}`);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Return Response
-    // ─────────────────────────────────────────────────────────────────────────
-    return NextResponse.json({
-      id: fileId,
-      name: file.name,
-      url: url,
-      type: file.type,
-      category: category,
+    // Save to database
+    const [fileRecord] = await db.insert(files).values({
+      name: filename,
+      originalName: file.name,
+      url,
+      mimeType: file.type,
+      category,
+      extension: ext,
       size: file.size,
+      userId,
+      conversationId: conversationId || undefined,
+      status: 'ready',
+    }).returning();
+
+    console.log(`[Upload] ✅ ${file.name} → ${url} (DB: ${fileRecord.id})`);
+
+    return NextResponse.json({
+      id: fileRecord.id,
+      name: file.name,
+      url,
+      type: file.type,
+      category,
+      size: file.size,
+      base64,
     });
 
   } catch (error) {
     console.error('[Upload] Error:', error);
-    return NextResponse.json(
-      { error: 'Upload failed. Please try again.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DELETE - Remove File
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// GET - Fetch file as base64
+// ─────────────────────────────────────────────────────────────────────────────
 
-export async function DELETE(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const userId = (session?.user as any)?.id;
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    const { searchParams } = new URL(req.url);
+
+    const { searchParams } = new URL(request.url);
     const fileUrl = searchParams.get('url');
-    
+
     if (!fileUrl) {
       return NextResponse.json({ error: 'URL required' }, { status: 400 });
     }
 
-    // Delete local file
-    if (fileUrl.startsWith('/uploads/')) {
-      const filePath = path.join(process.cwd(), 'public', fileUrl);
-      try {
-        await unlink(filePath);
-        console.log(`[Delete] Removed: ${filePath}`);
-      } catch (e) {
-        console.error('[Delete] Failed:', e);
-      }
+    if (!fileUrl.includes(`/uploads/${userId}/`)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const filepath = path.join(process.cwd(), 'public', fileUrl);
+    if (!existsSync(filepath)) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    const buffer = await readFile(filepath);
+    return NextResponse.json({ base64: buffer.toString('base64') });
+
+  } catch (error) {
+    console.error('[Upload] GET error:', error);
+    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE - Remove file
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const fileId = searchParams.get('id');
+
+    if (!fileId) {
+      return NextResponse.json({ error: 'File ID required' }, { status: 400 });
+    }
+
+    await db.update(files).set({ deletedAt: new Date() }).where(eq(files.id, fileId));
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('[Delete] Error:', error);
-    return NextResponse.json({ error: 'Delete failed.' }, { status: 500 });
+    console.error('[Upload] Delete error:', error);
+    return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
   }
 }

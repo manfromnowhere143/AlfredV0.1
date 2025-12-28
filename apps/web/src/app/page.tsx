@@ -26,6 +26,7 @@ interface ChatMessage {
   role: 'user' | 'alfred';
   content: string;
   timestamp: Date;
+  files?: Attachment[];
 }
 
 interface DBMessage {
@@ -37,9 +38,17 @@ interface DBMessage {
 
 interface Attachment {
   id: string;
-  type: 'image' | 'file';
+  type: 'image' | 'video' | 'document' | 'code';
   name: string;
-  file: File;
+  file?: File;
+  size: number;
+  url?: string;
+  base64?: string;
+  preview?: string;
+  status: 'pending' | 'uploading' | 'ready' | 'error';
+  progress: number;
+  error?: string;
+  duration?: number;
 }
 
 interface Project {
@@ -66,13 +75,6 @@ function mapDBMessageToChat(msg: DBMessage): ChatMessage {
     content: msg.content,
     timestamp: new Date(msg.createdAt),
   };
-}
-
-function mapChatToHistory(messages: ChatMessage[]) {
-  return messages.map(m => ({
-    role: m.role === 'alfred' ? 'assistant' : 'user',
-    content: m.content,
-  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -198,19 +200,14 @@ export default function AlfredChat() {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // PREVENT PINCH ZOOM ON iOS - STATE OF THE ART
+  // PREVENT PINCH ZOOM ON iOS
   // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const preventZoom = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+      if (e.touches.length > 1) e.preventDefault();
     };
-
-    const preventGestureZoom = (e: Event) => {
-      e.preventDefault();
-    };
+    const preventGestureZoom = (e: Event) => e.preventDefault();
 
     document.addEventListener('touchmove', preventZoom, { passive: false });
     document.addEventListener('gesturestart', preventGestureZoom);
@@ -245,7 +242,6 @@ export default function AlfredChat() {
       
       if (convsRes.ok) {
         const data = await convsRes.json();
-        // Map conversations with proper date handling
         const mappedConvs = (data.data || []).map((c: any) => ({
           id: c.id,
           title: c.title || 'Untitled',
@@ -280,17 +276,11 @@ export default function AlfredChat() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
-    console.log('[Alfred] Sign in with:', method, email);
-    
     if (method === 'google') {
       await signIn('google', { callbackUrl: '/' });
     } else if (method === 'email' && email) {
       const result = await signIn('email', { email, redirect: false });
-      if (result?.ok) {
-        setAuthModalOpen(false);
-      } else {
-        console.error('[Alfred] Sign in failed:', result?.error);
-      }
+      if (result?.ok) setAuthModalOpen(false);
     } else if (method === 'apple') {
       alert('Apple Sign In coming soon!');
     } else if (method === 'sso') {
@@ -307,7 +297,7 @@ export default function AlfredChat() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SEND MESSAGE
+  // SEND MESSAGE - Server loads history from DB for file persistence
   // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSend = async (content: string, attachments?: Attachment[]) => {
@@ -318,6 +308,7 @@ export default function AlfredChat() {
       role: 'user',
       content,
       timestamp: new Date(),
+      files: attachments,
     };
     
     setMessages(prev => [...prev, userMessage]);
@@ -325,16 +316,21 @@ export default function AlfredChat() {
     setStreamingContent('');
 
     try {
-      const history = mapChatToHistory(messages);
-
+      // Server loads history from DB (preserves file context)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: content,
-          history,
           conversationId: conversationId.current,
-          files: attachments?.map(a => ({ id: a.id, name: a.name, type: a.type === "image" ? `image/${a.name.split(".").pop()?.toLowerCase() || "jpeg"}` : a.type, size: a.size, url: a.url, base64: a.base64 })),
+          files: attachments?.filter(a => a.status === 'ready').map(a => ({
+            id: a.id,
+            name: a.name,
+            type: a.type === 'image' ? `image/${a.name.split('.').pop()?.toLowerCase() || 'jpeg'}` : a.type,
+            size: a.size,
+            url: a.url,
+            base64: a.base64,
+          })),
         }),
       });
 
@@ -364,12 +360,10 @@ export default function AlfredChat() {
                 }
                 if (parsed.conversationId && !conversationId.current) {
                   conversationId.current = parsed.conversationId;
-                  // Refresh conversation list
                   loadUserData();
                 }
               } catch {
-                fullContent += data;
-                setStreamingContent(fullContent);
+                // Ignore parse errors
               }
             }
           }
@@ -379,22 +373,20 @@ export default function AlfredChat() {
       const alfredMessage: ChatMessage = {
         id: `alfred-${Date.now()}`,
         role: 'alfred',
-        content: fullContent || 'I apologize, but I encountered an issue processing your request.',
+        content: fullContent || 'I encountered an issue processing your request.',
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, alfredMessage]);
-      setStreamingContent('');
 
     } catch (error) {
       console.error('[Alfred] Chat error:', error);
-      const errorMessage: ChatMessage = {
+      setMessages(prev => [...prev, {
         id: `alfred-${Date.now()}`,
         role: 'alfred',
         content: 'I encountered an error. Please try again.',
         timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      }]);
     } finally {
       setIsLoading(false);
       setStreamingContent('');
@@ -417,15 +409,8 @@ export default function AlfredChat() {
       if (res.ok) {
         const data = await res.json();
         conversationId.current = id;
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // MAP DB MESSAGES TO CHAT FORMAT
-        // ═══════════════════════════════════════════════════════════════════
         const dbMessages: DBMessage[] = data.data?.messages || [];
-        const mappedMessages = dbMessages.map(mapDBMessageToChat);
-        setMessages(mappedMessages);
-        
-        console.log(`[Alfred] Loaded ${mappedMessages.length} messages for conversation ${id}`);
+        setMessages(dbMessages.map(mapDBMessageToChat));
       }
     } catch (error) {
       console.error('[Alfred] Failed to load conversation:', error);
@@ -522,6 +507,7 @@ export default function AlfredChat() {
             isSignedIn={isSignedIn}
             isAuthChecked={isAuthChecked}
             onSignIn={() => setAuthModalOpen(true)}
+            conversationId={conversationId.current}
           />
         </main>
       </div>
@@ -531,14 +517,6 @@ export default function AlfredChat() {
         onClose={() => setAuthModalOpen(false)}
         onSignIn={handleSignIn}
       />
-
-      <style jsx>{`
-        .spiral-loading {
-          width: 280px;
-          height: 280px;
-          margin: 0 auto;
-        }
-      `}</style>
     </>
   );
 }
