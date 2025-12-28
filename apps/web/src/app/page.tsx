@@ -334,6 +334,7 @@ export default function AlfredChat() {
           message: content,
           history,
           conversationId: conversationId.current,
+          files: attachments?.map(a => ({ id: a.id, name: a.name, type: a.type === "image" ? `image/${a.name.split(".").pop()?.toLowerCase() || "jpeg"}` : a.type, size: a.size, url: a.url, base64: a.base64 })),
         }),
       });
 

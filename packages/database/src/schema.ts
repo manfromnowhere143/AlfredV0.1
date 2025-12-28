@@ -2,7 +2,7 @@
  * Database Schema
  *
  * PostgreSQL schema using Drizzle ORM.
- * Designed for Alfred's memory, conversations, and RAG.
+ * Designed for Alfred's memory, conversations, RAG, and file uploads.
  *
  * Principles:
  * - UUIDs for all primary keys
@@ -40,6 +40,10 @@ export const memoryTypeEnum = pgEnum('memory_type', ['preference', 'project', 'd
 export const projectTypeEnum = pgEnum('project_type', ['web_app', 'dashboard', 'api', 'library', 'other']);
 export const documentTypeEnum = pgEnum('document_type', ['code', 'markdown', 'architecture', 'decision', 'pattern']);
 export const qualityTierEnum = pgEnum('quality_tier', ['gold', 'silver', 'bronze']);
+
+// File system enums
+export const fileCategoryEnum = pgEnum('file_category', ['image', 'video', 'document', 'code', 'audio']);
+export const fileStatusEnum = pgEnum('file_status', ['pending', 'processing', 'ready', 'error']);
 
 // ============================================================================
 // USERS
@@ -131,6 +135,9 @@ export const messages = pgTable('messages', {
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
   
+  // File references - array of file UUIDs attached to this message
+  fileIds: jsonb('file_ids').$type<string[]>().default([]),
+  
   // Attachments and artifacts stored as JSONB
   attachments: jsonb('attachments').$type<Array<{
     type: string;
@@ -206,7 +213,7 @@ export const projects = pgTable('projects', {
 ]);
 
 // ============================================================================
-// ARTIFACTS (NEW - for saving generated code/components)
+// ARTIFACTS (for saving generated code/components)
 // ============================================================================
 
 export const artifacts = pgTable('artifacts', {
@@ -235,6 +242,60 @@ export const artifacts = pgTable('artifacts', {
   index('artifacts_project_id_idx').on(table.projectId),
   index('artifacts_conversation_id_idx').on(table.conversationId),
   index('artifacts_created_at_idx').on(table.createdAt),
+]);
+
+// ============================================================================
+// FILES (for user uploads - images, videos, documents, code)
+// ============================================================================
+
+export const files = pgTable('files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  // Basic info
+  name: varchar('name', { length: 255 }).notNull(),
+  originalName: varchar('original_name', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  
+  // Type info
+  mimeType: varchar('mime_type', { length: 100 }).notNull(),
+  category: fileCategoryEnum('category').notNull(),
+  extension: varchar('extension', { length: 20 }),
+  
+  // Size info
+  size: integer('size').notNull(),
+  
+  // Media dimensions (for images/videos)
+  width: integer('width'),
+  height: integer('height'),
+  duration: integer('duration'), // seconds for video/audio
+  
+  // Generated previews
+  thumbnailUrl: text('thumbnail_url'),
+  previewUrl: text('preview_url'),
+  
+  // Processing status
+  status: fileStatusEnum('status').notNull().default('ready'),
+  error: text('error'),
+  
+  // Ownership & Relations
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }),
+  messageId: uuid('message_id').references(() => messages.id, { onDelete: 'set null' }),
+  
+  // Metadata
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (table) => [
+  index('files_user_id_idx').on(table.userId),
+  index('files_conversation_id_idx').on(table.conversationId),
+  index('files_message_id_idx').on(table.messageId),
+  index('files_status_idx').on(table.status),
+  index('files_category_idx').on(table.category),
+  index('files_created_at_idx').on(table.createdAt),
 ]);
 
 // ============================================================================
@@ -453,6 +514,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   memoryEntries: many(memoryEntries),
   apiKeys: many(apiKeys),
   usageRecords: many(usageRecords),
+  files: many(files),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -461,10 +523,12 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
   messages: many(messages),
   decisions: many(projectDecisions),
   artifacts: many(artifacts),
+  files: many(files),
 }));
 
-export const messagesRelations = relations(messages, ({ one }) => ({
+export const messagesRelations = relations(messages, ({ one, many }) => ({
   conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+  files: many(files),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -478,6 +542,12 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
 export const artifactsRelations = relations(artifacts, ({ one }) => ({
   project: one(projects, { fields: [artifacts.projectId], references: [projects.id] }),
   conversation: one(conversations, { fields: [artifacts.conversationId], references: [conversations.id] }),
+}));
+
+export const filesRelations = relations(files, ({ one }) => ({
+  user: one(users, { fields: [files.userId], references: [users.id] }),
+  conversation: one(conversations, { fields: [files.conversationId], references: [conversations.id] }),
+  message: one(messages, { fields: [files.messageId], references: [messages.id] }),
 }));
 
 export const projectDecisionsRelations = relations(projectDecisions, ({ one }) => ({
@@ -514,11 +584,36 @@ export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type Project = typeof projects.$inferSelect;
-export type NewProject = typeof projects.$inferInsert;
+
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
+
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
+
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
+
 export type Artifact = typeof artifacts.$inferSelect;
 export type NewArtifact = typeof artifacts.$inferInsert;
+
+export type FileRecord = typeof files.$inferSelect;
+export type NewFile = typeof files.$inferInsert;
+
+export type ProjectDecision = typeof projectDecisions.$inferSelect;
+export type NewProjectDecision = typeof projectDecisions.$inferInsert;
+
+export type MemoryEntry = typeof memoryEntries.$inferSelect;
+export type NewMemoryEntry = typeof memoryEntries.$inferInsert;
+
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+
+export type Chunk = typeof chunks.$inferSelect;
+export type NewChunk = typeof chunks.$inferInsert;
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
+
+export type UsageRecord = typeof usageRecords.$inferSelect;
+export type NewUsageRecord = typeof usageRecords.$inferInsert;
