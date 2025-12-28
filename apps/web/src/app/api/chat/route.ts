@@ -217,7 +217,6 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
   const llmMessages: LLMMessage[] = [];
   
   try {
-    // Get all messages for this conversation using direct select
     const dbMessages = await db
       .select()
       .from(messages)
@@ -228,7 +227,6 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
       const role: 'user' | 'assistant' = msg.role === 'user' ? 'user' : 'assistant';
       
       if (role === 'user') {
-        // Check if this message has attached files using direct select
         const msgFiles = await db
           .select()
           .from(files)
@@ -272,15 +270,9 @@ export async function POST(request: NextRequest) {
   try {
     const client = getLLMClient();
     
-    // ─────────────────────────────────────────────────────────────────────────
-    // Authentication
-    // ─────────────────────────────────────────────────────────────────────────
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     
-    // ─────────────────────────────────────────────────────────────────────────
-    // Parse Request
-    // ─────────────────────────────────────────────────────────────────────────
     const body = await request.json();
     const { 
       message = '', 
@@ -299,7 +291,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Context Detection
+    // Context Detection & System Prompt
     // ─────────────────────────────────────────────────────────────────────────
     const detectedFacet = detectFacet(message || 'analyze');
     const skillLevel = coreInferSkillLevel([message || 'analyze image']);
@@ -308,8 +300,35 @@ export async function POST(request: NextRequest) {
     let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
     
     if (hasFiles) {
-      const fileList = incomingFiles.map((f: FileAttachment) => `- ${f.name}`).join('\n');
-      systemPrompt += `\n\nThe user has attached files:\n${fileList}\n\nAnalyze and work with these files as requested.`;
+      const fileList = incomingFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
+      
+      const imageFiles = incomingFiles.filter((f: FileAttachment) => f.type?.startsWith('image/'));
+      
+      let imageContext = '';
+      if (imageFiles.length > 0) {
+        const imgList = imageFiles.map((f: FileAttachment) => 
+          `  - ${f.name}: /api/files/serve?id=${f.id}`
+        ).join('\n');
+        
+        imageContext = `
+
+IMAGE EMBEDDING INSTRUCTIONS:
+You can SEE these images via Vision API. To DISPLAY them in React/HTML preview:
+
+${imgList}
+
+When creating React code that shows this image, use EXACTLY:
+<img src="/api/files/serve?id=${imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
+
+RULES:
+1. You CAN see and describe these images - use your vision
+2. To DISPLAY in React: use /api/files/serve?id={FILE_ID}
+3. NEVER say you cannot access files - you have full visual access
+4. NEVER use external URLs like unsplash or placeholder.com
+5. Use the serve endpoint above for any image display`;
+      }
+
+      systemPrompt += `\n\nThe user has attached files:\n${fileList}${imageContext}\n\nAnalyze and work with these files.`;
     }
 
     console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | User: ${userId || 'anon'}`);
@@ -353,7 +372,6 @@ export async function POST(request: NextRequest) {
         userMessageId = savedMessage?.id;
         console.log(`[Alfred] ✅ Saved user message: ${userMessageId}`);
 
-        // Link files to this message
         if (userMessageId && incomingFiles.length > 0) {
           for (const file of incomingFiles) {
             if (file.id) {
@@ -374,14 +392,12 @@ export async function POST(request: NextRequest) {
     // ─────────────────────────────────────────────────────────────────────────
     let llmMessages: LLMMessage[] = [];
 
-    // If existing conversation, load history from database
     if (convId && existingConvId) {
       console.log(`[Alfred] Loading history for conversation: ${convId}`);
       llmMessages = await loadConversationHistory(convId);
       console.log(`[Alfred] Loaded ${llmMessages.length} messages from history`);
     }
 
-    // Build current message with any new files
     const currentContent = await buildMessageContent(message, incomingFiles);
     llmMessages.push({ role: 'user', content: currentContent });
 
@@ -413,7 +429,6 @@ export async function POST(request: NextRequest) {
             streamOptions
           );
 
-          // Save assistant response
           if (userId && convId && fullResponse) {
             try {
               await db.insert(messages).values({

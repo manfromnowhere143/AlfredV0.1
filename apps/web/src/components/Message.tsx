@@ -224,6 +224,15 @@ function generatePreviewHTML(code: string, language: string): string {
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Image error fallback
+    document.addEventListener("error", function(e) {
+      if (e.target.tagName === "IMG") {
+        e.target.style.background = "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)";
+        e.target.alt = "Image unavailable";
+      }
+    }, true);
+  </script>
   <script type="text/babel" data-presets="react">
     const { useState, useEffect, useRef, useMemo, useCallback, Fragment, createContext, useContext } = React;
 
