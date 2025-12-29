@@ -115,41 +115,6 @@ function ConversationLoader() {
   );
 }
 
-function UserMenu({ isSignedIn, onLogout, userInitial = 'U' }: { isSignedIn: boolean; onLogout: () => void; userInitial?: string; }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  if (!isSignedIn) return null;
-
-  return (
-    <div className="user-menu" ref={menuRef}>
-      <button className="user-avatar" onClick={() => setIsOpen(!isOpen)} aria-label="User menu">{userInitial}</button>
-      <div className={'user-dropdown ' + (isOpen ? 'open' : '')}>
-        <button className="user-dropdown-item" onClick={() => setIsOpen(false)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-          Profile
-        </button>
-        <button className="user-dropdown-item" onClick={() => setIsOpen(false)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
-          Settings
-        </button>
-        <button className="user-dropdown-item danger" onClick={() => { setIsOpen(false); onLogout(); }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-          Log out
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function AlfredChat() {
   const { data: session, status } = useSession();
   const isSignedIn = !!session?.user;
@@ -180,7 +145,6 @@ export default function AlfredChat() {
       await new Promise(r => setTimeout(r, 50));
       setLoadingProgress(60);
       setLoadingProgress(90);
-      // No artificial delay
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
@@ -275,7 +239,7 @@ export default function AlfredChat() {
       timestamp: new Date(),
       files: attachments?.map(a => ({ ...a, url: a.preview || a.url })),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setStreamingContent('');
@@ -360,7 +324,7 @@ export default function AlfredChat() {
     setSidebarOpen(false);
     setIsLoadingConversation(true);
     setMessages([]);
-    
+
     try {
       const res = await fetch('/api/conversations/' + id);
       if (res.ok) {
@@ -385,37 +349,37 @@ export default function AlfredChat() {
   };
 
   const hasMessages = messages.length > 0;
-  const userInitial = session?.user?.email?.[0]?.toUpperCase() || 'U';
 
   return (
     <>
       <LoadingScreen progress={loadingProgress} isVisible={!isAppReady} />
 
       <div className="alfred-app" style={{ opacity: isAppReady ? 1 : 0 }}>
+        {/* SIDEBAR - Now has user, sign in/out integrated */}
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
-          projects={projects}
           conversations={conversations}
           onNewConversation={handleNewConversation}
-          onSelectProject={handleSelectProject}
           onSelectConversation={handleSelectConversation}
           isLoadingConversations={isLoadingConversations}
+          user={session?.user}
+          onSignIn={() => setAuthModalOpen(true)}
+          onSignOut={handleLogout}
         />
 
+        {/* HAMBURGER - Top Right, Portfolio Style */}
         <button
-          className={'sidebar-trigger ' + (sidebarOpen ? 'hidden' : '')}
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open menu"
+          className="hamburger-btn"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Menu"
         >
-          <div className="sidebar-trigger-icon">
-            <span className="sidebar-trigger-line" />
-            <span className="sidebar-trigger-line" />
-            <span className="sidebar-trigger-line" />
+          <div className="hamburger-lines">
+            <span className={'line line-1 ' + (sidebarOpen ? 'open' : '')} />
+            <span className={'line line-2 ' + (sidebarOpen ? 'open' : '')} />
+            <span className={'line line-3 ' + (sidebarOpen ? 'open' : '')} />
           </div>
         </button>
-
-        <UserMenu isSignedIn={isSignedIn} onLogout={handleLogout} userInitial={userInitial} />
 
         <main className="chat-container">
           {isLoadingConversation ? (
@@ -478,6 +442,88 @@ export default function AlfredChat() {
         onClose={() => setAuthModalOpen(false)}
         onSignIn={handleSignIn}
       />
+
+      <style jsx>{`
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* HAMBURGER - Top Right, Portfolio Style Lines                                    */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .hamburger-btn {
+          position: fixed;
+          top: 24px;
+          right: 24px;
+          z-index: 101;
+          width: 44px;
+          height: 44px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 10px;
+          -webkit-tap-highlight-color: transparent;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .hamburger-lines {
+          width: 26px;
+          height: 18px;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: flex-end;
+        }
+        
+        .line {
+          display: block;
+          height: 2px;
+          border-radius: 1px;
+          background: var(--text-primary, #fff);
+          transform-origin: right center;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .line-1 { width: 26px; }
+        .line-1.open {
+          width: 22px;
+          transform: rotate(-45deg) translateX(2px) translateY(-1px);
+        }
+        
+        .line-2 { width: 18px; }
+        .line-2.open {
+          width: 0;
+          opacity: 0;
+          transform: translateX(10px);
+        }
+        
+        .line-3 { width: 12px; }
+        .line-3.open {
+          width: 22px;
+          transform: rotate(45deg) translateX(2px) translateY(1px);
+        }
+        
+        @media (max-width: 768px) {
+          .hamburger-btn {
+            top: 16px;
+            right: 16px;
+            width: 40px;
+            height: 40px;
+            padding: 8px;
+          }
+          
+          .hamburger-lines {
+            width: 24px;
+            height: 16px;
+          }
+          
+          .line-1 { width: 24px; }
+          .line-1.open { width: 20px; }
+          .line-2 { width: 16px; }
+          .line-3 { width: 10px; }
+          .line-3.open { width: 20px; }
+        }
+      `}</style>
     </>
   );
 }

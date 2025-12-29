@@ -8,19 +8,16 @@ import { useState, useEffect, useRef } from 'react';
 
 type Theme = 'dark' | 'space' | 'light';
 
-interface Project { id: string; name: string; lastActive: Date; }
 interface Conversation { id: string; title: string; preview: string; timestamp: Date; }
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  projects?: Project[];
   conversations?: Conversation[];
   isLoadingConversations?: boolean;
-  onSelectProject?: (id: string) => void;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
-  user?: { name?: string; email?: string; avatar?: string } | null;
+  user?: { name?: string; email?: string; image?: string } | null;
   onSignOut?: () => void;
   onSignIn?: () => void;
 }
@@ -32,9 +29,7 @@ interface SidebarProps {
 export default function Sidebar({
   isOpen,
   onClose,
-  projects = [],
   conversations = [],
-  onSelectProject,
   onSelectConversation,
   onNewConversation,
   isLoadingConversations = false,
@@ -115,9 +110,18 @@ export default function Sidebar({
       <aside className={`control-panel ${isOpen ? 'open' : 'closing'}`}>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* THEME TOGGLE - Top, rounded header                                 */}
+        {/* CLOSE BUTTON - Elegant X                                           */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="panel-header">
+        <button className="close-btn" onClick={onClose} aria-label="Close panel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* THEME TOGGLE - Rounded header                                      */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div className="panel-section">
           <div className="theme-row">
             <button
               className={`theme-orb dark ${theme === 'dark' ? 'active' : ''}`}
@@ -138,19 +142,19 @@ export default function Sidebar({
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* USER AVATAR - Floating with dropdown                               */}
+        {/* USER AVATAR - With full dropdown                                   */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div className="user-section" ref={userMenuRef}>
           {user ? (
             <button className="icon-btn user-btn" onClick={() => setShowUserMenu(!showUserMenu)}>
-              {user.avatar ? (
-                <img src={user.avatar} alt="" className="avatar-img" />
+              {user.image ? (
+                <img src={user.image} alt="" className="avatar-img" />
               ) : (
                 <span className="avatar-initial">{getUserInitial()}</span>
               )}
             </button>
           ) : (
-            <button className="icon-btn" onClick={onSignIn}>
+            <button className="icon-btn" onClick={onSignIn} title="Sign In">
               <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
                 <circle cx="16" cy="10" r="5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
                 <path d="M6 28C6 28 8 19 16 19C24 19 26 28 26 28" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
@@ -165,18 +169,31 @@ export default function Sidebar({
                 <span className="user-email">{user.email}</span>
               </div>
               <div className="dropdown-divider" />
-              <button className="dropdown-item" onClick={() => { onSignOut?.(); setShowUserMenu(false); onClose(); }}>
+              <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                Profile
+              </button>
+              <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                </svg>
+                Settings
+              </button>
+              <div className="dropdown-divider" />
+              <button className="dropdown-item danger" onClick={() => { onSignOut?.(); setShowUserMenu(false); onClose(); }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
                 </svg>
-                Sign out
+                Log out
               </button>
             </div>
           )}
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* FLOATING ACTION ICONS - State of the art 3D glass                  */}
+        {/* FLOATING ACTION ICONS                                              */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div className="icon-row">
           {/* New Chat */}
@@ -196,81 +213,73 @@ export default function Sidebar({
               <path d="M27 15.5a10.5 10.5 0 01-1.1 4.7 10.5 10.5 0 01-9.4 5.8 10.5 10.5 0 01-4.7-1.1L5 27l2.4-7.1a10.5 10.5 0 01-1.1-4.7A10.5 10.5 0 0112 5.8a10.5 10.5 0 014.7-1.1h.6A10.5 10.5 0 0127 15v.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
           </button>
-
-          {/* Projects */}
-          <button className="icon-btn" onClick={() => {}} title="Projects">
-            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-              <rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="18" y="5" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="5" y="18" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="18" y="18" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CHAT LIST - Floating container with fade overlays                  */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className={`chat-container ${showChats ? 'visible' : ''}`}>
-          <div className="chat-header">
-            <span className="chat-label">HISTORY</span>
-          </div>
-
-          <div className="chat-body">
-            <div
-              className="fade-top"
-              style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
-            />
-
-            <div className="chat-scroll">
-              {isLoadingConversations ? (
-                <div className="chat-empty">Loading...</div>
-              ) : conversations.length === 0 ? (
-                <div className="chat-empty">No chats yet</div>
-              ) : conversations.map((c, i) => (
-                <button
-                  key={c.id}
-                  className="chat-item"
-                  onClick={() => { onSelectConversation?.(c.id); onClose(); }}
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  <span className="chat-title">{c.title}</span>
-                  <span className="chat-meta">{formatDate(c.timestamp)}</span>
-                </button>
-              ))}
-            </div>
-
-            <div
-              className="fade-bottom"
-              style={{ background: `linear-gradient(to top, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
-            />
-          </div>
         </div>
 
       </aside>
 
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* CHAT HISTORY - Separate floating container, fully visible              */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <div className={`chat-panel ${showChats && isOpen ? 'visible' : ''}`}>
+        <div className="chat-header">
+          <span className="chat-label">HISTORY</span>
+          <button className="chat-close" onClick={() => setShowChats(false)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="chat-body">
+          <div
+            className="fade-top"
+            style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
+          />
+
+          <div className="chat-scroll">
+            {isLoadingConversations ? (
+              <div className="chat-empty">Loading...</div>
+            ) : conversations.length === 0 ? (
+              <div className="chat-empty">No chats yet</div>
+            ) : conversations.map((c, i) => (
+              <button
+                key={c.id}
+                className="chat-item"
+                onClick={() => { onSelectConversation?.(c.id); onClose(); }}
+                style={{ animationDelay: `${i * 30}ms` }}
+              >
+                <span className="chat-title">{c.title}</span>
+                <span className="chat-meta">{formatDate(c.timestamp)}</span>
+              </button>
+            ))}
+          </div>
+
+          <div
+            className="fade-bottom"
+            style={{ background: `linear-gradient(to top, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
+          />
+        </div>
+      </div>
+
       <style jsx>{`
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CONTROL PANEL - Floating, transparent, from LEFT                                */
+        /* CONTROL PANEL - Floating from LEFT                                              */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .control-panel {
           position: fixed;
-          top: 24px;
+          top: 50%;
           left: 24px;
-          bottom: 24px;
-          width: 72px;
+          transform: translateY(-50%) translateX(-120%);
           z-index: 100;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 16px;
-          padding: 16px 0;
+          gap: 12px;
           
           background: transparent;
           pointer-events: none;
           
-          transform: translateX(-120%);
           opacity: 0;
           transition: 
             transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
@@ -282,54 +291,78 @@ export default function Sidebar({
         }
         
         .control-panel.open { 
-          transform: translateX(0); 
+          transform: translateY(-50%) translateX(0); 
           opacity: 1;
         }
         
         .control-panel.closing {
-          transform: translateX(-120%);
+          transform: translateY(-50%) translateX(-120%);
           opacity: 0;
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* PANEL HEADER - Theme orbs with rounded container                                */
+        /* CLOSE BUTTON                                                                    */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
-        .panel-header {
+        .close-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          background: linear-gradient(145deg, rgba(26, 26, 26, 0.85), rgba(10, 10, 11, 0.9));
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+        
+        .close-btn:hover {
+          color: var(--text-primary, #fff);
+          transform: scale(1.05);
+          background: linear-gradient(145deg, rgba(40, 40, 40, 0.9), rgba(20, 20, 20, 0.95));
+        }
+        
+        .close-btn:active { transform: scale(0.95); }
+        
+        :global([data-theme="light"]) .close-btn {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(245, 245, 240, 0.85));
+          color: var(--text-muted, rgba(0,0,0,0.4));
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+        }
+        
+        :global([data-theme="light"]) .close-btn:hover {
+          color: var(--text-primary, #1a1a1a);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* PANEL SECTION - Theme orbs                                                      */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .panel-section {
           padding: 12px 10px;
-          border-radius: 20px;
-          background: linear-gradient(145deg, 
-            rgba(26, 26, 26, 0.9), 
-            rgba(10, 10, 11, 0.95)
-          );
-          box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.4),
-            0 8px 32px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          border-radius: 18px;
+          background: linear-gradient(145deg, rgba(26, 26, 26, 0.9), rgba(10, 10, 11, 0.95));
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
         }
         
-        :global([data-theme="light"]) .panel-header {
-          background: linear-gradient(145deg, 
-            rgba(255, 255, 255, 0.95), 
-            rgba(245, 245, 240, 0.9)
-          );
-          box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.08),
-            0 8px 32px rgba(0, 0, 0, 0.06),
-            inset 0 1px 0 rgba(255, 255, 255, 1);
+        :global([data-theme="light"]) .panel-section {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(245, 245, 240, 0.9));
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
         }
         
-        .theme-row {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
+        .theme-row { display: flex; flex-direction: column; gap: 8px; }
         
         .theme-orb {
-          width: 28px;
-          height: 28px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           border: none;
           cursor: pointer;
@@ -340,9 +373,7 @@ export default function Sidebar({
         
         .theme-orb.dark {
           background: linear-gradient(145deg, #1a1a1a, #000);
-          box-shadow: 
-            inset 0 1px 0 rgba(255, 255, 255, 0.1),
-            0 2px 8px rgba(0, 0, 0, 0.5);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.5);
         }
         
         .theme-orb.dark::after {
@@ -350,17 +381,15 @@ export default function Sidebar({
           position: absolute;
           top: 4px;
           left: 5px;
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
         }
         
         .theme-orb.space {
           background: linear-gradient(145deg, #48484A, #2C2C2E);
-          box-shadow: 
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            0 2px 8px rgba(0, 0, 0, 0.4);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
         }
         
         .theme-orb.space::after {
@@ -368,17 +397,15 @@ export default function Sidebar({
           position: absolute;
           top: 4px;
           left: 5px;
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%);
         }
         
         .theme-orb.light {
           background: linear-gradient(145deg, #fff, #e5e5e5);
-          box-shadow: 
-            inset 0 1px 0 #fff,
-            0 2px 8px rgba(0, 0, 0, 0.15);
+          box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(0, 0, 0, 0.15);
         }
         
         .theme-orb.light::after {
@@ -386,90 +413,56 @@ export default function Sidebar({
           position: absolute;
           top: 4px;
           left: 5px;
-          width: 7px;
-          height: 7px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%);
         }
         
         .theme-orb.active {
           transform: scale(1.15);
-          box-shadow: 
-            0 0 0 2px rgba(201, 185, 154, 0.6),
-            0 0 16px rgba(201, 185, 154, 0.3),
-            0 4px 12px rgba(0, 0, 0, 0.4);
+          box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.6), 0 0 16px rgba(201, 185, 154, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
         }
         
-        .theme-orb:hover:not(.active) {
-          transform: scale(1.1);
-        }
-        
-        .theme-orb:active {
-          transform: scale(0.92);
-          transition: transform 0.1s ease;
-        }
+        .theme-orb:hover:not(.active) { transform: scale(1.1); }
+        .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* ICON BUTTONS - State of the art 3D glass like portfolio                        */
+        /* ICON BUTTONS - 3D Glass Effect                                                  */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
-        .user-section {
-          position: relative;
-        }
-        
-        .icon-row {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
+        .user-section { position: relative; }
+        .icon-row { display: flex; flex-direction: column; gap: 10px; }
         
         .icon-btn {
           position: relative;
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
+          width: 50px;
+          height: 50px;
+          border-radius: 14px;
           border: none;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           color: var(--text-primary, #fff);
-          
-          background: linear-gradient(
-            145deg,
-            #1a1a1a 0%,
-            #0e0e0e 50%,
-            #080808 100%
-          );
+          background: linear-gradient(145deg, #1a1a1a 0%, #0e0e0e 50%, #080808 100%);
           box-shadow: 
             0 0 0 0.5px rgba(255, 255, 255, 0.04),
             0 4px 12px rgba(0, 0, 0, 0.5),
             0 8px 24px rgba(0, 0, 0, 0.4),
-            0 16px 40px rgba(0, 0, 0, 0.3),
             inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
-          
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
           -webkit-tap-highlight-color: transparent;
-          -webkit-backface-visibility: hidden;
-          backface-visibility: hidden;
-          transform: translateZ(0) scale(1);
           overflow: hidden;
         }
         
-        /* Gradient border */
         .icon-btn::before {
           content: '';
           position: absolute;
           inset: -0.5px;
-          border-radius: 16.5px;
+          border-radius: 14.5px;
           padding: 0.5px;
-          background: linear-gradient(
-            145deg,
-            rgba(255, 255, 255, 0.12),
-            rgba(255, 255, 255, 0.02),
-            rgba(255, 255, 255, 0.06),
-            rgba(255, 255, 255, 0.01)
-          );
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
@@ -478,7 +471,6 @@ export default function Sidebar({
           opacity: 0.6;
         }
         
-        /* Top shine */
         .icon-btn::after {
           content: '';
           position: absolute;
@@ -486,164 +478,72 @@ export default function Sidebar({
           left: 10%;
           right: 10%;
           height: 45%;
-          background: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.08) 0%,
-            rgba(255, 255, 255, 0.02) 50%,
-            transparent 100%
-          );
-          border-radius: 16px 16px 50% 50%;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 50%, transparent 100%);
+          border-radius: 14px 14px 50% 50%;
           pointer-events: none;
           z-index: 10;
         }
         
         .icon-btn:hover {
-          transform: translateZ(0) scale(1.1) translateY(-3px);
-          box-shadow: 
-            0 0 0 0.5px rgba(255, 255, 255, 0.1),
-            0 0 24px rgba(255, 255, 255, 0.05),
-            0 8px 20px rgba(0, 0, 0, 0.5),
-            0 16px 40px rgba(0, 0, 0, 0.4);
+          transform: scale(1.08) translateY(-2px);
+          box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 0 20px rgba(255, 255, 255, 0.05), 0 8px 20px rgba(0, 0, 0, 0.5);
         }
         
-        .icon-btn:active {
-          transform: translateZ(0) scale(0.95);
-          transition: transform 0.1s ease;
-        }
+        .icon-btn:active { transform: scale(0.95); transition: transform 0.1s ease; }
         
         .icon-btn.active {
-          background: linear-gradient(
-            145deg,
-            #262626 0%,
-            #181818 50%,
-            #0c0c0c 100%
-          );
-          box-shadow: 
-            0 0 0 0.5px rgba(255, 255, 255, 0.1),
-            0 0 20px rgba(201, 185, 154, 0.2),
-            0 6px 16px rgba(0, 0, 0, 0.45);
+          background: linear-gradient(145deg, #262626 0%, #181818 50%, #0c0c0c 100%);
+          box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 0 20px rgba(201, 185, 154, 0.2), 0 6px 16px rgba(0, 0, 0, 0.45);
           color: #C9B99A;
-        }
-        
-        .icon-btn.active::after {
-          background: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.12) 0%,
-            rgba(255, 255, 255, 0.03) 50%,
-            transparent 100%
-          );
         }
         
         .icon-btn svg {
           position: relative;
           z-index: 5;
           filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-          transition: filter 0.3s ease;
         }
         
         .icon-btn.active svg {
-          filter: drop-shadow(0 0 8px rgba(201, 185, 154, 0.4))
-                  drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+          filter: drop-shadow(0 0 8px rgba(201, 185, 154, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
         }
         
         /* Light theme icons */
         :global([data-theme="light"]) .icon-btn {
-          background: linear-gradient(
-            145deg,
-            #ffffff 0%,
-            #f5f5f5 50%,
-            #ebebeb 100%
-          );
+          background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 50%, #ebebeb 100%);
           color: #1a1a1a;
-          box-shadow: 
-            0 0 0 0.5px rgba(0, 0, 0, 0.04),
-            0 4px 12px rgba(0, 0, 0, 0.08),
-            0 8px 24px rgba(0, 0, 0, 0.06),
-            inset 0 1px 0 rgba(255, 255, 255, 1);
-        }
-        
-        :global([data-theme="light"]) .icon-btn::before {
-          background: linear-gradient(
-            145deg,
-            rgba(255, 255, 255, 0.9),
-            rgba(0, 0, 0, 0.02),
-            rgba(255, 255, 255, 0.5),
-            rgba(0, 0, 0, 0.01)
-          );
-        }
-        
-        :global([data-theme="light"]) .icon-btn::after {
-          background: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.9) 0%,
-            rgba(255, 255, 255, 0.3) 50%,
-            transparent 100%
-          );
+          box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
         }
         
         :global([data-theme="light"]) .icon-btn:hover {
-          box-shadow: 
-            0 0 0 0.5px rgba(0, 0, 0, 0.06),
-            0 12px 32px rgba(0, 0, 0, 0.12),
-            0 24px 56px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.12);
         }
         
         :global([data-theme="light"]) .icon-btn.active {
-          background: linear-gradient(
-            145deg,
-            #f8f8f8 0%,
-            #f0f0f0 50%,
-            #e8e8e8 100%
-          );
+          background: linear-gradient(145deg, #f8f8f8 0%, #f0f0f0 50%, #e8e8e8 100%);
           color: #8B7355;
         }
         
-        :global([data-theme="light"]) .icon-btn svg {
-          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+        :global([data-theme="light"]) .icon-btn::after {
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
         }
         
-        /* User button with avatar */
-        .user-btn {
-          border-radius: 50%;
-          overflow: hidden;
-        }
-        
-        .user-btn::before {
-          border-radius: 50%;
-        }
-        
-        .user-btn::after {
-          border-radius: 50%;
-        }
-        
-        .avatar-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          position: relative;
-          z-index: 5;
-        }
-        
-        .avatar-initial {
-          font-size: 18px;
-          font-weight: 600;
-          position: relative;
-          z-index: 5;
-        }
+        /* User button */
+        .user-btn { border-radius: 50%; }
+        .user-btn::before, .user-btn::after { border-radius: 50%; }
+        .avatar-img { width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 5; border-radius: 50%; }
+        .avatar-initial { font-size: 18px; font-weight: 600; position: relative; z-index: 5; }
         
         /* User dropdown */
         .user-dropdown {
           position: absolute;
-          top: 60px;
-          left: 0;
-          min-width: 180px;
-          background: var(--bg-secondary, rgba(10, 10, 11, 0.95));
+          top: 0;
+          left: 60px;
+          min-width: 200px;
+          background: var(--bg-secondary, rgba(10, 10, 11, 0.98));
           border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
           border-radius: 14px;
           padding: 8px;
-          box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.5),
-            0 16px 48px rgba(0, 0, 0, 0.4);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 16px 48px rgba(0, 0, 0, 0.4);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           animation: dropIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -651,41 +551,20 @@ export default function Sidebar({
         }
         
         @keyframes dropIn {
-          from { opacity: 0; transform: translateY(-8px) scale(0.95); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+          from { opacity: 0; transform: translateX(-8px) scale(0.95); }
+          to { opacity: 1; transform: translateX(0) scale(1); }
         }
         
         :global([data-theme="light"]) .user-dropdown {
-          background: rgba(255, 255, 255, 0.95);
+          background: rgba(255, 255, 255, 0.98);
           border-color: rgba(0, 0, 0, 0.06);
-          box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.12),
-            0 16px 48px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }
         
-        .user-info {
-          padding: 10px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-        
-        .user-name {
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-primary, #fff);
-        }
-        
-        .user-email {
-          font-size: 11px;
-          color: var(--text-muted, rgba(255,255,255,0.5));
-        }
-        
-        .dropdown-divider {
-          height: 1px;
-          background: var(--border-subtle, rgba(255,255,255,0.08));
-          margin: 6px 0;
-        }
+        .user-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+        .user-name { font-size: 13px; font-weight: 500; color: var(--text-primary, #fff); }
+        .user-email { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.5)); }
+        .dropdown-divider { height: 1px; background: var(--border-subtle, rgba(255,255,255,0.08)); margin: 6px 0; }
         
         .dropdown-item {
           width: 100%;
@@ -707,104 +586,112 @@ export default function Sidebar({
           color: var(--text-primary, #fff);
         }
         
+        .dropdown-item.danger { color: #ef4444; }
+        .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+        
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CHAT CONTAINER - Floating with fade overlays                                    */
+        /* CHAT PANEL - Separate floating container, fully in view                         */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
-        .chat-container {
-          flex: 1;
-          max-height: 280px;
-          width: 200px;
-          margin-left: -10px;
+        .chat-panel {
+          position: fixed;
+          top: 50%;
+          left: 100px;
+          transform: translateY(-50%) translateX(-20px);
+          width: 240px;
+          max-height: 70vh;
           display: flex;
           flex-direction: column;
+          z-index: 99;
           
-          background: linear-gradient(145deg, 
-            rgba(26, 26, 26, 0.9), 
-            rgba(10, 10, 11, 0.95)
-          );
+          background: linear-gradient(145deg, rgba(26, 26, 26, 0.98), rgba(10, 10, 11, 0.99));
           border-radius: 16px;
-          box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.4),
-            0 8px 32px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 12px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
           
           opacity: 0;
-          transform: translateX(-10px);
           pointer-events: none;
-          transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+          transition: all 0.35s cubic-bezier(0.32, 0.72, 0, 1);
         }
         
-        .chat-container.visible {
+        .chat-panel.visible {
           opacity: 1;
-          transform: translateX(0);
+          transform: translateY(-50%) translateX(0);
           pointer-events: auto;
         }
         
-        :global([data-theme="light"]) .chat-container {
-          background: linear-gradient(145deg, 
-            rgba(255, 255, 255, 0.95), 
-            rgba(245, 245, 240, 0.9)
-          );
-          box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.08),
-            0 8px 32px rgba(0, 0, 0, 0.06),
-            inset 0 1px 0 rgba(255, 255, 255, 1);
+        :global([data-theme="light"]) .chat-panel {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(250, 250, 248, 0.98));
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
         }
         
         .chat-header {
-          padding: 12px 14px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 16px 10px;
+          border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
         }
         
         .chat-label {
           font-family: 'JetBrains Mono', 'SF Mono', monospace;
-          font-size: 9px;
+          font-size: 10px;
           font-weight: 500;
           letter-spacing: 0.12em;
           color: var(--text-muted, rgba(255,255,255,0.4));
         }
         
+        .chat-close {
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          transition: all 0.15s ease;
+        }
+        
+        .chat-close:hover {
+          background: var(--border-subtle, rgba(255,255,255,0.08));
+          color: var(--text-primary, #fff);
+        }
+        
         .chat-body {
           position: relative;
           flex: 1;
+          min-height: 180px;
+          max-height: 50vh;
           overflow: hidden;
         }
         
-        .fade-top {
+        .fade-top, .fade-bottom {
           position: absolute;
-          top: 0;
           left: 0;
           right: 0;
-          height: 20px;
+          height: 24px;
           pointer-events: none;
           z-index: 10;
         }
         
-        .fade-bottom {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 20px;
-          pointer-events: none;
-          z-index: 10;
-        }
+        .fade-top { top: 0; }
+        .fade-bottom { bottom: 0; }
         
         .chat-scroll {
           height: 100%;
           overflow-y: auto;
-          padding: 16px 10px;
+          padding: 20px 12px;
           scrollbar-width: none;
         }
         
-        .chat-scroll::-webkit-scrollbar {
-          display: none;
-        }
+        .chat-scroll::-webkit-scrollbar { display: none; }
         
         .chat-empty {
-          padding: 24px 8px;
+          padding: 32px 8px;
           text-align: center;
           color: var(--text-muted, rgba(255,255,255,0.35));
           font-size: 12px;
@@ -815,10 +702,10 @@ export default function Sidebar({
           display: flex;
           flex-direction: column;
           align-items: flex-start;
-          gap: 2px;
-          padding: 10px 12px;
-          margin-bottom: 4px;
-          border-radius: 10px;
+          gap: 3px;
+          padding: 12px 14px;
+          margin-bottom: 6px;
+          border-radius: 12px;
           background: transparent;
           border: none;
           cursor: pointer;
@@ -829,20 +716,15 @@ export default function Sidebar({
         }
         
         @keyframes itemSlide {
-          from { opacity: 0; transform: translateX(-8px); }
+          from { opacity: 0; transform: translateX(-12px); }
           to { opacity: 1; transform: translateX(0); }
         }
         
-        .chat-item:hover {
-          background: var(--border-subtle, rgba(255,255,255,0.06));
-        }
-        
-        .chat-item:active {
-          transform: scale(0.98);
-        }
+        .chat-item:hover { background: var(--border-subtle, rgba(255,255,255,0.06)); }
+        .chat-item:active { transform: scale(0.98); }
         
         .chat-title {
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 400;
           color: var(--text-primary, #fff);
           white-space: nowrap;
@@ -852,7 +734,7 @@ export default function Sidebar({
         }
         
         .chat-meta {
-          font-size: 10px;
+          font-size: 11px;
           color: var(--text-muted, rgba(255,255,255,0.35));
         }
         
@@ -861,58 +743,25 @@ export default function Sidebar({
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         @media (max-width: 768px) {
-          .control-panel {
-            top: 16px;
-            left: 16px;
-            bottom: 16px;
-            width: 64px;
-            gap: 12px;
-            padding: 12px 0;
+          .control-panel { left: 16px; gap: 10px; }
+          .close-btn { width: 32px; height: 32px; border-radius: 8px; }
+          .close-btn svg { width: 14px; height: 14px; }
+          .panel-section { padding: 10px 8px; border-radius: 16px; }
+          .theme-row { gap: 6px; }
+          .theme-orb { width: 22px; height: 22px; }
+          .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
+          .icon-btn svg { width: 18px; height: 18px; }
+          
+          .chat-panel {
+            left: 76px;
+            width: calc(100vw - 100px);
+            max-width: 260px;
+            max-height: 60vh;
           }
           
-          .panel-header {
-            padding: 10px 8px;
-            border-radius: 18px;
-          }
-          
-          .theme-row {
-            gap: 6px;
-          }
-          
-          .theme-orb {
-            width: 24px;
-            height: 24px;
-          }
-          
-          .icon-btn {
-            width: 46px;
-            height: 46px;
-            border-radius: 14px;
-          }
-          
-          .icon-btn svg {
-            width: 20px;
-            height: 20px;
-          }
-          
-          .chat-container {
-            width: 180px;
-            max-height: 240px;
-            margin-left: -8px;
-            border-radius: 14px;
-          }
-          
-          .chat-header {
-            padding: 10px 12px 6px;
-          }
-          
-          .chat-item {
-            padding: 8px 10px;
-          }
-          
-          .chat-title {
-            font-size: 11px;
-          }
+          .chat-body { min-height: 150px; max-height: 45vh; }
+          .chat-item { padding: 10px 12px; }
+          .chat-title { font-size: 12px; }
         }
       `}</style>
     </>
