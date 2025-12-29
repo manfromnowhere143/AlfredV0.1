@@ -119,13 +119,6 @@ export default function Sidebar({
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <aside className={`control-panel left ${isOpen ? 'open' : 'closing'}`}>
 
-        {/* Close Button */}
-        <button className="close-btn" onClick={onClose} aria-label="Close panel">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
-          </svg>
-        </button>
-
         {/* User Avatar */}
         <div className="user-section" ref={userMenuRef}>
           {user ? (
@@ -331,37 +324,6 @@ export default function Sidebar({
         }
         .control-panel.right.open { transform: translateY(-50%) translateX(0); opacity: 1; }
         .control-panel.right.closing { transform: translateY(-50%) translateX(120%); opacity: 0; }
-        
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CLOSE BUTTON                                                                    */
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        
-        .close-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--text-muted, rgba(255,255,255,0.5));
-          background: linear-gradient(145deg, rgba(26, 26, 26, 0.85), rgba(10, 10, 11, 0.9));
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          transition: all 0.2s ease;
-        }
-        
-        .close-btn:hover { color: var(--text-primary, #fff); transform: scale(1.05); }
-        .close-btn:active { transform: scale(0.95); }
-        
-        :global([data-theme="light"]) .close-btn {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(245, 245, 240, 0.85));
-          color: var(--text-muted, rgba(0,0,0,0.4));
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
-        }
-        :global([data-theme="light"]) .close-btn:hover { color: var(--text-primary, #1a1a1a); }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* THEME COLUMN - Right side                                                       */
@@ -658,9 +620,6 @@ export default function Sidebar({
         @media (max-width: 768px) {
           .control-panel.left { left: 16px; gap: 10px; }
           .control-panel.right { right: 16px; }
-          
-          .close-btn { width: 32px; height: 32px; border-radius: 8px; }
-          .close-btn svg { width: 14px; height: 14px; }
           
           .theme-column { padding: 10px 8px; border-radius: 16px; gap: 10px; }
           .theme-orb { width: 24px; height: 24px; }
