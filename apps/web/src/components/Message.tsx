@@ -96,11 +96,7 @@ function MessageActions({ content, isAlfred }: { content: string; isAlfred: bool
         </>
       )}
       <style jsx>{`
-        :global([data-theme="dark"]) .code-fade-top, .code-fade-top { background: linear-gradient(to bottom, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); }
-        :global([data-theme="dark"]) .code-fade-bottom, .code-fade-bottom { background: linear-gradient(to top, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); }
-        :global([data-theme="light"]) .code-fade-top { background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
-        :global([data-theme="light"]) .code-fade-bottom { background: linear-gradient(to top, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
-        .message-actions { display: flex; align-items: center; gap: 2px; padding-top: 8px; }
+.message-actions { display: flex; align-items: center; gap: 2px; padding-top: 8px; }
         .action-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.7); }
         .action-btn:hover { background: rgba(156,163,175,0.12); color: rgba(156,163,175,1); transform: scale(1.05); }
         .action-btn:active { transform: scale(0.95); }
@@ -236,7 +232,7 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         .code-block { position: relative; margin: 16px 0; background: transparent; overflow: visible; }
         .code-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 8px 0; }
         .code-header-left { display: flex; align-items: center; gap: 10px; }
-        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6); transition: color 0.35s ease; }
+        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6);  }
         .code-icon-btn { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.5); }
         .code-icon-btn:hover { color: rgba(156,163,175,0.9); background: rgba(156,163,175,0.1); }
         .code-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -248,8 +244,8 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         .code-content { overflow-y: auto; padding: 32px 0; max-height: 320px; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
         .code-content::-webkit-scrollbar { display: none; }
         .code-line { display: block; padding: 1px 8px; min-height: 20px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; line-height: 20px; letter-spacing: 0.02em; font-weight: 300; }
-        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none; transition: color 0.35s ease; }
-        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; transition: color 0.35s ease; }
+        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none;  }
+        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;  }
         .line-code :global(.kw) { color: #C586C0; }
         .line-code :global(.str) { color: #CE9178; }
         .line-code :global(.num) { color: #B5CEA8; }
@@ -482,7 +478,7 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
       {!isStreaming && role === 'alfred' && <MessageActions content={content} isAlfred={true} />}
       <style jsx>{`
         .message-wrapper { display: flex; flex-direction: column; align-items: ${role === 'user' ? 'flex-end' : 'flex-start'}; width: 100%; }
-        .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary, rgba(255,255,255,0.9)); -webkit-font-smoothing: antialiased; transition: color 0.3s; }
+        .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary, rgba(255,255,255,0.9)); -webkit-font-smoothing: antialiased;  }
         .streaming-cursor { display: inline-block; width: 2px; height: 16px; background: #C9B99A; margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: text-bottom; box-shadow: 0 0 8px #C9B99A; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
       `}</style>
