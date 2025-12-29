@@ -26,12 +26,14 @@
     "pg": "^8.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sharp": "^0.34.5",
     "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.14",
     "@types/react-dom": "^18.3.2",
+    "@types/sharp": "^0.32.0",
     "typescript": "^5.7.2"
   }
 }

@@ -272,6 +272,7 @@ export const files = pgTable('files', {
   // Generated previews
   thumbnailUrl: text('thumbnail_url'),
   previewUrl: text('preview_url'),
+  optimizedUrl: text('optimized_url'),
   
   // Processing status
   status: fileStatusEnum('status').notNull().default('ready'),
