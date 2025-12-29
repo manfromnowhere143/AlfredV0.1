@@ -236,7 +236,7 @@ export default function AlfredChat() {
     }
   }, [isSignedIn]);
 
-  useEffect(() => { loadUserData(); }, [loadUserData]);
+  useEffect(() => { if (status !== "loading") loadUserData(); }, [loadUserData, status]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
