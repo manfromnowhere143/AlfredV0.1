@@ -355,12 +355,14 @@ export default function AlfredChat() {
       <LoadingScreen progress={loadingProgress} isVisible={!isAppReady} />
 
       <div className="alfred-app" style={{ opacity: isAppReady ? 1 : 0 }}>
-        {/* SIDEBAR - Now has user, sign in/out integrated */}
+        {/* SIDEBAR - Full control panel with user, projects, chats */}
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          projects={projects}
           conversations={conversations}
           onNewConversation={handleNewConversation}
+          onSelectProject={handleSelectProject}
           onSelectConversation={handleSelectConversation}
           isLoadingConversations={isLoadingConversations}
           user={session?.user}
