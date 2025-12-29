@@ -177,13 +177,6 @@ export default function AlfredChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
 
-  // REQUIRE LOGIN
-  useEffect(() => {
-    if (isAuthChecked && !isSignedIn) {
-      setAuthModalOpen(true);
-    }
-  }, [isAuthChecked, isSignedIn]);
-
   // ─────────────────────────────────────────────────────────────────────────────
   // INITIALIZATION
   // ─────────────────────────────────────────────────────────────────────────────
@@ -204,6 +197,10 @@ export default function AlfredChat() {
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
+      // Require login
+      if (!session?.user) {
+        setAuthModalOpen(true);
+      }
     };
     initializeApp();
   }, []);
