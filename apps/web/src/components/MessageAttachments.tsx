@@ -115,10 +115,10 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
       </div>
       <style jsx>{`
         .lightbox-root { position: fixed; inset: 0; z-index: 10000; }
-        .lightbox-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(20px); animation: fadeIn 0.3s ease; }
-        .lightbox-backdrop.closing { animation: fadeOut 0.3s ease forwards; }
-        .lightbox-container { position: absolute; inset: 0; display: flex; flex-direction: column; animation: scaleIn 0.3s ease; }
-        .lightbox-container.closing { animation: scaleOut 0.3s ease forwards; }
+        .lightbox-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .lightbox-backdrop.closing { animation: fadeOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .lightbox-container { position: absolute; inset: 0; display: flex; flex-direction: column; animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .lightbox-container.closing { animation: scaleOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .lightbox-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: absolute; top: 0; left: 0; right: 0; z-index: 10; }
         .lightbox-info { display: flex; flex-direction: column; gap: 2px; }
         .lightbox-name { font-size: 14px; font-weight: 500; color: #fff; }
@@ -132,11 +132,11 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
         .lightbox-media { flex: 1; display: flex; align-items: center; justify-content: center; padding: 80px 80px 40px; }
         .lightbox-loader { position: absolute; display: flex; align-items: center; justify-content: center; }
         .lightbox-spinner { width: 32px; height: 32px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        .lightbox-image, .lightbox-video { max-width: min(90vw, 800px); max-height: min(80vh, 600px); object-fit: contain; border-radius: 8px; opacity: 0; transform: scale(0.95); transition: all 0.3s ease; }
+        .lightbox-image, .lightbox-video { max-width: min(90vw, 800px); max-height: min(80vh, 600px); object-fit: contain; border-radius: 8px; opacity: 0; transform: scale(0.97); transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .lightbox-image.loaded, .lightbox-video.loaded { opacity: 1; transform: scale(1); }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes scaleIn { 0% { opacity: 0; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1); } }
         @keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 768px) {
@@ -194,10 +194,10 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
           border: 1px solid rgba(255,255,255,0.08);
           padding: 0;
           flex-shrink: 0;
-          animation: thumbIn 0.4s ease backwards;
-          transition: all 0.2s ease;
+          animation: thumbIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .thumb-container:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        .thumb-container:hover { transform: scale(1.03); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
         .thumb-container:active { transform: scale(0.98); }
         .thumb-media { position: relative; width: 100%; height: 100%; }
         .thumb-skeleton { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%); overflow: hidden; }
