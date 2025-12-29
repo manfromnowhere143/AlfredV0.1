@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHAT API ROUTE - /api/chat
-// State-of-the-art: ALWAYS uses optimized images for Vision
+// Production-grade with persistent file context + video support
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -23,7 +23,6 @@ interface FileAttachment {
   type: string;
   size: number;
   url?: string;
-  optimizedUrl?: string;
   base64?: string;
 }
 
@@ -65,10 +64,10 @@ const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/we
 const SUPPORTED_DOCUMENT_TYPES = ['application/pdf'];
 const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/mov'];
 
-// Claude Vision limit is 5MB, we use 4MB to be safe with base64 overhead
-const MAX_IMAGE_SIZE_FOR_VISION = 4 * 1024 * 1024;
-const MAX_IMAGES_PER_REQUEST = 5;
-const MAX_HISTORY_MESSAGES = 20;
+// Limits to prevent 413 errors
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB per image
+const MAX_IMAGES_PER_REQUEST = 5; // Max images to send to Claude
+const MAX_HISTORY_MESSAGES = 20; // Limit conversation history
 
 const CODE_FORMATTING_RULES = `
 ██████████████████████████████████████████████████████████████████████████████
@@ -140,101 +139,59 @@ function normalizeMimeType(type: string, filename: string): string {
     'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
     'gif': 'image/gif', 'webp': 'image/webp', 'pdf': 'application/pdf',
     'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime',
-    'heic': 'image/jpeg', 'heif': 'image/jpeg',
   };
   return mimeMap[ext || ''] || type;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// OPTIMIZED IMAGE READER - Top-tier approach
-// Always tries to find optimized version first, never trusts frontend base64
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function getOptimizedImageForVision(file: FileAttachment): Promise<{ base64: string; size: number } | null> {
+async function readFileFromDisk(url: string): Promise<string | null> {
   try {
-    if (!file.url) return null;
-    
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 1: Try to find optimized version on disk
-    // Upload saves: {timestamp}-{id}-optimized-{name}.jpg
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    const urlDir = path.dirname(file.url);
-    const urlBase = path.basename(file.url);
-    
-    // Pattern: 1767000822806-qchffs-IMG_5563.png → 1767000822806-qchffs-optimized-IMG_5563.jpg
-    const match = urlBase.match(/^(\d+-\w+-)(.+)$/);
-    if (match) {
-      const nameWithoutExt = match[2].replace(/\.[^.]+$/, '');
-      const optimizedName = `${match[1]}optimized-${nameWithoutExt}.jpg`;
-      const optimizedPath = path.join(process.cwd(), 'public', urlDir, optimizedName);
-      
-      if (existsSync(optimizedPath)) {
-        const buffer = await readFile(optimizedPath);
-        console.log(`[Chat] ✅ Using OPTIMIZED (${(buffer.length/1024/1024).toFixed(2)}MB): ${file.name}`);
-        return { base64: buffer.toString('base64'), size: buffer.length };
-      }
+    const filepath = path.join(process.cwd(), 'public', url);
+    if (!existsSync(filepath)) {
+      console.log(`[Chat] File not found on disk: ${filepath}`);
+      return null;
     }
-    
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 2: Fallback to original if it's small enough
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    const originalPath = path.join(process.cwd(), 'public', file.url);
-    if (existsSync(originalPath)) {
-      const buffer = await readFile(originalPath);
-      
-      // Check if small enough for Vision (accounting for base64 overhead)
-      const base64Size = Math.ceil(buffer.length * 1.37); // base64 adds ~37%
-      if (base64Size <= MAX_IMAGE_SIZE_FOR_VISION) {
-        console.log(`[Chat] Using original (${(buffer.length/1024/1024).toFixed(2)}MB): ${file.name}`);
-        return { base64: buffer.toString('base64'), size: buffer.length };
-      }
-      
-      console.log(`[Chat] ⏭️ Original too large (${(buffer.length/1024/1024).toFixed(2)}MB → ${(base64Size/1024/1024).toFixed(2)}MB base64): ${file.name}`);
-    }
-    
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 3: No usable version found - Claude won't see it, but URL still works
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    return null;
-    
+    const buffer = await readFile(filepath);
+    return buffer.toString('base64');
   } catch (error) {
-    console.error(`[Chat] Error reading image ${file.name}:`, error);
+    console.error(`[Chat] Error reading file ${url}:`, error);
     return null;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// BUILD MESSAGE CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
-
 async function buildMessageContent(
   text: string,
   fileAttachments?: FileAttachment[],
+  skipVideos: boolean = true
 ): Promise<string | ContentBlock[]> {
   if (!fileAttachments || fileAttachments.length === 0) {
     return text || 'Hello';
   }
 
   const content: ContentBlock[] = [];
-  let processedImages = 0;
-  const skippedForVision: string[] = [];
+  let processedFiles = 0;
+  let skippedFiles = 0;
 
   for (const file of fileAttachments) {
     const mimeType = normalizeMimeType(file.type, file.name);
     
-    // Skip videos - not supported by Vision
+    // Skip videos - they can't be sent to Claude Vision
     if (isVideo(mimeType)) {
-      console.log(`[Chat] ⏭️ Skipping video for Vision: ${file.name}`);
+      console.log(`[Chat] ⏭️ Skipping video (not supported): ${file.name}`);
+      skippedFiles++;
       continue;
     }
 
-    // Skip if we've hit the image limit
-    if (processedImages >= MAX_IMAGES_PER_REQUEST) {
-      console.log(`[Chat] ⏭️ Max images reached, skipping Vision: ${file.name}`);
-      skippedForVision.push(file.name);
+    // Skip if too large
+    if (file.size > MAX_IMAGE_SIZE) {
+      console.log(`[Chat] ⏭️ Skipping large file (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
+      skippedFiles++;
+      continue;
+    }
+
+    // Skip if we've hit the limit
+    if (processedFiles >= MAX_IMAGES_PER_REQUEST) {
+      console.log(`[Chat] ⏭️ Max images reached, skipping: ${file.name}`);
+      skippedFiles++;
       continue;
     }
 
@@ -243,65 +200,46 @@ async function buildMessageContent(
       continue;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ALWAYS read from disk - never trust frontend base64
-    // This ensures we use the optimized version
-    // ─────────────────────────────────────────────────────────────────────────
+    let base64Data: string | null = null;
     
+    if (file.base64) {
+      base64Data = file.base64.includes(',') ? file.base64.split(',')[1] : file.base64;
+    } else if (file.url) {
+      base64Data = await readFileFromDisk(file.url);
+    }
+
+    if (!base64Data) {
+      console.log(`[Chat] ⚠️ No data for file: ${file.name}`);
+      continue;
+    }
+
     if (isImage(mimeType)) {
-      const result = await getOptimizedImageForVision(file);
-      
-      if (result) {
-        content.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            mediaType: 'image/jpeg', // Optimized images are JPEG
-            data: result.base64,
-          },
-        });
-        processedImages++;
-      } else {
-        // Image too large - Claude won't see it but can still use URL
-        skippedForVision.push(file.name);
-      }
-    } else if (isPDF(mimeType) && file.url) {
-      // PDFs - read from disk
-      try {
-        const pdfPath = path.join(process.cwd(), 'public', file.url);
-        if (existsSync(pdfPath)) {
-          const buffer = await readFile(pdfPath);
-          if (buffer.length <= MAX_IMAGE_SIZE_FOR_VISION) {
-            content.push({
-              type: 'document',
-              source: { type: 'base64', mediaType: 'application/pdf', data: buffer.toString('base64') },
-            });
-            processedImages++;
-            console.log(`[Chat] ✅ Added PDF: ${file.name}`);
-          }
-        }
-      } catch (e) {
-        console.error(`[Chat] PDF read error: ${file.name}`, e);
-      }
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          mediaType: mimeType as ImageBlock['source']['mediaType'],
+          data: base64Data,
+        },
+      });
+      processedFiles++;
+      console.log(`[Chat] ✅ Added image: ${file.name}`);
+    } else if (isPDF(mimeType)) {
+      content.push({
+        type: 'document',
+        source: { type: 'base64', mediaType: 'application/pdf', data: base64Data },
+      });
+      processedFiles++;
+      console.log(`[Chat] ✅ Added PDF: ${file.name}`);
     }
   }
 
-  // Build text content
-  let textContent = text?.trim() || '';
-  
-  if (!textContent && processedImages > 0) {
-    textContent = 'Please analyze the attached file(s) and describe what you see.';
-  }
-  
-  if (skippedForVision.length > 0) {
-    textContent += `\n\n(Note: ${skippedForVision.join(', ')} - large file(s), use URL to display)`;
-  }
-  
-  if (!textContent) textContent = 'Hello';
+  const textContent = text?.trim() || (processedFiles > 0 
+    ? 'Please analyze the attached file(s) and describe what you see.'
+    : 'Hello');
   
   content.push({ type: 'text', text: textContent });
 
-  // If only text, return as string
   if (content.length === 1 && content[0].type === 'text') {
     return (content[0] as TextBlock).text;
   }
@@ -310,13 +248,14 @@ async function buildMessageContent(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY LOADING
+// HISTORY LOADING - With limits to prevent 413 errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadConversationHistory(conversationId: string): Promise<LLMMessage[]> {
   const llmMessages: LLMMessage[] = [];
   
   try {
+    // Get recent messages only
     const dbMessages = await db
       .select()
       .from(messages)
@@ -335,6 +274,7 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
           .from(files)
           .where(eq(files.messageId, msg.id));
 
+        // Filter to only include images (not videos) and limit count
         const imageFiles = msgFiles.filter(f => isImage(f.mimeType) && !isVideo(f.mimeType));
         
         if (imageFiles.length > 0 && imagesInHistory < MAX_IMAGES_PER_REQUEST) {
@@ -353,6 +293,7 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
           imagesInHistory += attachments.length;
           console.log(`[Alfred] ✅ Reconstructed message with ${attachments.length} image(s)`);
         } else if (msg.content?.trim()) {
+          // Include text-only version if we've hit image limit
           llmMessages.push({ role, content: msg.content });
         }
       } else {
@@ -410,6 +351,7 @@ export async function POST(request: NextRequest) {
     if (hasFiles) {
       const fileList = incomingFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
       
+      // Separate images and videos
       const imageFiles = incomingFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isImage(mime);
@@ -422,6 +364,7 @@ export async function POST(request: NextRequest) {
       
       let mediaContext = '';
       
+      // Image instructions
       if (imageFiles.length > 0) {
         const imgList = imageFiles.map((f: FileAttachment) => 
           `  - ${f.name}: /api/files/serve?id=${f.id}`
@@ -429,15 +372,15 @@ export async function POST(request: NextRequest) {
         
         mediaContext += `
 
-IMAGE FILES:
+IMAGE FILES (you can SEE these):
 ${imgList}
 
-You can SEE these images via Vision API.
-To DISPLAY in React/HTML preview, use the serve URLs above:
+To DISPLAY images in React preview:
 <img src="/api/files/serve?id=${imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
 `;
       }
       
+      // Video instructions - Claude can't see these but can use the URL
       if (videoFiles.length > 0) {
         const vidList = videoFiles.map((f: FileAttachment) => 
           `  - ${f.name}: /api/files/serve?id=${f.id}`
@@ -448,12 +391,30 @@ To DISPLAY in React/HTML preview, use the serve URLs above:
 VIDEO FILES (use URL in code, you cannot preview these):
 ${vidList}
 
-To DISPLAY videos in React preview:
+To DISPLAY videos in React preview (hero video, background, etc.):
 <video 
   src="/api/files/serve?id=${videoFiles[0]?.id}" 
-  autoPlay muted loop playsInline
+  autoPlay 
+  muted 
+  loop 
+  playsInline
   className="absolute inset-0 w-full h-full object-cover"
 />
+
+For hero sections with video backgrounds:
+\`\`\`jsx
+<div className="relative h-screen overflow-hidden">
+  <video 
+    src="/api/files/serve?id=${videoFiles[0]?.id}"
+    autoPlay muted loop playsInline
+    className="absolute inset-0 w-full h-full object-cover"
+  />
+  <div className="absolute inset-0 bg-black/50" />
+  <div className="relative z-10">
+    {/* Content here */}
+  </div>
+</div>
+\`\`\`
 `;
       }
 
@@ -528,7 +489,7 @@ RULES:
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BUILD LLM MESSAGES
+    // BUILD LLM MESSAGES - Load history with limits
     // ─────────────────────────────────────────────────────────────────────────
     let llmMessages: LLMMessage[] = [];
 
@@ -538,7 +499,7 @@ RULES:
       console.log(`[Alfred] Loaded ${llmMessages.length} messages from history`);
     }
 
-    // Build current message - only include images (not videos) for Vision
+    // Build current message - only include images, not videos
     const imageOnlyFiles = incomingFiles.filter((f: FileAttachment) => {
       const mime = normalizeMimeType(f.type, f.name);
       return isImage(mime);
