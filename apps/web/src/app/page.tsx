@@ -482,6 +482,7 @@ export default function AlfredChat() {
                       role={message.role}
                       content={message.content}
                       timestamp={message.timestamp}
+                      files={message.files}
                     />
                   ))}
                   {isLoading && streamingContent && (
