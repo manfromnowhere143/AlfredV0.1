@@ -37,8 +37,8 @@ function getMediaUrl(attachment: Attachment): string {
   return attachment.url || '';
 }
 
-function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
-  attachment: Attachment;
+function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: { 
+  attachment: Attachment; 
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -50,7 +50,7 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
-    setTimeout(onClose, 300);
+    setTimeout(onClose, 350);
   }, [onClose]);
 
   useEffect(() => {
@@ -115,29 +115,63 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
       </div>
       <style jsx>{`
         .lightbox-root { position: fixed; inset: 0; z-index: 10000; }
-        .lightbox-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .lightbox-backdrop { 
+          position: absolute; inset: 0; 
+          background: rgba(0,0,0,0.92); 
+          backdrop-filter: blur(24px); 
+          -webkit-backdrop-filter: blur(24px);
+          animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
         .lightbox-backdrop.closing { animation: fadeOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .lightbox-container { position: absolute; inset: 0; display: flex; flex-direction: column; animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .lightbox-container { 
+          position: absolute; inset: 0; 
+          display: flex; flex-direction: column; 
+          animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
         .lightbox-container.closing { animation: scaleOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .lightbox-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: absolute; top: 0; left: 0; right: 0; z-index: 10; }
+        .lightbox-header { 
+          display: flex; align-items: center; justify-content: space-between; 
+          padding: 16px 20px; 
+          background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent); 
+          position: absolute; top: 0; left: 0; right: 0; z-index: 10; 
+        }
         .lightbox-info { display: flex; flex-direction: column; gap: 2px; }
-        .lightbox-name { font-size: 14px; font-weight: 500; color: #fff; }
-        .lightbox-meta { font-size: 12px; color: rgba(255,255,255,0.5); font-family: monospace; }
-        .lightbox-close { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; transition: all 0.2s; }
+        .lightbox-name { font-size: 14px; font-weight: 500; color: #fff; font-family: 'Inter', system-ui, sans-serif; }
+        .lightbox-meta { font-size: 12px; color: rgba(255,255,255,0.5); font-family: 'SF Mono', monospace; }
+        .lightbox-close { 
+          width: 40px; height: 40px; border-radius: 50%; 
+          background: rgba(255,255,255,0.1); border: none; cursor: pointer; 
+          display: flex; align-items: center; justify-content: center; color: #fff; 
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
         .lightbox-close:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
-        .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; z-index: 10; transition: all 0.2s; backdrop-filter: blur(10px); }
+        .lightbox-nav { 
+          position: absolute; top: 50%; transform: translateY(-50%); 
+          width: 48px; height: 48px; border-radius: 50%; 
+          background: rgba(255,255,255,0.1); 
+          border: 1px solid rgba(255,255,255,0.1); 
+          cursor: pointer; display: flex; align-items: center; justify-content: center; 
+          color: #fff; z-index: 10; 
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); 
+          backdrop-filter: blur(10px); 
+        }
         .lightbox-nav:hover { background: rgba(255,255,255,0.2); transform: translateY(-50%) scale(1.05); }
         .lightbox-nav-prev { left: 20px; }
         .lightbox-nav-next { right: 20px; }
         .lightbox-media { flex: 1; display: flex; align-items: center; justify-content: center; padding: 80px 80px 40px; }
         .lightbox-loader { position: absolute; display: flex; align-items: center; justify-content: center; }
-        .lightbox-spinner { width: 32px; height: 32px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        .lightbox-image, .lightbox-video { max-width: min(90vw, 800px); max-height: min(80vh, 600px); object-fit: contain; border-radius: 8px; opacity: 0; transform: scale(0.97); transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .lightbox-spinner { width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.1); border-top-color: rgba(255,255,255,0.8); border-radius: 50%; animation: spin 0.7s linear infinite; }
+        .lightbox-image, .lightbox-video { 
+          max-width: min(90vw, 900px); max-height: min(85vh, 700px); 
+          object-fit: contain; border-radius: 8px; 
+          opacity: 0; transform: scale(0.97); 
+          transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
         .lightbox-image.loaded, .lightbox-video.loaded { opacity: 1; transform: scale(1); }
         @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fadeOut { 0% { opacity: 1; } 100% { opacity: 0; } }
         @keyframes scaleIn { 0% { opacity: 0; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1); } }
-        @keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
+        @keyframes scaleOut { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.97); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 768px) {
           .lightbox-media { padding: 60px 16px 24px; }
@@ -158,26 +192,26 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
   const isVideo = attachment.type === 'video';
 
   return (
-    <button className="thumb-container" onClick={onClick} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} style={{ animationDelay: index * 50 + 'ms' }}>
+    <button className="thumb-container" onClick={onClick} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} style={{ animationDelay: index * 40 + 'ms' }}>
       <div className="thumb-media">
         {!isLoaded && !hasError && <div className="thumb-skeleton"><div className="thumb-shimmer" /></div>}
         {hasError ? (
           <div className="thumb-error">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
         ) : isVideo ? (
           <>
             <video src={mediaUrl} onLoadedData={() => setIsLoaded(true)} onError={() => setHasError(true)} muted playsInline className={'thumb-video ' + (isLoaded ? 'loaded' : '')} />
-            <div className="thumb-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg></div>
+            <div className="thumb-play"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg></div>
             {attachment.duration && <span className="thumb-duration">{formatDuration(attachment.duration)}</span>}
           </>
         ) : (
           <img src={mediaUrl} alt={attachment.name} onLoad={() => setIsLoaded(true)} onError={() => setHasError(true)} className={'thumb-image ' + (isLoaded ? 'loaded' : '')} draggable={false} />
         )}
         <div className={'thumb-overlay ' + (isHovered ? 'visible' : '')}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
@@ -185,36 +219,47 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
       <style jsx>{`
         .thumb-container {
           position: relative;
-          width: 48px;
-          height: 48px;
-          border-radius: 8px;
+          width: 72px;
+          height: 72px;
+          border-radius: 10px;
           overflow: hidden;
           cursor: pointer;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06);
           padding: 0;
           flex-shrink: 0;
           animation: thumbIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
           transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .thumb-container:hover { transform: scale(1.03); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        .thumb-container:hover { 
+          transform: scale(1.04); 
+          border-color: rgba(255,255,255,0.12); 
+          box-shadow: 0 8px 24px rgba(0,0,0,0.25); 
+        }
         .thumb-container:active { transform: scale(0.98); }
         .thumb-media { position: relative; width: 100%; height: 100%; }
-        .thumb-skeleton { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%); overflow: hidden; }
-        .thumb-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); animation: shimmer 1.5s infinite; }
-        .thumb-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%); color: rgba(255,255,255,0.3); }
-        .thumb-image, .thumb-video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s ease; }
+        .thumb-skeleton { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.05) 100%); overflow: hidden; }
+        .thumb-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent); animation: shimmer 1.5s infinite; }
+        .thumb-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.25); }
+        .thumb-image, .thumb-video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.35s ease; }
         .thumb-image.loaded, .thumb-video.loaded { opacity: 1; }
-        .thumb-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: #fff; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s ease; }
-        .thumb-container:hover .thumb-play { transform: translate(-50%, -50%) scale(1.1); background: rgba(0,0,0,0.8); }
-        .thumb-duration { position: absolute; bottom: 4px; right: 4px; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.7); font-size: 9px; font-weight: 500; color: #fff; font-family: monospace; }
-        .thumb-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: #fff; opacity: 0; transition: opacity 0.2s ease; }
+        .thumb-play { 
+          position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+          width: 28px; height: 28px; border-radius: 50%; 
+          background: rgba(0,0,0,0.55); backdrop-filter: blur(8px); 
+          display: flex; align-items: center; justify-content: center; 
+          color: #fff; border: 1px solid rgba(255,255,255,0.15); 
+          transition: all 0.2s ease; 
+        }
+        .thumb-container:hover .thumb-play { transform: translate(-50%, -50%) scale(1.08); background: rgba(0,0,0,0.7); }
+        .thumb-duration { position: absolute; bottom: 4px; right: 4px; padding: 2px 5px; border-radius: 4px; background: rgba(0,0,0,0.7); font-size: 9px; font-weight: 500; color: #fff; font-family: 'SF Mono', monospace; }
+        .thumb-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: #fff; opacity: 0; transition: opacity 0.2s ease; }
         .thumb-overlay.visible { opacity: 1; }
-        @keyframes thumbIn { from { opacity: 0; transform: scale(0.9) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes thumbIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @media (max-width: 768px) {
-          .thumb-container { width: 40px; height: 40px; border-radius: 6px; }
-          .thumb-play { width: 18px; height: 18px; }
+          .thumb-container { width: 64px; height: 64px; border-radius: 8px; }
+          .thumb-play { width: 24px; height: 24px; }
           .thumb-play svg { width: 12px; height: 12px; }
         }
       `}</style>
@@ -224,7 +269,7 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
 
 export default function MessageAttachments({ attachments, isUser = false }: MessageAttachmentsProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-
+  
   if (!attachments || attachments.length === 0) return null;
 
   const mediaAttachments = attachments.filter(a => a.type === 'image' || a.type === 'video');
@@ -248,10 +293,10 @@ export default function MessageAttachments({ attachments, isUser = false }: Mess
         />
       )}
       <style jsx>{`
-        .attachments-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .attachments-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .attachments-grid.user { justify-content: flex-end; }
         .attachments-grid.alfred { justify-content: flex-start; }
-        @media (max-width: 768px) { .attachments-grid { gap: 4px; } }
+        @media (max-width: 768px) { .attachments-grid { gap: 6px; } }
       `}</style>
     </>
   );

@@ -7,13 +7,7 @@ import MessageAttachments from './MessageAttachments';
 // ARTIFACT CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface Artifact {
-  id: string;
-  code: string;
-  language: string;
-  title?: string;
-}
-
+interface Artifact { id: string; code: string; language: string; title?: string; }
 interface ArtifactContextType {
   artifacts: Artifact[];
   addArtifact: (artifact: Artifact) => void;
@@ -31,29 +25,14 @@ export function ArtifactProvider({ children, conversationId }: { children: React
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  useEffect(() => {
-    setArtifacts([]);
-    setIsGalleryOpen(false);
-    setCurrentIndex(0);
-  }, [conversationId]);
+  useEffect(() => { setArtifacts([]); setIsGalleryOpen(false); setCurrentIndex(0); }, [conversationId]);
 
   const addArtifact = useCallback((artifact: Artifact) => {
-    setArtifacts(prev => {
-      if (prev.some(a => a.id === artifact.id)) return prev;
-      return [...prev, artifact];
-    });
+    setArtifacts(prev => prev.some(a => a.id === artifact.id) ? prev : [...prev, artifact]);
   }, []);
 
   return (
-    <ArtifactContext.Provider value={{ 
-      artifacts, 
-      addArtifact, 
-      openGallery: (idx = 0) => { setCurrentIndex(idx); setIsGalleryOpen(true); },
-      isGalleryOpen, 
-      closeGallery: () => setIsGalleryOpen(false), 
-      currentIndex, 
-      setCurrentIndex 
-    }}>
+    <ArtifactContext.Provider value={{ artifacts, addArtifact, openGallery: (idx = 0) => { setCurrentIndex(idx); setIsGalleryOpen(true); }, isGalleryOpen, closeGallery: () => setIsGalleryOpen(false), currentIndex, setCurrentIndex }}>
       {children}
       {isGalleryOpen && <ArtifactGallery />}
     </ArtifactContext.Provider>
@@ -70,29 +49,104 @@ export function useArtifacts() {
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface Attachment {
-  id: string;
-  type: 'image' | 'video' | 'document' | 'code';
-  name: string;
-  size: number;
-  url?: string;
-  preview?: string;
-  duration?: number;
-}
+interface Attachment { id: string; type: 'image' | 'video' | 'document' | 'code'; name: string; size: number; url?: string; preview?: string; duration?: number; }
+interface MessageProps { id: string; role: 'user' | 'alfred'; content: string; timestamp: Date; isStreaming?: boolean; files?: Attachment[]; }
+interface ParsedContent { type: 'text' | 'code' | 'code-streaming'; content: string; language?: string; }
 
-interface MessageProps {
-  id: string;
-  role: 'user' | 'alfred';
-  content: string;
-  timestamp: Date;
-  isStreaming?: boolean;
-  files?: Attachment[];
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+// MESSAGE ACTIONS - State of the art like Claude
+// ═══════════════════════════════════════════════════════════════════════════════
 
-interface ParsedContent {
-  type: 'text' | 'code' | 'code-streaming';
-  content: string;
-  language?: string;
+function MessageActions({ content, isAlfred }: { content: string; isAlfred: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const [liked, setLiked] = useState<boolean | null>(null);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="message-actions">
+      {/* Copy */}
+      <button className={'action-btn' + (copied ? ' success' : '')} onClick={handleCopy} title="Copy">
+        {copied ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        )}
+      </button>
+
+      {isAlfred && (
+        <>
+          {/* Read aloud */}
+          <button className="action-btn" onClick={() => {}} title="Read aloud">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+          </button>
+
+          {/* Like */}
+          <button className={'action-btn' + (liked === true ? ' active' : '')} onClick={() => setLiked(liked === true ? null : true)} title="Good response">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={liked === true ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+          </button>
+
+          {/* Dislike */}
+          <button className={'action-btn' + (liked === false ? ' active' : '')} onClick={() => setLiked(liked === false ? null : false)} title="Bad response">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={liked === false ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
+          </button>
+
+          {/* Regenerate */}
+          <button className="action-btn" onClick={() => {}} title="Regenerate">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+
+          {/* Share */}
+          <button className="action-btn" onClick={() => {}} title="Share">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          </button>
+        </>
+      )}
+
+      <style jsx>{`
+        .message-actions {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          padding-top: 8px;
+        }
+        .action-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          border: none;
+          background: transparent;
+          color: var(--text-tertiary, rgba(255,255,255,0.35));
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .action-btn:hover {
+          background: var(--bg-hover, rgba(255,255,255,0.06));
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+          transform: scale(1.05);
+        }
+        .action-btn:active {
+          transform: scale(0.95);
+        }
+        .action-btn.active {
+          color: #C9B99A;
+        }
+        .action-btn.success {
+          color: #4ade80;
+        }
+        @media (max-width: 768px) {
+          .action-btn { width: 36px; height: 36px; }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -103,9 +157,7 @@ function parseContent(content: string, isStreaming: boolean = false): ParsedCont
   const parts: ParsedContent[] = [];
   const completeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
   const incompleteBlockRegex = /```(\w+)?\n([\s\S]*)$/;
-  
-  let lastIndex = 0;
-  let match;
+  let lastIndex = 0, match;
 
   while ((match = completeBlockRegex.exec(content)) !== null) {
     if (match.index > lastIndex) {
@@ -150,273 +202,97 @@ function extractComponentName(code: string): string {
 
 function generatePreviewHTML(code: string, language: string): string {
   if (language.toLowerCase() === 'html') {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { min-height: 100%; touch-action: pan-x pan-y; -webkit-touch-callout: none; }
-    body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  </style>
-</head>
-<body>${code}</body>
-</html>`;
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"><\/script><style>*{margin:0;padding:0;box-sizing:border-box}img{max-width:100%;height:auto}</style><script>document.addEventListener("load",function(e){if(e.target.tagName==="IMG")e.target.classList.add("loaded")},true)<\/script></head><body>${code}</body></html>`;
   }
 
   const componentName = extractComponentName(code);
-  
-  const cleanCode = code
-    .replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^import\s+['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^import\s+\{[\s\S]*?\}\s+from\s+['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^import\s+\*\s+as\s+\w+\s+from\s+['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^import\s+\w+\s*,\s*\{[\s\S]*?\}\s+from\s+['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/export\s+default\s+/, '')
-    .trim();
+  const cleanCode = code.replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*$/gm, '').replace(/^import\s+['"][^'"]+['"];?\s*$/gm, '').replace(/^import\s+\{[\s\S]*?\}\s+from\s+['"][^'"]+['"];?\s*$/gm, '').replace(/^import\s+\*\s+as\s+\w+\s+from\s+['"][^'"]+['"];?\s*$/gm, '').replace(/^import\s+\w+\s*,\s*\{[\s\S]*?\}\s+from\s+['"][^'"]+['"];?\s*$/gm, '').replace(/export\s+default\s+/, '').trim();
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\/script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin><\/script>
-  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"><\/script>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <script>
-    tailwind.config = {
-      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
-    }
-  <\/script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { min-height: 100%; }
-    html, body { touch-action: pan-x pan-y; -webkit-touch-callout: none; }
-    body { min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-    #root { min-height: 100vh; }
-    html { scroll-behavior: smooth; }
-    img { 
-      max-width: 100%; 
-      height: auto; 
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    img.loaded { opacity: 1; }
-    img:not(.loaded) {
-      background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%);
-      min-height: 100px;
-    }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fadeIn { animation: fadeIn 0.5s ease-out; }
-    .animate-slideUp { animation: slideUp 0.5s ease-out; }
-  </style>
-  <script>
-    document.addEventListener("load", function(e) { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
-    document.addEventListener("error", function(e) {
-      if (e.target.tagName === "IMG" && e.type === "load") {
-        e.target.classList.add("loaded");
-      } else if (e.target.tagName === "IMG") {
-        e.target.style.background = "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)";
-        e.target.alt = "Image unavailable";
-      }
-    }, true);
-  <\/script>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useRef, useMemo, useCallback, Fragment, createContext, useContext } = React;
-    
-    const ChevronRightIcon = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>;
-    const ChevronLeftIcon = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>;
-    const StarIcon = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" /></svg>;
-    const HeartIcon = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" /></svg>;
-    const PlayIcon = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>;
-    const ArrowRightIcon = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>;
-    
-    const toCSS = (props) => {
-      if (!props || typeof props !== 'object') return {};
-      const css = {};
-      const transforms = [];
-      Object.entries(props).forEach(([key, val]) => {
-        switch(key) {
-          case 'x': transforms.push('translateX(' + (typeof val === 'number' ? val + 'px' : val) + ')'); break;
-          case 'y': transforms.push('translateY(' + (typeof val === 'number' ? val + 'px' : val) + ')'); break;
-          case 'scale': transforms.push('scale(' + val + ')'); break;
-          case 'rotate': transforms.push('rotate(' + (typeof val === 'number' ? val + 'deg' : val) + ')'); break;
-          case 'opacity': css.opacity = val; break;
-          default: if (typeof val === 'number' || typeof val === 'string') css[key] = val;
-        }
-      });
-      if (transforms.length > 0) css.transform = transforms.join(' ');
-      return css;
-    };
-    
-    const createMotionComponent = (tag) => {
-      return React.forwardRef(({ initial, animate, transition, whileHover, whileTap, style, className, children, ...props }, ref) => {
-        const [phase, setPhase] = useState('initial');
-        const [isHovered, setIsHovered] = useState(false);
-        const [isTapped, setIsTapped] = useState(false);
-        useEffect(() => { requestAnimationFrame(() => setPhase('animate')); }, []);
-        const computedStyles = useMemo(() => {
-          let base = phase === 'initial' && initial ? toCSS(initial) : (phase === 'animate' && animate ? toCSS(animate) : {});
-          if (whileHover && isHovered) Object.assign(base, toCSS(whileHover));
-          if (whileTap && isTapped) Object.assign(base, toCSS(whileTap));
-          return base;
-        }, [phase, initial, animate, whileHover, whileTap, isHovered, isTapped]);
-        const t = transition || {};
-        const dur = t.duration != null ? t.duration : 0.5;
-        const finalStyle = Object.assign({}, style, { transition: 'all ' + dur + 's ease-out', willChange: 'transform, opacity' }, computedStyles);
-        const handlers = {};
-        if (whileHover) {
-          handlers.onMouseEnter = () => setIsHovered(true);
-          handlers.onMouseLeave = () => { setIsHovered(false); setIsTapped(false); };
-        }
-        if (whileTap) {
-          handlers.onMouseDown = () => setIsTapped(true);
-          handlers.onMouseUp = () => setIsTapped(false);
-        }
-        return React.createElement(tag, Object.assign({ ref, style: finalStyle, className }, props, handlers), children);
-      });
-    };
-    const motion = new Proxy({}, { get: (_, tag) => createMotionComponent(tag) });
-    const AnimatePresence = (props) => props.children;
-
-    ${cleanCode}
-
-    try {
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(${componentName}));
-    } catch (err) {
-      document.getElementById('root').innerHTML = '<div style="padding:48px;color:#ef4444;font-family:system-ui;background:#fef2f2;min-height:100vh;"><h2 style="margin-bottom:12px;font-weight:600;">Render Error</h2><pre style="white-space:pre-wrap;opacity:0.8;font-size:13px;">' + err.message + '</pre></div>';
-    }
-  <\/script>
-</body>
-</html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\/script><script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin><\/script><script src="https://unpkg.com/@babel/standalone@7/babel.min.js"><\/script><script src="https://cdn.tailwindcss.com"><\/script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif}img{max-width:100%;height:auto}</style></head><body><div id="root"></div><script type="text/babel">const{useState,useEffect,useRef,useMemo,useCallback}=React;const motion={div:'div',span:'span',button:'button',img:'img',a:'a',section:'section',header:'header',nav:'nav',footer:'footer',h1:'h1',h2:'h2',h3:'h3',p:'p',ul:'ul',li:'li'};const AnimatePresence=({children})=>children;${cleanCode};try{ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(${componentName}))}catch(err){document.getElementById('root').innerHTML='<div style="padding:24px;color:#ef4444">'+err.message+'</div>'}<\/script></body></html>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CODE BLOCK
+// FLOATING CODE BLOCK - Void aesthetic
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CodeBlock({ language, code, isStreaming = false, onPreview }: {
-  language: string;
-  code: string;
-  isStreaming?: boolean;
-  onPreview?: () => void;
-}) {
+function CodeBlock({ language, code, isStreaming = false, onPreview }: { language: string; code: string; isStreaming?: boolean; onPreview?: () => void; }) {
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isRenderable = !isStreaming && isRenderableCode(language, code);
 
-  useEffect(() => {
-    if (isStreaming && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [code, isStreaming]);
+  useEffect(() => { if (isStreaming && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [code, isStreaming]);
 
   const lines = code.split('\n');
-  const borderColor = isStreaming ? 'rgba(201,185,154,0.5)' : 'rgba(255,255,255,0.1)';
+
+  const highlightLine = (line: string) => {
+    return line
+      .replace(/\b(const|let|var|function|return|if|else|for|while|import|export|default|from|async|await|class|extends|new|this|try|catch|throw)\b/g, '<span class="kw">$1</span>')
+      .replace(/\b(true|false|null|undefined)\b/g, '<span class="bool">$1</span>')
+      .replace(/(["'`])(?:(?!\1)[^\\]|\\.)*?\1/g, '<span class="str">$&</span>')
+      .replace(/\/\/.*/g, '<span class="cmt">$&</span>')
+      .replace(/\b(\d+)\b/g, '<span class="num">$1</span>');
+  };
 
   return (
-    <div style={{
-      width: '100%',
-      minWidth: 0,
-      minHeight: '150px', maxHeight: '400px',
-      margin: '12px 0',
-      borderRadius: '10px',
-      background: '#111',
-      border: `1px solid ${borderColor}`,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 14px',
-        height: '42px',
-        background: '#0a0a0a',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: '#666' }}>
-          {language.toUpperCase()}
-        </span>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText(code);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            disabled={isStreaming}
-            style={{
-              fontFamily: "'SF Mono', monospace",
-              fontSize: '9px',
-              color: copied ? '#34d399' : '#888',
-              background: 'transparent',
-              border: `1px solid ${copied ? '#34d399' : 'rgba(255,255,255,0.2)'}`,
-              borderRadius: '4px',
-              padding: '5px 10px',
-              cursor: isStreaming ? 'not-allowed' : 'pointer',
-              opacity: isStreaming ? 0.4 : 1,
-            }}
-          >
-            {copied ? 'COPIED' : 'COPY'}
-          </button>
-          {isRenderable && onPreview && (
-            <button
-              onClick={onPreview}
-              style={{
-                fontFamily: "'SF Mono', monospace",
-                fontSize: '9px',
-                color: '#C9B99A',
-                background: 'transparent',
-                border: '1px solid rgba(201,185,154,0.4)',
-                borderRadius: '4px',
-                padding: '5px 10px',
-                cursor: 'pointer',
-              }}
-            >
-              PREVIEW
-            </button>
-          )}
+    <div className="code-block">
+      <div className="code-header">
+        <span className="code-lang">{language.toUpperCase()}</span>
+        <div className="code-actions">
+          <button className="code-btn" onClick={async () => { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }} disabled={isStreaming}>{copied ? 'COPIED' : 'COPY'}</button>
+          {isRenderable && onPreview && <button className="code-btn preview-btn" onClick={onPreview}>PREVIEW</button>}
         </div>
       </div>
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <div ref={scrollRef} style={{ position: 'absolute', inset: 0, overflow: 'auto', padding: '14px 0' }}>
-          {lines.map((line, i) => (
-            <div key={i} style={{ display: 'flex', padding: '1px 14px', fontFamily: "'SF Mono', monospace", fontSize: '12px', lineHeight: '20px' }}>
-              <span style={{ width: '32px', color: '#444', textAlign: 'right', paddingRight: '14px', userSelect: 'none' }}>{i + 1}</span>
-              <span style={{ color: '#e0e0e0', whiteSpace: 'pre' }}>{line || ' '}</span>
-            </div>
-          ))}
-          {isStreaming && <span style={{ display: 'inline-block', width: '2px', height: '14px', background: '#C9B99A', marginLeft: '46px', animation: 'alfredBlink 0.8s step-end infinite' }} />}
+      <div className="code-container">
+        <div className="code-fade-top" />
+        <div className="code-content" ref={scrollRef}>
+          {lines.map((line, i) => (<div key={i} className="code-line"><span className="line-num">{i + 1}</span><span className="line-code" dangerouslySetInnerHTML={{ __html: highlightLine(line) || ' ' }} /></div>))}
+          {isStreaming && <span className="cursor" />}
         </div>
+        <div className="code-fade-bottom" />
       </div>
-      <style>{`@keyframes alfredBlink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
+      <style jsx>{`
+        .code-block { position: relative; margin: 16px 0; background: transparent; }
+        .code-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; }
+        .code-lang { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.1em; color: var(--text-tertiary, rgba(255,255,255,0.35)); transition: color 0.3s; }
+        .code-actions { display: flex; gap: 8px; }
+        .code-btn { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.05em; color: var(--text-tertiary, rgba(255,255,255,0.4)); background: transparent; border: 1px solid var(--border-primary, rgba(255,255,255,0.08)); border-radius: 4px; padding: 5px 10px; cursor: pointer; transition: all 0.2s; }
+        .code-btn:hover { color: var(--text-primary, #fff); border-color: var(--border-primary, rgba(255,255,255,0.15)); }
+        .code-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .preview-btn { color: #C9B99A; border-color: rgba(201,185,154,0.3); }
+        .preview-btn:hover { border-color: rgba(201,185,154,0.5); background: rgba(201,185,154,0.08); }
+        .code-container { position: relative; max-height: 320px; overflow: hidden; }
+        .code-fade-top { position: absolute; top: -2px; left: -20px; right: -20px; height: 50px; pointer-events: none; z-index: 10; background: linear-gradient(to bottom, var(--bg-primary, #0a0a0b) 0%, var(--bg-primary, #0a0a0b) 20%, transparent 100%); }
+        .code-fade-bottom { position: absolute; bottom: -6px; left: -20px; right: -20px; height: 60px; pointer-events: none; z-index: 10; background: linear-gradient(to top, var(--bg-primary, #0a0a0b) 0%, var(--bg-primary, #0a0a0b) 25%, transparent 100%); }
+        .code-content { overflow-y: auto; padding: 28px 0; max-height: 320px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .code-content::-webkit-scrollbar { display: none; }
+        .code-line { display: flex; padding: 1px 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; letter-spacing: 0.02em; font-weight: 300; }
+        .line-num { width: 32px; color: var(--text-tertiary, rgba(255,255,255,0.18)); text-align: right; padding-right: 14px; user-select: none; flex-shrink: 0; transition: color 0.3s; }
+        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; transition: color 0.3s; }
+        .line-code :global(.kw) { color: #C586C0; }
+        .line-code :global(.str) { color: #CE9178; }
+        .line-code :global(.num) { color: #B5CEA8; }
+        .line-code :global(.bool) { color: #569CD6; }
+        .line-code :global(.cmt) { color: var(--text-tertiary, rgba(255,255,255,0.3)); font-style: italic; }
+        .cursor { display: inline-block; width: 2px; height: 14px; background: var(--text-primary, #C9B99A); margin-left: 2px; animation: blink 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite; box-shadow: 0 0 10px currentColor; border-radius: 1px; }
+        @keyframes blink { 0%, 40% { opacity: 1; } 50%, 90% { opacity: 0; } 100% { opacity: 1; } }
+        @media (max-width: 768px) { .code-line { font-size: 10px; padding: 1px 4px; } .line-num { width: 24px; padding-right: 10px; } .code-container, .code-content { max-height: 260px; } .code-fade-top { height: 40px; } .code-fade-bottom { height: 50px; } }
+      `}</style>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ARTIFACT GALLERY
+// ARTIFACT GALLERY - State of the art split screen
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function ArtifactGallery() {
   const { artifacts, currentIndex, setCurrentIndex, closeGallery } = useArtifacts();
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const [isMobile, setIsMobile] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showCode, setShowCode] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [splitPosition, setSplitPosition] = useState(50);
+  const isDragging = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const displayArtifacts = useMemo(() => {
@@ -429,122 +305,117 @@ function ArtifactGallery() {
   const current = displayArtifacts[safeIndex];
   const previewHTML = useMemo(() => current ? generatePreviewHTML(current.code, current.language) : '', [current]);
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+  useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
+
+  const handleClose = useCallback(() => { setIsClosing(true); setTimeout(closeGallery, 280); }, [closeGallery]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeGallery();
+      if (e.key === 'Escape') handleClose();
       if (e.key === 'ArrowLeft' && safeIndex > 0) setCurrentIndex(safeIndex - 1);
       if (e.key === 'ArrowRight' && safeIndex < displayArtifacts.length - 1) setCurrentIndex(safeIndex + 1);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [safeIndex, displayArtifacts.length, closeGallery, setCurrentIndex]);
+  }, [safeIndex, displayArtifacts.length, handleClose, setCurrentIndex]);
 
   useEffect(() => { setIsLoaded(false); }, [safeIndex]);
 
-  if (!current) return null;
+  // Split screen drag handler
+  const handleMouseDown = useCallback(() => { isDragging.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }, []);
+  
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newPos = (e.clientX / window.innerWidth) * 100;
+      setSplitPosition(Math.max(25, Math.min(75, newPos)));
+    };
+    const handleMouseUp = () => { isDragging.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
+  }, []);
 
-  const lines = current.code.split('\n');
+  if (!current) return null;
   const currentName = extractComponentName(current.code);
 
   return (
     <>
-      <div className="alfred-gallery-root">
-        <div className="alfred-gallery-wrap">
-          <div className="alfred-gallery-head">
-            <div className="alfred-gallery-headleft">
-              <button className="alfred-gallery-navbtn" onClick={() => setCurrentIndex(safeIndex - 1)} disabled={safeIndex === 0}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round"/></svg>
-              </button>
-              <span className="alfred-gallery-counter">{safeIndex + 1}/{displayArtifacts.length}</span>
-              <button className="alfred-gallery-navbtn" onClick={() => setCurrentIndex(safeIndex + 1)} disabled={safeIndex === displayArtifacts.length - 1}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" strokeLinecap="round"/></svg>
-              </button>
-              <span className="alfred-gallery-title">{currentName}</span>
-            </div>
-            <div className="alfred-gallery-headright">
-              {!isMobile && (
-                <button className={`alfred-gallery-toggle ${showCode ? 'active' : ''}`} onClick={() => setShowCode(!showCode)}>
-                  {showCode ? 'HIDE CODE' : 'SHOW CODE'}
-                </button>
-              )}
-              <button className="alfred-gallery-iconbtn" onClick={() => { setIsLoaded(false); if(iframeRef.current) iframeRef.current.src = iframeRef.current.src; }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6" strokeLinecap="round"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" strokeLinecap="round"/></svg>
-              </button>
-              <button className="alfred-gallery-iconbtn alfred-gallery-closebtn" onClick={closeGallery}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/></svg>
-              </button>
-            </div>
+      <div className={'gallery-root' + (isClosing ? ' closing' : '')}>
+        <div className="gallery-header">
+          <div className="gallery-nav-left">
+            <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex - 1)} disabled={safeIndex === 0}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span className="counter">{safeIndex + 1}/{displayArtifacts.length}</span>
+            <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex + 1)} disabled={safeIndex === displayArtifacts.length - 1}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <span className="title">{currentName}</span>
           </div>
-          <div className="alfred-gallery-main">
-            {!isMobile && showCode && (
-              <div className="alfred-gallery-codepanel">
-                <div className="alfred-gallery-codescroll">
-                  {lines.map((line, i) => (
-                    <div key={i} className="alfred-gallery-codeline">
-                      <span className="alfred-gallery-codenum">{i + 1}</span>
-                      <span className="alfred-gallery-codetxt">{line || ' '}</span>
-                    </div>
+          <div className="gallery-nav-right">
+            {!isMobile && <button className={'toggle-btn' + (showCode ? ' active' : '')} onClick={() => setShowCode(!showCode)}>{showCode ? 'HIDE CODE' : 'SHOW CODE'}</button>}
+            <button className="icon-btn" onClick={() => { setIsLoaded(false); if(iframeRef.current) iframeRef.current.src = iframeRef.current.src; }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            </button>
+            <button className="icon-btn close-btn" onClick={handleClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div className="gallery-main">
+          <div className="preview-area" style={{ width: showCode && !isMobile ? splitPosition + '%' : '100%' }}>
+            {!isLoaded && <div className="loader"><div className="spinner" /></div>}
+            <iframe ref={iframeRef} srcDoc={previewHTML} sandbox="allow-scripts allow-same-origin" onLoad={() => setIsLoaded(true)} className={isLoaded ? 'loaded' : ''} />
+          </div>
+          {showCode && !isMobile && (
+            <>
+              <div className="splitter" onMouseDown={handleMouseDown}><div className="splitter-line" /></div>
+              <div className="code-area" style={{ width: (100 - splitPosition) + '%' }}>
+                <div className="code-scroll">
+                  {current.code.split('\n').map((line, i) => (
+                    <div key={i} className="code-line"><span className="ln">{i + 1}</span><span className="lc">{line}</span></div>
                   ))}
                 </div>
               </div>
-            )}
-            <div className="alfred-gallery-preview" style={{ width: (!isMobile && showCode) ? '60%' : '100%' }}>
-              {!isLoaded && <div className="alfred-gallery-loading"><div className="alfred-gallery-spinner" /></div>}
-              <iframe ref={iframeRef} srcDoc={previewHTML} sandbox="allow-scripts allow-same-origin" title="Preview" onLoad={() => setIsLoaded(true)} className={`alfred-gallery-iframe ${isLoaded ? 'loaded' : ''}`} />
-            </div>
-          </div>
-          {!isMobile && displayArtifacts.length > 1 && (
-            <div className="alfred-gallery-thumbs">
-              {displayArtifacts.map((a, i) => (
-                <button key={a.id} className={`alfred-gallery-thumb ${i === safeIndex ? 'active' : ''}`} onClick={() => setCurrentIndex(i)}>
-                  <span className="alfred-gallery-thumbnum">{i + 1}</span>
-                  <span className="alfred-gallery-thumbname">{extractComponentName(a.code)}</span>
-                </button>
-              ))}
-            </div>
+            </>
           )}
         </div>
       </div>
-      <style>{`
-        .alfred-gallery-root{position:fixed!important;inset:0!important;z-index:99999!important;background:#000!important;display:flex!important;flex-direction:column!important;touch-action:none!important}
-        .alfred-gallery-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:100%!important}
-        .alfred-gallery-head{display:flex!important;align-items:center!important;justify-content:space-between!important;padding:12px 16px!important;border-bottom:1px solid rgba(255,255,255,0.1)!important;flex-shrink:0!important;background:#000!important}
-        .alfred-gallery-headleft,.alfred-gallery-headright{display:flex!important;align-items:center!important;gap:8px!important}
-        .alfred-gallery-title{font-size:13px!important;font-weight:500!important;color:#fff!important;margin-left:12px!important}
-        .alfred-gallery-navbtn,.alfred-gallery-iconbtn{width:32px!important;height:32px!important;border-radius:6px!important;background:rgba(255,255,255,0.05)!important;border:1px solid rgba(255,255,255,0.1)!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#888!important}
-        .alfred-gallery-navbtn:hover:not(:disabled),.alfred-gallery-iconbtn:hover{color:#fff!important;background:rgba(255,255,255,0.1)!important}
-        .alfred-gallery-navbtn:disabled{opacity:0.3!important;cursor:not-allowed!important}
-        .alfred-gallery-closebtn:hover{background:rgba(239,68,68,0.2)!important;color:#ef4444!important}
-        .alfred-gallery-counter{font-family:monospace!important;font-size:11px!important;color:#666!important;min-width:40px!important;text-align:center!important}
-        .alfred-gallery-toggle{font-family:'SF Mono',monospace!important;font-size:9px!important;color:#888!important;background:transparent!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:4px!important;padding:6px 12px!important;cursor:pointer!important}
-        .alfred-gallery-toggle:hover{color:#fff!important}
-        .alfred-gallery-toggle.active{color:#C9B99A!important;border-color:#C9B99A!important}
-        .alfred-gallery-main{flex:1!important;display:flex!important;overflow:hidden!important;min-height:0!important}
-        .alfred-gallery-codepanel{width:40%!important;height:100%!important;border-right:1px solid rgba(255,255,255,0.1)!important;background:#050505!important;overflow:hidden!important}
-        .alfred-gallery-codescroll{height:100%!important;overflow:auto!important;padding:14px 0!important}
-        .alfred-gallery-codeline{display:flex!important;padding:1px 16px!important;font-family:'SF Mono',monospace!important;font-size:11px!important;line-height:18px!important}
-        .alfred-gallery-codenum{width:32px!important;color:#333!important;text-align:right!important;padding-right:12px!important;user-select:none!important}
-        .alfred-gallery-codetxt{color:#ccc!important;white-space:pre!important}
-        .alfred-gallery-preview{flex:1!important;position:relative!important;background:#000!important;min-height:0!important;height:100%!important}
-        .alfred-gallery-iframe{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:none!important;background:#000!important;opacity:0!important;transition:opacity 0.3s ease!important}
-        .alfred-gallery-iframe.loaded{opacity:1!important}
-        .alfred-gallery-loading{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;background:#000!important}
-        .alfred-gallery-spinner{width:24px!important;height:24px!important;border:2px solid rgba(255,255,255,0.1)!important;border-top-color:#666!important;border-radius:50%!important;animation:alfredSpin 0.6s linear infinite!important}
-        @keyframes alfredSpin{to{transform:rotate(360deg)}}
-        .alfred-gallery-thumbs{display:flex!important;gap:8px!important;padding:12px 16px!important;border-top:1px solid rgba(255,255,255,0.1)!important;overflow-x:auto!important;flex-shrink:0!important;background:#000!important}
-        .alfred-gallery-thumb{display:flex!important;align-items:center!important;gap:8px!important;padding:8px 14px!important;background:rgba(255,255,255,0.03)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;cursor:pointer!important;flex-shrink:0!important}
-        .alfred-gallery-thumb:hover{background:rgba(255,255,255,0.06)!important}
-        .alfred-gallery-thumb.active{background:rgba(201,185,154,0.1)!important;border-color:#C9B99A!important}
-        .alfred-gallery-thumbnum{font-family:monospace!important;font-size:10px!important;color:#666!important}
-        .alfred-gallery-thumbname{font-size:11px!important;color:#999!important}
-        .alfred-gallery-thumb.active .alfred-gallery-thumbname{color:#C9B99A!important}
+      <style jsx>{`
+        .gallery-root { position: fixed; inset: 0; z-index: 99999; background: #000; display: flex; flex-direction: column; animation: galleryIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+        .gallery-root.closing { animation: galleryOut 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+        @keyframes galleryIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+        @keyframes galleryOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.98); } }
+        .gallery-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .gallery-nav-left, .gallery-nav-right { display: flex; align-items: center; gap: 8px; }
+        .nav-btn, .icon-btn { width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .nav-btn:hover:not(:disabled), .icon-btn:hover { color: #fff; background: rgba(255,255,255,0.1); transform: scale(1.05); }
+        .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .close-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .counter { font-family: 'SF Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.4); min-width: 40px; text-align: center; }
+        .title { font-size: 13px; font-weight: 500; color: #fff; margin-left: 12px; }
+        .toggle-btn { font-family: 'SF Mono', monospace; font-size: 9px; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 12px; cursor: pointer; transition: all 0.2s; }
+        .toggle-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
+        .toggle-btn.active { color: #C9B99A; border-color: rgba(201,185,154,0.4); background: rgba(201,185,154,0.1); }
+        .gallery-main { flex: 1; display: flex; overflow: hidden; }
+        .preview-area { position: relative; background: #000; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        iframe.loaded { opacity: 1; }
+        .loader { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+        .spinner { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.08); border-top-color: rgba(255,255,255,0.5); border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .splitter { width: 12px; background: rgba(255,255,255,0.02); cursor: col-resize; display: flex; align-items: center; justify-content: center; transition: background 0.2s; position: relative; z-index: 10; }
+        .splitter:hover { background: rgba(255,255,255,0.05); }
+        .splitter:hover .splitter-line { background: rgba(201,185,154,0.6); }
+        .splitter-line { width: 3px; height: 40px; background: rgba(255,255,255,0.15); border-radius: 2px; transition: all 0.2s; }
+        .code-area { background: #0d0d0f; border-left: 1px solid rgba(255,255,255,0.06); overflow: hidden; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .code-scroll { flex: 1; overflow-y: auto; padding: 16px 0; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+        .code-scroll::-webkit-scrollbar { width: 6px; }
+        .code-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .code-line { display: flex; padding: 1px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; }
+        .ln { width: 36px; color: rgba(255,255,255,0.2); text-align: right; padding-right: 16px; user-select: none; flex-shrink: 0; }
+        .lc { color: rgba(255,255,255,0.8); white-space: pre; }
       `}</style>
     </>
   );
@@ -555,106 +426,46 @@ function ArtifactGallery() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function formatText(text: string): React.ReactNode[] {
-  let cleaned = text
-    .replace(/^[-─━]{3,}$/gm, '')
-    .replace(/^\*{3,}$/gm, '')
-    .replace(/^#{1,6}\s*/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
+  let cleaned = text.replace(/^[-─━]{3,}$/gm, '').replace(/^\*{3,}$/gm, '').replace(/^#{1,6}\s*/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   const elements: React.ReactNode[] = [];
   const paragraphs = cleaned.split(/\n\n+/);
 
   paragraphs.forEach((para, pIndex) => {
     if (!para.trim()) return;
-
     const lines = para.split('\n');
     const lineElements: React.ReactNode[] = [];
 
     lines.forEach((line, lIndex) => {
       if (!line.trim()) return;
-
       const bulletMatch = line.match(/^[\s]*[-•*]\s+(.+)$/);
       if (bulletMatch) {
-        lineElements.push(
-          <div key={`${pIndex}-${lIndex}`} style={{ display: 'flex', gap: '10px', marginLeft: '4px', marginBottom: '6px' }}>
-            <span style={{ color: 'var(--accent, #C9B99A)', opacity: 0.6, fontSize: '8px', marginTop: '8px' }}>●</span>
-            <span>{processInlineFormatting(bulletMatch[1], `${pIndex}-${lIndex}`)}</span>
-          </div>
-        );
+        lineElements.push(<div key={lIndex} style={{ display: 'flex', gap: '10px', marginLeft: '4px', marginBottom: '6px' }}><span style={{ color: 'var(--text-tertiary, #C9B99A)', opacity: 0.6, fontSize: '8px', marginTop: '8px' }}>●</span><span>{processInline(bulletMatch[1], lIndex)}</span></div>);
         return;
       }
-
-      const numberedMatch = line.match(/^[\s]*(\d+)[.)]\s+(.+)$/);
-      if (numberedMatch) {
-        lineElements.push(
-          <div key={`${pIndex}-${lIndex}`} style={{ display: 'flex', gap: '10px', marginLeft: '4px', marginBottom: '6px' }}>
-            <span style={{ color: 'var(--accent, #C9B99A)', opacity: 0.8, fontSize: '13px', fontWeight: 500, minWidth: '18px' }}>{numberedMatch[1]}.</span>
-            <span>{processInlineFormatting(numberedMatch[2], `${pIndex}-${lIndex}`)}</span>
-          </div>
-        );
-        return;
-      }
-
-      lineElements.push(
-        <span key={`${pIndex}-${lIndex}`}>
-          {processInlineFormatting(line, `${pIndex}-${lIndex}`)}
-          {lIndex < lines.length - 1 && <br />}
-        </span>
-      );
+      lineElements.push(<span key={lIndex}>{processInline(line, lIndex)}{lIndex < lines.length - 1 && <br />}</span>);
     });
 
-    if (lineElements.length > 0) {
-      elements.push(
-        <p key={pIndex} style={{ margin: 0, marginBottom: pIndex < paragraphs.length - 1 ? '16px' : 0 }}>
-          {lineElements}
-        </p>
-      );
-    }
+    if (lineElements.length > 0) elements.push(<p key={pIndex} style={{ margin: 0, marginBottom: pIndex < paragraphs.length - 1 ? '16px' : 0 }}>{lineElements}</p>);
   });
 
   return elements.length > 0 ? elements : [<span key="empty">{text}</span>];
 }
 
-function processInlineFormatting(text: string, keyPrefix: string): React.ReactNode[] {
+function processInline(text: string, key: number): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
   const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
-  let lastIndex = 0;
-  let match;
-  let partKey = 0;
+  let lastIndex = 0, match;
 
   while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      elements.push(<span key={`${keyPrefix}-${partKey++}`}>{text.slice(lastIndex, match.index)}</span>);
-    }
-
-    if (match[2]) {
-      elements.push(<span key={`${keyPrefix}-${partKey++}`} style={{ fontWeight: 600 }}>{match[2]}</span>);
-    } else if (match[3]) {
-      elements.push(<span key={`${keyPrefix}-${partKey++}`} style={{ fontStyle: 'italic', opacity: 0.9 }}>{match[3]}</span>);
-    } else if (match[4]) {
-      elements.push(
-        <code key={`${keyPrefix}-${partKey++}`} style={{ 
-          fontFamily: "'SF Mono', monospace",
-          fontSize: '0.9em',
-          background: 'var(--code-bg, rgba(128,128,128,0.15))',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          color: 'var(--accent, #C9B99A)'
-        }}>
-          {match[4]}
-        </code>
-      );
-    }
-
+    if (match.index > lastIndex) elements.push(<span key={key + '-' + lastIndex}>{text.slice(lastIndex, match.index)}</span>);
+    if (match[2]) elements.push(<span key={key + '-' + match.index} style={{ fontWeight: 600 }}>{match[2]}</span>);
+    else if (match[3]) elements.push(<span key={key + '-' + match.index} style={{ fontStyle: 'italic', opacity: 0.9 }}>{match[3]}</span>);
+    else if (match[4]) elements.push(<code key={key + '-' + match.index} style={{ fontFamily: "'SF Mono', monospace", fontSize: '0.9em', background: 'var(--bg-hover, rgba(128,128,128,0.15))', padding: '2px 6px', borderRadius: '4px', color: '#C9B99A', transition: 'background 0.3s' }}>{match[4]}</code>);
     lastIndex = match.index + match[0].length;
   }
 
-  if (lastIndex < text.length) {
-    elements.push(<span key={`${keyPrefix}-${partKey++}`}>{text.slice(lastIndex)}</span>);
-  }
-
-  return elements.length > 0 ? elements : [<span key={`${keyPrefix}-0`}>{text}</span>];
+  if (lastIndex < text.length) elements.push(<span key={key + '-end'}>{text.slice(lastIndex)}</span>);
+  return elements.length > 0 ? elements : [<span key={key}>{text}</span>];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -662,6 +473,7 @@ function processInlineFormatting(text: string, keyPrefix: string): React.ReactNo
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function Message({ id, role, content, timestamp, isStreaming = false, files }: MessageProps) {
+  const [isHovered, setIsHovered] = useState(false);
   const parsedContent = useMemo(() => parseContent(content, isStreaming), [content, isStreaming]);
   
   let artifactCtx: ArtifactContextType | null = null;
@@ -671,63 +483,37 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
     if (!artifactCtx || isStreaming) return;
     parsedContent.forEach((part, index) => {
       if (part.type === 'code' && isRenderableCode(part.language || '', part.content)) {
-        artifactCtx!.addArtifact({
-          id: `${id}-${index}`,
-          code: part.content,
-          language: part.language || 'jsx',
-          title: extractComponentName(part.content),
-        });
+        artifactCtx!.addArtifact({ id: id + '-' + index, code: part.content, language: part.language || 'jsx', title: extractComponentName(part.content) });
       }
     });
   }, [parsedContent, isStreaming, id, artifactCtx]);
 
   const handlePreview = useCallback((index: number) => {
     if (artifactCtx) {
-      const idx = artifactCtx.artifacts.findIndex(a => a.id === `${id}-${index}`);
+      const idx = artifactCtx.artifacts.findIndex(a => a.id === id + '-' + index);
       artifactCtx.openGallery(idx >= 0 ? idx : 0);
     }
   }, [artifactCtx, id]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start', width: '100%', overflow: 'hidden' }}>
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '12px', 
-        width: role === 'user' ? 'auto' : '100%', 
-        maxWidth: role === 'user' ? '80%' : '100%', 
-        overflow: 'hidden', 
-        fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-        fontSize: '15px', 
-        lineHeight: 1.75,
-        fontWeight: 400,
-        letterSpacing: '-0.01em',
-        color: role === 'user' 
-          ? 'var(--text-primary, var(--foreground, inherit))' 
-          : 'var(--text-secondary, var(--foreground, inherit))',
-        WebkitFontSmoothing: 'antialiased',
-      }}>
-        {/* ATTACHMENTS - Show uploaded media with elegant thumbnails */}
-        {files && files.length > 0 && (
-          <MessageAttachments attachments={files} isUser={role === 'user'} />
-        )}
-        
-        {/* TEXT CONTENT */}
+    <div className="message-wrapper" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      <div className={'message-content ' + role}>
+        {files && files.length > 0 && <MessageAttachments attachments={files} isUser={role === 'user'} />}
         {parsedContent.map((part, index) => {
-          if (part.type === 'code' || part.type === 'code-streaming') {
-            return <CodeBlock key={index} language={part.language || 'plaintext'} code={part.content} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;
-          }
-          return (
-            <div key={index} style={{ padding: '2px 0' }}>
-              {formatText(part.content)}
-            </div>
-          );
+          if (part.type === 'code' || part.type === 'code-streaming') return <CodeBlock key={index} language={part.language || 'plaintext'} code={part.content} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;
+          return <div key={index} style={{ padding: '2px 0' }}>{formatText(part.content)}</div>;
         })}
-        
-        {isStreaming && parsedContent.every(p => p.type === 'text') && (
-          <span style={{ display: 'inline-block', width: 2, height: 16, background: 'var(--accent, rgba(201,185,154,0.8))', marginLeft: 2, animation: 'alfredBlink 0.8s step-end infinite', verticalAlign: 'text-bottom' }} />
-        )}
+        {isStreaming && parsedContent.every(p => p.type === 'text') && <span className="streaming-cursor" />}
       </div>
+      {!isStreaming && <div className={'actions-row' + (isHovered ? ' visible' : '')}><MessageActions content={content} isAlfred={role === 'alfred'} /></div>}
+      <style jsx>{`
+        .message-wrapper { display: flex; flex-direction: column; align-items: ${role === 'user' ? 'flex-end' : 'flex-start'}; width: 100%; }
+        .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary, rgba(255,255,255,0.9)); -webkit-font-smoothing: antialiased; transition: color 0.3s; }
+        .actions-row { opacity: 0; transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .actions-row.visible { opacity: 1; }
+        .streaming-cursor { display: inline-block; width: 2px; height: 16px; background: #C9B99A; margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: text-bottom; box-shadow: 0 0 8px #C9B99A; }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+      `}</style>
     </div>
   );
 }
@@ -739,10 +525,8 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
 export function AlfredThinking() {
   return (
     <div style={{ display: 'flex', gap: 5, padding: '12px 0' }}>
-      {[0, 1, 2].map(i => (
-        <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#666', animation: `alfredDot 1.4s ease-in-out infinite`, animationDelay: `${i * 0.15}s` }} />
-      ))}
-      <style>{`@keyframes alfredDot{0%,100%{opacity:0.3;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}`}</style>
+      {[0, 1, 2].map(i => (<span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#666', animation: 'dot 1.4s ease-in-out infinite', animationDelay: i * 0.15 + 's' }} />))}
+      <style>{`@keyframes dot{0%,100%{opacity:0.3;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}`}</style>
     </div>
   );
 }
