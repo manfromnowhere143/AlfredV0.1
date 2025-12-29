@@ -17,6 +17,7 @@ interface SidebarProps {
   onClose: () => void;
   projects?: Project[];
   conversations?: Conversation[];
+  isLoadingConversations?: boolean;
   onSelectProject?: (id: string) => void;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
@@ -34,6 +35,7 @@ export default function Sidebar({
   onSelectProject,
   onSelectConversation,
   onNewConversation,
+  isLoadingConversations = false,
 }: SidebarProps) {
   const [theme, setTheme] = useState<Theme>('dark');
   const [view, setView] = useState<SidebarView>('main');
@@ -166,8 +168,10 @@ export default function Sidebar({
                 <span>Chats</span>
               </button>
               <div className="list">
-                {conversations.length === 0 ? (
-                  <div className="empty">No chats</div>
+                {isLoadingConversations ? (
+                  <div className="empty">Loading...</div>
+                ) : conversations.length === 0 ? (
+                  <div className="empty">No chats yet</div>
                 ) : conversations.map((c, i) => (
                   <button key={c.id} className="list-item" onClick={() => { onSelectConversation?.(c.id); onClose(); }} style={{ animationDelay: `${i * 30}ms` }}>
                     <span className="item-title">{c.title}</span>

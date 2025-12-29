@@ -8,18 +8,10 @@ import ChatInput from '@/components/ChatInput';
 import Message, { AlfredThinking, ArtifactProvider } from '@/components/Message';
 import AuthModal from '@/components/AuthModal';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DYNAMIC IMPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
   ssr: false,
   loading: () => <div style={{ width: 280, height: 280 }} />
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════════
 
 interface ChatMessage {
   id: string;
@@ -65,10 +57,6 @@ interface Conversation {
   timestamp: Date;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// UTILITIES
-// ═══════════════════════════════════════════════════════════════════════════════
-
 function mapDBMessageToChat(msg: DBMessage): ChatMessage {
   return {
     id: msg.id,
@@ -79,24 +67,16 @@ function mapDBMessageToChat(msg: DBMessage): ChatMessage {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
 function LoadingScreen({ progress, isVisible }: { progress: number; isVisible: boolean }) {
   return (
-    <div className={`loading-screen ${!isVisible ? 'fade-out' : ''}`}>
+    <div className={'loading-screen ' + (isVisible ? '' : 'fade-out')}>
       <div className="loading-logo">Alfred</div>
       <div className="loading-progress-container">
-        <div className="loading-progress-bar" style={{ width: `${progress}%` }} />
+        <div className="loading-progress-bar" style={{ width: progress + '%' }} />
       </div>
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONVERSATION LOADING - Elegant skeleton loader
-// ─────────────────────────────────────────────────────────────────────────────
 
 function ConversationLoader() {
   return (
@@ -114,14 +94,12 @@ function ConversationLoader() {
           padding: 60px 20px;
           animation: fadeIn 0.3s ease;
         }
-        
         .loader-container {
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 16px;
         }
-        
         .loader-spinner {
           width: 32px;
           height: 32px;
@@ -130,44 +108,26 @@ function ConversationLoader() {
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
-        
         .loader-text {
           font-size: 13px;
           color: rgba(255, 255, 255, 0.4);
           font-family: 'Inter', system-ui, sans-serif;
           letter-spacing: 0.02em;
         }
-        
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       `}</style>
     </div>
   );
 }
 
-function UserMenu({ 
-  isSignedIn, 
-  onLogout,
-  userInitial = 'U'
-}: { 
-  isSignedIn: boolean; 
-  onLogout: () => void;
-  userInitial?: string;
-}) {
+function UserMenu({ isSignedIn, onLogout, userInitial = 'U' }: { isSignedIn: boolean; onLogout: () => void; userInitial?: string; }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -177,30 +137,18 @@ function UserMenu({
 
   return (
     <div className="user-menu" ref={menuRef}>
-      <button className="user-avatar" onClick={() => setIsOpen(!isOpen)} aria-label="User menu">
-        {userInitial}
-      </button>
-      <div className={`user-dropdown ${isOpen ? 'open' : ''}`}>
+      <button className="user-avatar" onClick={() => setIsOpen(!isOpen)} aria-label="User menu">{userInitial}</button>
+      <div className={'user-dropdown ' + (isOpen ? 'open' : '')}>
         <button className="user-dropdown-item" onClick={() => setIsOpen(false)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
           Profile
         </button>
         <button className="user-dropdown-item" onClick={() => setIsOpen(false)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
           Settings
         </button>
         <button className="user-dropdown-item danger" onClick={() => { setIsOpen(false); onLogout(); }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
           Log out
         </button>
       </div>
@@ -208,19 +156,11 @@ function UserMenu({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
-
 export default function AlfredChat() {
   const { data: session, status } = useSession();
   const isSignedIn = !!session?.user;
   const isAuthChecked = status !== 'loading';
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STATE
-  // ─────────────────────────────────────────────────────────────────────────────
-  
   const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -228,26 +168,20 @@ export default function AlfredChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [streamingContent, setStreamingContent] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // INITIALIZATION
-  // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const initializeApp = async () => {
       setLoadingProgress(10);
       await new Promise(r => setTimeout(r, 50));
       const savedTheme = localStorage.getItem('alfred-theme');
-      if (savedTheme) {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      }
+      if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
       setLoadingProgress(30);
       await new Promise(r => setTimeout(r, 50));
       setLoadingProgress(60);
@@ -256,28 +190,18 @@ export default function AlfredChat() {
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
-      if (!session?.user) {
-        setAuthModalOpen(true);
-      }
+      if (!session?.user) setAuthModalOpen(true);
     };
     initializeApp();
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // PREVENT PINCH ZOOM ON iOS
-  // ─────────────────────────────────────────────────────────────────────────────
-
   useEffect(() => {
-    const preventZoom = (e: TouchEvent) => {
-      if (e.touches.length > 1) e.preventDefault();
-    };
+    const preventZoom = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
     const preventGestureZoom = (e: Event) => e.preventDefault();
-
     document.addEventListener('touchmove', preventZoom, { passive: false });
     document.addEventListener('gesturestart', preventGestureZoom);
     document.addEventListener('gesturechange', preventGestureZoom);
     document.addEventListener('gestureend', preventGestureZoom);
-
     return () => {
       document.removeEventListener('touchmove', preventZoom);
       document.removeEventListener('gesturestart', preventGestureZoom);
@@ -286,24 +210,21 @@ export default function AlfredChat() {
     };
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // LOAD USER DATA
-  // ─────────────────────────────────────────────────────────────────────────────
-
   const loadUserData = useCallback(async () => {
-    if (!isSignedIn) return;
-    
+    if (!isSignedIn) {
+      setIsLoadingConversations(false);
+      return;
+    }
+    setIsLoadingConversations(true);
     try {
       const [projectsRes, convsRes] = await Promise.all([
         fetch('/api/projects'),
         fetch('/api/conversations')
       ]);
-      
       if (projectsRes.ok) {
         const data = await projectsRes.json();
         setProjects(data.data || []);
       }
-      
       if (convsRes.ok) {
         const data = await convsRes.json();
         const mappedConvs = (data.data || []).map((c: any) => ({
@@ -316,28 +237,18 @@ export default function AlfredChat() {
       }
     } catch (error) {
       console.error('[Alfred] Failed to load user data:', error);
+    } finally {
+      setIsLoadingConversations(false);
     }
   }, [isSignedIn]);
 
-  useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SCROLL TO BOTTOM
-  // ─────────────────────────────────────────────────────────────────────────────
+  useEffect(() => { loadUserData(); }, [loadUserData]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // AUTH HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────────
+  useEffect(() => { scrollToBottom(); }, [messages, streamingContent, scrollToBottom]);
 
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
     if (method === 'google') {
@@ -360,24 +271,15 @@ export default function AlfredChat() {
     conversationId.current = null;
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SEND MESSAGE
-  // ─────────────────────────────────────────────────────────────────────────────
-
   const handleSend = async (content: string, attachments?: Attachment[]) => {
     if (!content.trim() && !attachments?.length) return;
 
-    // Create user message with files shown immediately (using preview/base64)
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: 'user-' + Date.now(),
       role: 'user',
       content,
       timestamp: new Date(),
-      files: attachments?.map(a => ({
-        ...a,
-        // Use preview URL for immediate display
-        url: a.preview || a.url,
-      })),
+      files: attachments?.map(a => ({ ...a, url: a.preview || a.url })),
     };
     
     setMessages(prev => [...prev, userMessage]);
@@ -394,7 +296,7 @@ export default function AlfredChat() {
           files: attachments?.filter(a => a.status === 'ready').map(a => ({
             id: a.id,
             name: a.name,
-            type: a.type === 'image' ? `image/${a.name.split('.').pop()?.toLowerCase() || 'jpeg'}` : a.type,
+            type: a.type === 'image' ? 'image/' + (a.name.split('.').pop()?.toLowerCase() || 'jpeg') : a.type,
             size: a.size,
             url: a.url,
             base64: a.base64,
@@ -412,10 +314,8 @@ export default function AlfredChat() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n');
-
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
@@ -430,27 +330,22 @@ export default function AlfredChat() {
                   conversationId.current = parsed.conversationId;
                   loadUserData();
                 }
-              } catch {
-                // Ignore parse errors
-              }
+              } catch {}
             }
           }
         }
       }
 
-      const alfredMessage: ChatMessage = {
-        id: `alfred-${Date.now()}`,
+      setMessages(prev => [...prev, {
+        id: 'alfred-' + Date.now(),
         role: 'alfred',
         content: fullContent || 'I encountered an issue processing your request.',
         timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, alfredMessage]);
-
+      }]);
     } catch (error) {
       console.error('[Alfred] Chat error:', error);
       setMessages(prev => [...prev, {
-        id: `alfred-${Date.now()}`,
+        id: 'alfred-' + Date.now(),
         role: 'alfred',
         content: 'I encountered an error. Please try again.',
         timestamp: new Date(),
@@ -461,10 +356,6 @@ export default function AlfredChat() {
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CONVERSATION HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────────
-
   const handleNewConversation = () => {
     setMessages([]);
     conversationId.current = null;
@@ -472,23 +363,18 @@ export default function AlfredChat() {
   };
 
   const handleSelectConversation = async (id: string) => {
-    // Immediately close sidebar and show loading state
     setSidebarOpen(false);
     setIsLoadingConversation(true);
-    setMessages([]); // Clear current messages for clean transition
+    setMessages([]);
     
     try {
       const res = await fetch('/api/conversations/' + id);
-      
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
           conversationId.current = id;
           const dbMessages: DBMessage[] = data.data.messages || [];
-          
-          // Small delay for smooth transition
-          await new Promise(r => setTimeout(r, 150));
-          
+          await new Promise(r => setTimeout(r, 100));
           setMessages(dbMessages.map(mapDBMessageToChat));
         }
       }
@@ -503,10 +389,6 @@ export default function AlfredChat() {
     console.log('[Alfred] Select project:', id);
     setSidebarOpen(false);
   };
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const hasMessages = messages.length > 0;
   const userInitial = session?.user?.email?.[0]?.toUpperCase() || 'U';
@@ -524,10 +406,11 @@ export default function AlfredChat() {
           onNewConversation={handleNewConversation}
           onSelectProject={handleSelectProject}
           onSelectConversation={handleSelectConversation}
+          isLoadingConversations={isLoadingConversations}
         />
 
         <button
-          className={`sidebar-trigger ${sidebarOpen ? 'hidden' : ''}`}
+          className={'sidebar-trigger ' + (sidebarOpen ? 'hidden' : '')}
           onClick={() => setSidebarOpen(true)}
           aria-label="Open menu"
         >
