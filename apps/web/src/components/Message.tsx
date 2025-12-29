@@ -174,14 +174,14 @@ function generatePreviewHTML(code: string, language: string): string {
 
 function CodeBlock({ language, code, isStreaming = false, onPreview }: { language: string; code: string; isStreaming?: boolean; onPreview?: () => void; }) {
   const [copied, setCopied] = useState(false);
-  const [hideFades, setHideFades] = useState(false);
+  const [fadeColor, setFadeColor] = useState('#0a0a0b');
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // Hide fades during theme transition to prevent flash
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setHideFades(true);
-      setTimeout(() => setHideFades(false), 50);
+      setFadeColor(document.documentElement.getAttribute('data-theme') === 'light' ? '#FFFFFF' : '#0a0a0b');
+      
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
@@ -221,12 +221,12 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         </div>
       </div>
       <div className="code-container">
-        <div className="code-fade-top" style={{ opacity: hideFades ? 0 : 1 }} />
+        <div className="code-fade-top" style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
         <div className="code-content" ref={scrollRef}>
           {lines.map((line, i) => (<div key={i} className="code-line"><span className="line-num">{i + 1}</span><span className="line-code" dangerouslySetInnerHTML={{ __html: highlightLine(line) || ' ' }} /></div>))}
           {isStreaming && <span className="cursor" />}
         </div>
-        <div className="code-fade-bottom" style={{ opacity: hideFades ? 0 : 1 }} />
+        <div className="code-fade-bottom" style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
       </div>
       <style jsx>{`
         .code-block { position: relative; margin: 16px 0; background: transparent; overflow: visible; }
