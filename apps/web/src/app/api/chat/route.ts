@@ -143,7 +143,7 @@ function normalizeMimeType(type: string, filename: string): string {
   return mimeMap[ext || ''] || type;
 }
 
-async function readFileFromDisk(url: string): Promise<string | null> {
+async function readFileFromUrl(url: string): Promise<string | null> {
   try {
     const filepath = path.join(process.cwd(), 'public', url);
     if (!existsSync(filepath)) {
@@ -205,7 +205,7 @@ async function buildMessageContent(
     if (file.base64) {
       base64Data = file.base64.includes(',') ? file.base64.split(',')[1] : file.base64;
     } else if (file.url) {
-      base64Data = await readFileFromDisk(file.url);
+      base64Data = await readFileFromUrl(file.url);
     }
 
     if (!base64Data) {
