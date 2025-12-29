@@ -464,7 +464,20 @@ export default function Sidebar({
         }
         .theme-orb.light::after { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
         
-        .theme-orb.active { transform: scale(1.15); box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.6), 0 0 16px rgba(201, 185, 154, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4); }
+        .theme-orb.active { 
+          transform: scale(1.2); 
+          box-shadow: 
+            0 0 0 2px rgba(255, 255, 255, 0.15),
+            0 8px 24px rgba(0, 0, 0, 0.5),
+            0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        
+        :global([data-theme="light"]) .theme-orb.active {
+          box-shadow: 
+            0 0 0 2px rgba(0, 0, 0, 0.1),
+            0 8px 24px rgba(0, 0, 0, 0.15),
+            0 4px 12px rgba(0, 0, 0, 0.1);
+        }
         .theme-orb:hover:not(.active) { transform: scale(1.1); }
         .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
         
