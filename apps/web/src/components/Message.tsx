@@ -120,7 +120,7 @@ function MessageActions({ content, isAlfred }: { content: string; isAlfred: bool
           border-radius: 8px;
           border: none;
           background: transparent;
-          color: var(--text-tertiary, rgba(255,255,255,0.35));
+          color: rgba(128,128,128,0.6);
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -128,10 +128,18 @@ function MessageActions({ content, isAlfred }: { content: string; isAlfred: bool
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .action-btn:hover {
-          background: var(--bg-hover, rgba(255,255,255,0.06));
-          color: var(--text-secondary, rgba(255,255,255,0.7));
+          background: rgba(128,128,128,0.15);
+          color: rgba(80,80,80,0.9);
           transform: scale(1.05);
         }
+        @media (prefers-color-scheme: dark) {
+          .action-btn { color: rgba(180,180,180,0.5); }
+          .action-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        }
+        [data-theme="dark"] .action-btn { color: rgba(180,180,180,0.5); }
+        [data-theme="dark"] .action-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        [data-theme="light"] .action-btn { color: rgba(100,100,100,0.6); }
+        [data-theme="light"] .action-btn:hover { background: rgba(0,0,0,0.08); color: rgba(50,50,50,0.9); }
         .action-btn:active {
           transform: scale(0.95);
         }
@@ -509,8 +517,8 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
       <style jsx>{`
         .message-wrapper { display: flex; flex-direction: column; align-items: ${role === 'user' ? 'flex-end' : 'flex-start'}; width: 100%; }
         .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary, rgba(255,255,255,0.9)); -webkit-font-smoothing: antialiased; transition: color 0.3s; }
-        .actions-row { opacity: 0; transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        .actions-row.visible { opacity: 1; }
+        .actions-row { opacity: 1; }
+        
         .streaming-cursor { display: inline-block; width: 2px; height: 16px; background: #C9B99A; margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: text-bottom; box-shadow: 0 0 8px #C9B99A; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
       `}</style>

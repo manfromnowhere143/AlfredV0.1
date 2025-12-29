@@ -214,6 +214,7 @@ export default function AuthModal({ isOpen, onClose, onSignIn }: AuthModalProps)
           border-radius: 24px 24px 0 0;
           z-index: 201;
           transform: translateY(100%);
+          pointer-events: none;
           transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
           overflow: hidden;
           display: flex;
@@ -236,6 +237,7 @@ export default function AuthModal({ isOpen, onClose, onSignIn }: AuthModalProps)
             max-height: 85vh;
             border-radius: 24px;
             transform: translate(-50%, -50%) scale(0.95);
+            pointer-events: none;
             opacity: 0;
           }
           
