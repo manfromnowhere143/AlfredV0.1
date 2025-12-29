@@ -73,7 +73,7 @@ function mapDBMessageToChat(msg: DBMessage): ChatMessage {
   return {
     id: msg.id,
     role: msg.role === 'assistant' ? 'alfred' : (msg.role as 'user' | 'alfred'),
-    content: msg.content,
+    content: msg.files && msg.files.length > 0 && msg.content === '[File attachment]' ? '' : msg.content,
     timestamp: new Date(msg.createdAt),
     files: msg.files,
   };
