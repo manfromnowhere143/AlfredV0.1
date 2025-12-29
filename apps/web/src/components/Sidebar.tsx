@@ -111,65 +111,65 @@ export default function Sidebar({
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* LEFT CONTROL PANEL                                                      */}
+      {/* USER BUTTON - Top Left, separate from main icons                        */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <div className={`user-panel ${isOpen ? 'open' : 'closing'}`} ref={userMenuRef}>
+        {user ? (
+          <>
+            <button
+              className="icon-btn user-btn"
+              onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); }}
+              aria-label="User menu"
+            >
+              {user.image ? (
+                <img src={user.image} alt="" className="avatar-img" />
+              ) : (
+                <span className="avatar-initial">{getUserInitial()}</span>
+              )}
+            </button>
+            {/* User Dropdown */}
+            <div className={`user-dropdown ${showUserMenu ? 'open' : ''}`}>
+              <div className="user-info">
+                <span className="user-name">{user.name || 'User'}</span>
+                <span className="user-email">{user.email}</span>
+              </div>
+              <div className="dropdown-divider" />
+              <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                Profile
+              </button>
+              <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                </svg>
+                Settings
+              </button>
+              <div className="dropdown-divider" />
+              <button className="dropdown-item danger" onClick={() => { onSignOut?.(); setShowUserMenu(false); onClose(); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Log out
+              </button>
+            </div>
+          </>
+        ) : (
+          <button className="icon-btn" onClick={onSignIn} title="Sign In">
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="10" r="5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+              <path d="M6 28C6 28 8 19 16 19C24 19 26 28 26 28" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* LEFT ICONS - Centered, 3 icons aligned with 3 theme orbs               */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <aside className={`control-panel left ${isOpen ? 'open' : 'closing'}`}>
-
-        {/* User Avatar */}
-        <div className="user-section" ref={userMenuRef}>
-          {user ? (
-            <>
-              <button
-                className="icon-btn user-btn"
-                onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); }}
-                aria-label="User menu"
-              >
-                {user.image ? (
-                  <img src={user.image} alt="" className="avatar-img" />
-                ) : (
-                  <span className="avatar-initial">{getUserInitial()}</span>
-                )}
-              </button>
-              {/* User Dropdown - Always in DOM, toggle with class */}
-              <div className={`user-dropdown ${showUserMenu ? 'open' : ''}`}>
-                <div className="user-info">
-                  <span className="user-name">{user.name || 'User'}</span>
-                  <span className="user-email">{user.email}</span>
-                </div>
-                <div className="dropdown-divider" />
-                <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                  </svg>
-                  Profile
-                </button>
-                <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                  </svg>
-                  Settings
-                </button>
-                <div className="dropdown-divider" />
-                <button className="dropdown-item danger" onClick={() => { onSignOut?.(); setShowUserMenu(false); onClose(); }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
-                  Log out
-                </button>
-              </div>
-            </>
-          ) : (
-            <button className="icon-btn" onClick={onSignIn} title="Sign In">
-              <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="10" r="5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                <path d="M6 28C6 28 8 19 16 19C24 19 26 28 26 28" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Action Icons */}
-        <div className="icon-row">
+        <div className="icon-column">
           <button className="icon-btn" onClick={() => { onNewConversation?.(); onClose(); }} title="New Chat">
             <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
               <path d="M16 8v16M8 16h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -199,11 +199,10 @@ export default function Sidebar({
             </svg>
           </button>
         </div>
-
       </aside>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* RIGHT THEME PANEL - Aligned with left icons                            */}
+      {/* RIGHT THEME ORBS - Centered, 3 orbs aligned with 3 icons               */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <aside className={`control-panel right ${isOpen ? 'open' : 'closing'}`}>
         <div className="theme-column">
@@ -289,26 +288,35 @@ export default function Sidebar({
 
       <style jsx>{`
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CONTROL PANELS - Left and Right                                                 */
+        /* USER PANEL - Top Left, separate                                                 */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .user-panel {
+          position: fixed;
+          top: 24px;
+          left: 24px;
+          z-index: 100;
+          opacity: 0;
+          transform: translateX(-120%);
+          transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
+        }
+        
+        .user-panel.open { transform: translateX(0); opacity: 1; }
+        .user-panel.closing { transform: translateX(-120%); opacity: 0; }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* CONTROL PANELS - Left icons & Right orbs, both centered                         */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .control-panel {
           position: fixed;
           top: 50%;
           z-index: 100;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-          background: transparent;
-          pointer-events: none;
           opacity: 0;
           transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
         }
         
-        .control-panel > * { pointer-events: auto; }
-        
-        /* LEFT panel */
+        /* LEFT - 3 action icons */
         .control-panel.left {
           left: 24px;
           transform: translateY(-50%) translateX(-120%);
@@ -316,7 +324,7 @@ export default function Sidebar({
         .control-panel.left.open { transform: translateY(-50%) translateX(0); opacity: 1; }
         .control-panel.left.closing { transform: translateY(-50%) translateX(-120%); opacity: 0; }
         
-        /* RIGHT panel - theme orbs */
+        /* RIGHT - 3 theme orbs */
         .control-panel.right {
           right: 24px;
           transform: translateY(-50%) translateX(120%);
@@ -325,64 +333,14 @@ export default function Sidebar({
         .control-panel.right.closing { transform: translateY(-50%) translateX(120%); opacity: 0; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* THEME COLUMN - Right side                                                       */
+        /* ICON COLUMN - 3 icons with matching spacing to theme orbs                       */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
-        .theme-column {
+        .icon-column {
           display: flex;
           flex-direction: column;
           gap: 14px;
-          padding: 14px 12px;
-          border-radius: 20px;
-          background: linear-gradient(145deg, rgba(26, 26, 26, 0.9), rgba(10, 10, 11, 0.95));
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
         }
-        
-        :global([data-theme="light"]) .theme-column {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(245, 245, 240, 0.9));
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
-        }
-        
-        .theme-orb {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          border: none;
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: relative;
-        }
-        
-        .theme-orb.dark {
-          background: linear-gradient(145deg, #1a1a1a, #000);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.5);
-        }
-        .theme-orb.dark::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%); }
-        
-        .theme-orb.space {
-          background: linear-gradient(145deg, #48484A, #2C2C2E);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
-        }
-        .theme-orb.space::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%); }
-        
-        .theme-orb.light {
-          background: linear-gradient(145deg, #fff, #e5e5e5);
-          box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(0, 0, 0, 0.15);
-        }
-        .theme-orb.light::after { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
-        
-        .theme-orb.active { transform: scale(1.15); box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.6), 0 0 16px rgba(201, 185, 154, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4); }
-        .theme-orb:hover:not(.active) { transform: scale(1.1); }
-        .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
-        
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* ICON BUTTONS                                                                    */
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        
-        .user-section { position: relative; }
-        .icon-row { display: flex; flex-direction: column; gap: 10px; }
         
         .icon-btn {
           position: relative;
@@ -441,7 +399,7 @@ export default function Sidebar({
         .icon-btn svg { position: relative; z-index: 5; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
         .icon-btn.active svg { filter: drop-shadow(0 0 8px rgba(201, 185, 154, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
         
-        /* Light theme */
+        /* Light theme icons */
         :global([data-theme="light"]) .icon-btn {
           background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 50%, #ebebeb 100%);
           color: #1a1a1a;
@@ -451,11 +409,64 @@ export default function Sidebar({
         :global([data-theme="light"]) .icon-btn.active { background: linear-gradient(145deg, #f8f8f8 0%, #f0f0f0 50%, #e8e8e8 100%); color: #8B7355; }
         :global([data-theme="light"]) .icon-btn::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%); }
         
-        /* User button */
+        /* User button - circular */
         .user-btn { border-radius: 50%; }
         .user-btn::before, .user-btn::after { border-radius: 50%; }
         .avatar-img { width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 5; border-radius: 50%; }
         .avatar-initial { font-size: 18px; font-weight: 600; position: relative; z-index: 5; }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* THEME COLUMN - 3 orbs with matching spacing to icons                            */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .theme-column {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          padding: 14px 12px;
+          border-radius: 20px;
+          background: linear-gradient(145deg, rgba(26, 26, 26, 0.9), rgba(10, 10, 11, 0.95));
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+        }
+        
+        :global([data-theme="light"]) .theme-column {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(245, 245, 240, 0.9));
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+        }
+        
+        .theme-orb {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+        }
+        
+        .theme-orb.dark {
+          background: linear-gradient(145deg, #1a1a1a, #000);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        .theme-orb.dark::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%); }
+        
+        .theme-orb.space {
+          background: linear-gradient(145deg, #48484A, #2C2C2E);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        .theme-orb.space::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%); }
+        
+        .theme-orb.light {
+          background: linear-gradient(145deg, #fff, #e5e5e5);
+          box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .theme-orb.light::after { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
+        
+        .theme-orb.active { transform: scale(1.15); box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.6), 0 0 16px rgba(201, 185, 154, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4); }
+        .theme-orb:hover:not(.active) { transform: scale(1.1); }
+        .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* USER DROPDOWN                                                                   */
@@ -475,7 +486,6 @@ export default function Sidebar({
           -webkit-backdrop-filter: blur(20px);
           z-index: 200;
           
-          /* Hidden by default */
           opacity: 0;
           visibility: hidden;
           transform: translateX(-8px) scale(0.95);
@@ -625,14 +635,17 @@ export default function Sidebar({
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         @media (max-width: 768px) {
-          .control-panel.left { left: 16px; gap: 10px; }
+          .user-panel { top: 16px; left: 16px; }
+          
+          .control-panel.left { left: 16px; }
           .control-panel.right { right: 16px; }
+          
+          .icon-column { gap: 10px; }
+          .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
+          .icon-btn svg { width: 18px; height: 18px; }
           
           .theme-column { padding: 10px 8px; border-radius: 16px; gap: 10px; }
           .theme-orb { width: 24px; height: 24px; }
-          
-          .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
-          .icon-btn svg { width: 18px; height: 18px; }
           
           .list-panel { left: 76px; width: calc(100vw - 100px); max-width: 260px; max-height: 60vh; }
           .list-body { min-height: 150px; max-height: 45vh; }
