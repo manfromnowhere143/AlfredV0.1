@@ -34,6 +34,7 @@ interface DBMessage {
   role: 'user' | 'assistant' | 'alfred';
   content: string;
   createdAt: string;
+  files?: Attachment[];
 }
 
 interface Attachment {
@@ -74,6 +75,7 @@ function mapDBMessageToChat(msg: DBMessage): ChatMessage {
     role: msg.role === 'assistant' ? 'alfred' : (msg.role as 'user' | 'alfred'),
     content: msg.content,
     timestamp: new Date(msg.createdAt),
+    files: msg.files,
   };
 }
 
