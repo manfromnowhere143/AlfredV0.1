@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "pnpm -C apps/web dev",
     "build": "pnpm -r --if-present build",
-    "build:packages": "pnpm -C packages/core build && pnpm -C packages/database build",
+    "build:packages": "pnpm -r --filter ./packages/* build",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
