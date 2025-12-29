@@ -478,7 +478,7 @@ export default function AlfredChat() {
     setMessages([]); // Clear current messages for clean transition
     
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetch('/api/conversations/' + id);
       
       if (res.ok) {
         const data = await res.json();
