@@ -177,19 +177,18 @@ export default function AlfredChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // INITIALIZATION
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-  // ─────────────────────────────────────────────────────────────────────────────
-  // REQUIRE LOGIN - Auto open auth modal if not signed in
-  // ─────────────────────────────────────────────────────────────────────────────
+  // REQUIRE LOGIN
   useEffect(() => {
     if (isAuthChecked && !isSignedIn) {
       setAuthModalOpen(true);
     }
   }, [isAuthChecked, isSignedIn]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // INITIALIZATION
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
     const initializeApp = async () => {
       setLoadingProgress(10);
       await new Promise(r => setTimeout(r, 50));
@@ -525,7 +524,7 @@ export default function AlfredChat() {
 
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => isSignedIn && setAuthModalOpen(false)}
+        onClose={() => setAuthModalOpen(false)}
         onSignIn={handleSignIn}
       />
     </>
