@@ -182,6 +182,14 @@ export default function AlfredChat() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // REQUIRE LOGIN - Auto open auth modal if not signed in
+  // ─────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isAuthChecked && !isSignedIn) {
+      setAuthModalOpen(true);
+    }
+  }, [isAuthChecked, isSignedIn]);
     const initializeApp = async () => {
       setLoadingProgress(10);
       await new Promise(r => setTimeout(r, 50));
@@ -517,7 +525,7 @@ export default function AlfredChat() {
 
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={() => isSignedIn && setAuthModalOpen(false)}
         onSignIn={handleSignIn}
       />
     </>
