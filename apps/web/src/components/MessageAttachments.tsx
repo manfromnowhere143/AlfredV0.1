@@ -185,8 +185,8 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
       <style jsx>{`
         .thumb-container {
           position: relative;
-          width: 64px;
-          height: 64px;
+          width: 48px;
+          height: 48px;
           border-radius: 8px;
           overflow: hidden;
           cursor: pointer;
@@ -205,7 +205,7 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
         .thumb-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%); color: rgba(255,255,255,0.3); }
         .thumb-image, .thumb-video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s ease; }
         .thumb-image.loaded, .thumb-video.loaded { opacity: 1; }
-        .thumb-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: #fff; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s ease; }
+        .thumb-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: #fff; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s ease; }
         .thumb-container:hover .thumb-play { transform: translate(-50%, -50%) scale(1.1); background: rgba(0,0,0,0.8); }
         .thumb-duration { position: absolute; bottom: 4px; right: 4px; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.7); font-size: 9px; font-weight: 500; color: #fff; font-family: monospace; }
         .thumb-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: #fff; opacity: 0; transition: opacity 0.2s ease; }
@@ -213,8 +213,8 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
         @keyframes thumbIn { from { opacity: 0; transform: scale(0.9) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @media (max-width: 768px) {
-          .thumb-container { width: 56px; height: 56px; border-radius: 6px; }
-          .thumb-play { width: 24px; height: 24px; }
+          .thumb-container { width: 40px; height: 40px; border-radius: 6px; }
+          .thumb-play { width: 18px; height: 18px; }
           .thumb-play svg { width: 12px; height: 12px; }
         }
       `}</style>

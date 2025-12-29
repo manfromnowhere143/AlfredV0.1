@@ -83,36 +83,30 @@ function ConversationLoader() {
     <div className="conversation-loader">
       <div className="loader-container">
         <div className="loader-spinner" />
-        <span className="loader-text">Loading conversation...</span>
       </div>
       <style jsx>{`
         .conversation-loader {
+          position: absolute;
+          inset: 0;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 60px 20px;
-          animation: fadeIn 0.3s ease;
+          padding-bottom: 15vh;
         }
         .loader-container {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 16px;
+          gap: 12px;
+          animation: fadeIn 0.2s ease;
         }
         .loader-spinner {
-          width: 32px;
-          height: 32px;
-          border: 2px solid rgba(201, 185, 154, 0.1);
-          border-top-color: rgba(201, 185, 154, 0.8);
+          width: 24px;
+          height: 24px;
+          border: 1.5px solid rgba(201, 185, 154, 0.15);
+          border-top-color: rgba(201, 185, 154, 0.7);
           border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-        .loader-text {
-          font-size: 13px;
-          color: rgba(255, 255, 255, 0.4);
-          font-family: 'Inter', system-ui, sans-serif;
-          letter-spacing: 0.02em;
+          animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -186,7 +180,7 @@ export default function AlfredChat() {
       await new Promise(r => setTimeout(r, 50));
       setLoadingProgress(60);
       setLoadingProgress(90);
-      await new Promise(r => setTimeout(r, 100));
+      // No artificial delay
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);

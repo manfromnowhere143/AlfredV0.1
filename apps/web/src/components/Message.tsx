@@ -201,15 +201,28 @@ function generatePreviewHTML(code: string, language: string): string {
     body { min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     #root { min-height: 100vh; }
     html { scroll-behavior: smooth; }
-    img { max-width: 100%; height: auto; }
+    img { 
+      max-width: 100%; 
+      height: auto; 
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    img.loaded { opacity: 1; }
+    img:not(.loaded) {
+      background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 100%);
+      min-height: 100px;
+    }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fadeIn { animation: fadeIn 0.5s ease-out; }
     .animate-slideUp { animation: slideUp 0.5s ease-out; }
   </style>
   <script>
+    document.addEventListener("load", function(e) { if (e.target.tagName === "IMG") e.target.classList.add("loaded"); }, true);
     document.addEventListener("error", function(e) {
-      if (e.target.tagName === "IMG") {
+      if (e.target.tagName === "IMG" && e.type === "load") {
+        e.target.classList.add("loaded");
+      } else if (e.target.tagName === "IMG") {
         e.target.style.background = "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)";
         e.target.alt = "Image unavailable";
       }
