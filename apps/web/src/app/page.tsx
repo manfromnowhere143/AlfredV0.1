@@ -197,7 +197,6 @@ export default function AlfredChat() {
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
-      // Require login
       if (!session?.user) {
         setAuthModalOpen(true);
       }
@@ -303,7 +302,7 @@ export default function AlfredChat() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SEND MESSAGE - Server loads history from DB for file persistence
+  // SEND MESSAGE
   // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSend = async (content: string, attachments?: Attachment[]) => {
@@ -322,7 +321,6 @@ export default function AlfredChat() {
     setStreamingContent('');
 
     try {
-      // Server loads history from DB (preserves file context)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -411,7 +409,7 @@ export default function AlfredChat() {
 
   const handleSelectConversation = async (id: string) => {
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetch('/api/conversations/' + id);
       if (res.ok) {
         const data = await res.json();
         conversationId.current = id;
