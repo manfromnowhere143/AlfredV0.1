@@ -226,7 +226,7 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
           {lines.map((line, i) => (<div key={i} className="code-line"><span className="line-num">{i + 1}</span><span className="line-code" dangerouslySetInnerHTML={{ __html: highlightLine(line) || ' ' }} /></div>))}
           {isStreaming && <span className="cursor" />}
         </div>
-        <div className="code-fade-bottom" style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
+        <div className="code-fade-bottom" style={{ background: `linear-gradient(to top, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
       </div>
       <style jsx>{`
         .code-block { position: relative; margin: 16px 0; background: transparent; overflow: visible; }
