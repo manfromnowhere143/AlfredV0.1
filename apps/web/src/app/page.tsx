@@ -94,6 +94,63 @@ function LoadingScreen({ progress, isVisible }: { progress: number; isVisible: b
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONVERSATION LOADING - Elegant skeleton loader
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ConversationLoader() {
+  return (
+    <div className="conversation-loader">
+      <div className="loader-container">
+        <div className="loader-spinner" />
+        <span className="loader-text">Loading conversation...</span>
+      </div>
+      <style jsx>{`
+        .conversation-loader {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 60px 20px;
+          animation: fadeIn 0.3s ease;
+        }
+        
+        .loader-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }
+        
+        .loader-spinner {
+          width: 32px;
+          height: 32px;
+          border: 2px solid rgba(201, 185, 154, 0.1);
+          border-top-color: rgba(201, 185, 154, 0.8);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        
+        .loader-text {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.4);
+          font-family: 'Inter', system-ui, sans-serif;
+          letter-spacing: 0.02em;
+        }
+        
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function UserMenu({ 
   isSignedIn, 
   onLogout,
@@ -170,9 +227,11 @@ export default function AlfredChat() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
@@ -308,12 +367,17 @@ export default function AlfredChat() {
   const handleSend = async (content: string, attachments?: Attachment[]) => {
     if (!content.trim() && !attachments?.length) return;
 
+    // Create user message with files shown immediately (using preview/base64)
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content,
       timestamp: new Date(),
-      files: attachments,
+      files: attachments?.map(a => ({
+        ...a,
+        // Use preview URL for immediate display
+        url: a.preview || a.url,
+      })),
     };
     
     setMessages(prev => [...prev, userMessage]);
@@ -408,18 +472,31 @@ export default function AlfredChat() {
   };
 
   const handleSelectConversation = async (id: string) => {
+    // Immediately close sidebar and show loading state
+    setSidebarOpen(false);
+    setIsLoadingConversation(true);
+    setMessages([]); // Clear current messages for clean transition
+    
     try {
-      const res = await fetch('/api/conversations/' + id);
+      const res = await fetch(`/api/conversations/${id}`);
+      
       if (res.ok) {
         const data = await res.json();
-        conversationId.current = id;
-        const dbMessages: DBMessage[] = data.data?.messages || [];
-        setMessages(dbMessages.map(mapDBMessageToChat));
+        if (data.success && data.data) {
+          conversationId.current = id;
+          const dbMessages: DBMessage[] = data.data.messages || [];
+          
+          // Small delay for smooth transition
+          await new Promise(r => setTimeout(r, 150));
+          
+          setMessages(dbMessages.map(mapDBMessageToChat));
+        }
       }
     } catch (error) {
       console.error('[Alfred] Failed to load conversation:', error);
+    } finally {
+      setIsLoadingConversation(false);
     }
-    setSidebarOpen(false);
   };
 
   const handleSelectProject = (id: string) => {
@@ -464,7 +541,9 @@ export default function AlfredChat() {
         <UserMenu isSignedIn={isSignedIn} onLogout={handleLogout} userInitial={userInitial} />
 
         <main className="chat-container">
-          {!hasMessages ? (
+          {isLoadingConversation ? (
+            <ConversationLoader />
+          ) : !hasMessages ? (
             <div className="chat-empty">
               {isSignedIn ? (
                 <GoldenSpiral3D />
