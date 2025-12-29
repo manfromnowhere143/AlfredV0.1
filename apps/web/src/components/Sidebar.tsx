@@ -539,8 +539,8 @@ export default function Sidebar({
           position: fixed;
           top: 50%;
           left: 100px;
+          width: min(220px, calc(100vw - 200px));
           transform: translateY(-50%) translateX(-20px);
-          width: 240px;
           max-height: 70vh;
           display: flex;
           flex-direction: column;
@@ -647,7 +647,7 @@ export default function Sidebar({
           .theme-column { padding: 10px 8px; border-radius: 16px; gap: 10px; }
           .theme-orb { width: 24px; height: 24px; }
           
-          .list-panel { left: 76px; width: calc(100vw - 100px); max-width: 260px; max-height: 60vh; }
+          .list-panel { left: 76px; width: min(200px, calc(100vw - 160px)); max-height: 60vh; }
           .list-body { min-height: 150px; max-height: 45vh; }
           .list-item { padding: 10px 12px; }
           .item-title { font-size: 12px; }
