@@ -96,6 +96,10 @@ function MessageActions({ content, isAlfred }: { content: string; isAlfred: bool
         </>
       )}
       <style jsx>{`
+        :global([data-theme="dark"]) .code-fade-top, .code-fade-top { background: linear-gradient(to bottom, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); }
+        :global([data-theme="dark"]) .code-fade-bottom, .code-fade-bottom { background: linear-gradient(to top, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); }
+        :global([data-theme="light"]) .code-fade-top { background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
+        :global([data-theme="light"]) .code-fade-bottom { background: linear-gradient(to top, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
         .message-actions { display: flex; align-items: center; gap: 2px; padding-top: 8px; }
         .action-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.7); }
         .action-btn:hover { background: rgba(156,163,175,0.12); color: rgba(156,163,175,1); transform: scale(1.05); }
@@ -174,7 +178,18 @@ function generatePreviewHTML(code: string, language: string): string {
 
 function CodeBlock({ language, code, isStreaming = false, onPreview }: { language: string; code: string; isStreaming?: boolean; onPreview?: () => void; }) {
   const [copied, setCopied] = useState(false);
+  const [hideFades, setHideFades] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Hide fades during theme transition to prevent flash
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setHideFades(true);
+      setTimeout(() => setHideFades(false), 50);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
   const isRenderable = !isStreaming && isRenderableCode(language, code);
 
   useEffect(() => { if (isStreaming && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [code, isStreaming]);
@@ -210,31 +225,31 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         </div>
       </div>
       <div className="code-container">
-        <div className="code-fade-top" />
+        <div className="code-fade-top" style={{ opacity: hideFades ? 0 : 1 }} />
         <div className="code-content" ref={scrollRef}>
           {lines.map((line, i) => (<div key={i} className="code-line"><span className="line-num">{i + 1}</span><span className="line-code" dangerouslySetInnerHTML={{ __html: highlightLine(line) || ' ' }} /></div>))}
           {isStreaming && <span className="cursor" />}
         </div>
-        <div className="code-fade-bottom" />
+        <div className="code-fade-bottom" style={{ opacity: hideFades ? 0 : 1 }} />
       </div>
       <style jsx>{`
         .code-block { position: relative; margin: 16px 0; background: transparent; overflow: visible; }
         .code-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 8px 0; }
         .code-header-left { display: flex; align-items: center; gap: 10px; }
-        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6); transition: color 0.3s; }
+        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6); transition: color 0.35s ease; }
         .code-icon-btn { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.5); }
         .code-icon-btn:hover { color: rgba(156,163,175,0.9); background: rgba(156,163,175,0.1); }
         .code-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         .code-icon-btn.preview { color: rgba(201,185,154,0.6); }
         .code-icon-btn.preview:hover { color: #C9B99A; background: rgba(201,185,154,0.12); }
         .code-container { position: relative; max-height: 320px; overflow: hidden; }
-        .code-fade-top { position: absolute; top: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to bottom, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); transition: background 0.35s ease; } :global([data-theme="light"]) .code-fade-top { background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
-        .code-fade-bottom { position: absolute; bottom: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to top, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); transition: background 0.35s ease; } :global([data-theme="light"]) .code-fade-bottom { background: linear-gradient(to top, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
+        .code-fade-top { position: absolute; top: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; }
+        .code-fade-bottom { position: absolute; bottom: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; }
         .code-content { overflow-y: auto; padding: 32px 0; max-height: 320px; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
         .code-content::-webkit-scrollbar { display: none; }
         .code-line { display: block; padding: 1px 8px; min-height: 20px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; line-height: 20px; letter-spacing: 0.02em; font-weight: 300; }
-        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none; transition: color 0.3s; }
-        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; transition: color 0.3s; }
+        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none; transition: color 0.35s ease; }
+        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; transition: color 0.35s ease; }
         .line-code :global(.kw) { color: #C586C0; }
         .line-code :global(.str) { color: #CE9178; }
         .line-code :global(.num) { color: #B5CEA8; }
