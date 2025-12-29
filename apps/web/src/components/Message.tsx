@@ -204,7 +204,7 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
           </button>
           {isRenderable && onPreview && (
             <button className="code-icon-btn preview" onClick={onPreview} title="Preview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg>
             </button>
           )}
         </div>
@@ -228,8 +228,8 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         .code-icon-btn.preview { color: rgba(201,185,154,0.6); }
         .code-icon-btn.preview:hover { color: #C9B99A; background: rgba(201,185,154,0.12); }
         .code-container { position: relative; max-height: 320px; overflow: hidden; }
-        .code-fade-top { position: absolute; top: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to bottom, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); } :global([data-theme="light"]) .code-fade-top { background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
-        .code-fade-bottom { position: absolute; bottom: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to top, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); } :global([data-theme="light"]) .code-fade-bottom { background: linear-gradient(to top, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
+        .code-fade-top { position: absolute; top: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to bottom, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); transition: background 0.35s ease; } :global([data-theme="light"]) .code-fade-top { background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
+        .code-fade-bottom { position: absolute; bottom: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; background: linear-gradient(to top, #0a0a0b 0%, #0a0a0b 30%, transparent 100%); transition: background 0.35s ease; } :global([data-theme="light"]) .code-fade-bottom { background: linear-gradient(to top, #FFFFFF 0%, #FFFFFF 30%, transparent 100%); }
         .code-content { overflow-y: auto; padding: 32px 0; max-height: 320px; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
         .code-content::-webkit-scrollbar { display: none; }
         .code-line { display: block; padding: 1px 8px; min-height: 20px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; line-height: 20px; letter-spacing: 0.02em; font-weight: 300; }
