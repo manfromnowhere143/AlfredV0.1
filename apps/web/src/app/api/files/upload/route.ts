@@ -1,6 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// FILE UPLOAD API - /api/files/upload
-// State-of-the-art: stores ORIGINAL + generates OPTIMIZED for AI Vision
+// FILE UPLOAD API - Hybrid: Local (dev) + Vercel Blob (production)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,18 +10,18 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { db, files, eq } from '@alfred/database';
 import sharp from 'sharp';
+import { put } from '@vercel/blob';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
 
+const IS_PRODUCTION = process.env.VERCEL === '1';
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB for videos
-const MAX_IMAGE_SIZE = 50 * 1024 * 1024;  // 50MB originals allowed
-
-// AI Vision limits
-const AI_MAX_SIZE = 4 * 1024 * 1024;      // 4MB for Claude Vision (safe margin)
-const AI_MAX_DIMENSION = 1920;             // Max width/height for AI
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+const AI_MAX_SIZE = 4 * 1024 * 1024;
+const AI_MAX_DIMENSION = 1920;
 
 type FileCategory = 'image' | 'video' | 'document' | 'code' | 'audio';
 
@@ -52,7 +51,7 @@ const MIME_TO_CATEGORY: Record<string, FileCategory> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IMAGE OPTIMIZATION - Creates AI-friendly version
+// IMAGE OPTIMIZATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function optimizeImageForAI(buffer: Buffer, mimeType: string): Promise<{
@@ -60,20 +59,14 @@ async function optimizeImageForAI(buffer: Buffer, mimeType: string): Promise<{
   optimizedSize: number;
   wasOptimized: boolean;
 }> {
-  // If already small enough, no optimization needed
   if (buffer.length <= AI_MAX_SIZE) {
-    return {
-      optimizedBuffer: buffer,
-      optimizedSize: buffer.length,
-      wasOptimized: false,
-    };
+    return { optimizedBuffer: buffer, optimizedSize: buffer.length, wasOptimized: false };
   }
 
   try {
     let sharpInstance = sharp(buffer);
     const metadata = await sharpInstance.metadata();
     
-    // Resize if too large
     const needsResize = (metadata.width && metadata.width > AI_MAX_DIMENSION) || 
                         (metadata.height && metadata.height > AI_MAX_DIMENSION);
     
@@ -84,52 +77,61 @@ async function optimizeImageForAI(buffer: Buffer, mimeType: string): Promise<{
       });
     }
 
-    // Progressive compression until under limit
     let quality = 85;
     let optimizedBuffer = buffer;
     
     while (quality >= 20) {
-      // Convert to JPEG for best compression (unless PNG with transparency)
       const hasAlpha = metadata.hasAlpha && mimeType === 'image/png';
       
       if (hasAlpha) {
-        optimizedBuffer = await sharpInstance
-          .png({ quality, compressionLevel: 9 })
-          .toBuffer();
+        optimizedBuffer = await sharpInstance.png({ quality, compressionLevel: 9 }).toBuffer();
       } else {
-        optimizedBuffer = await sharpInstance
-          .jpeg({ quality, mozjpeg: true })
-          .toBuffer();
+        optimizedBuffer = await sharpInstance.jpeg({ quality, mozjpeg: true }).toBuffer();
       }
       
-      if (optimizedBuffer.length <= AI_MAX_SIZE) {
-        break;
-      }
-      
+      if (optimizedBuffer.length <= AI_MAX_SIZE) break;
       quality -= 10;
     }
 
-    const originalMB = (buffer.length / 1024 / 1024).toFixed(2);
-    const optimizedMB = (optimizedBuffer.length / 1024 / 1024).toFixed(2);
-    console.log(`[Upload] 🖼️ Optimized: ${originalMB}MB → ${optimizedMB}MB (quality: ${quality})`);
-
-    return {
-      optimizedBuffer,
-      optimizedSize: optimizedBuffer.length,
-      wasOptimized: true,
-    };
+    console.log(`[Upload] Optimized: ${(buffer.length / 1024 / 1024).toFixed(2)}MB -> ${(optimizedBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+    return { optimizedBuffer, optimizedSize: optimizedBuffer.length, wasOptimized: true };
   } catch (error) {
-    console.error('[Upload] Optimization failed, using original:', error);
-    return {
-      optimizedBuffer: buffer,
-      optimizedSize: buffer.length,
-      wasOptimized: false,
-    };
+    console.error('[Upload] Optimization failed:', error);
+    return { optimizedBuffer: buffer, optimizedSize: buffer.length, wasOptimized: false };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST - Upload file with dual storage
+// STORAGE - Local (dev) or Vercel Blob (production)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function saveToLocal(buffer: Buffer, userId: string, filename: string): Promise<string> {
+  const userDir = path.join(UPLOAD_DIR, userId);
+  if (!existsSync(userDir)) {
+    await mkdir(userDir, { recursive: true });
+  }
+  const filepath = path.join(userDir, filename);
+  await writeFile(filepath, buffer);
+  return `/uploads/${userId}/${filename}`;
+}
+
+async function saveToBlob(buffer: Buffer, userId: string, filename: string, contentType: string): Promise<string> {
+  const blob = await put(`uploads/${userId}/${filename}`, buffer, {
+    access: 'public',
+    contentType,
+  });
+  return blob.url;
+}
+
+async function saveFile(buffer: Buffer, userId: string, filename: string, contentType: string): Promise<string> {
+  if (IS_PRODUCTION) {
+    return saveToBlob(buffer, userId, filename, contentType);
+  }
+  return saveToLocal(buffer, userId, filename);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST - Upload file
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -149,42 +151,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const category = MIME_TO_CATEGORY[file.type] || MIME_TO_CATEGORY[file.type.split(';')[0]];
-    if (!category) {
-      // Allow unknown types as documents
-      console.log(`[Upload] Unknown type ${file.type}, treating as document`);
-    }
-
+    const category = MIME_TO_CATEGORY[file.type] || MIME_TO_CATEGORY[file.type.split(';')[0]] || 'document';
     const maxSize = category === 'video' ? MAX_FILE_SIZE : MAX_IMAGE_SIZE;
+    
     if (file.size > maxSize) {
-      return NextResponse.json({ 
-        error: `File too large. Max: ${maxSize / 1024 / 1024}MB` 
-      }, { status: 400 });
+      return NextResponse.json({ error: `File too large. Max: ${maxSize / 1024 / 1024}MB` }, { status: 400 });
     }
 
-    // Create user directory
-    const userDir = path.join(UPLOAD_DIR, userId);
-    if (!existsSync(userDir)) {
-      await mkdir(userDir, { recursive: true });
-    }
-
-    // Generate filename
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 8);
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 50);
     const filename = `${timestamp}-${randomId}-${safeName}`;
-    const optimizedFilename = `${timestamp}-${randomId}-optimized-${safeName.replace(/\.[^.]+$/, '')}.jpg`;
+    const optimizedFilename = `${timestamp}-${randomId}-optimized.jpg`;
 
-    // Get buffer
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Save ORIGINAL to disk (full quality)
-    const filepath = path.join(userDir, filename);
-    await writeFile(filepath, buffer);
-    const url = `/uploads/${userId}/${filename}`;
+    // Save original
+    const url = await saveFile(buffer, userId, filename, file.type);
 
-    // For images: create OPTIMIZED version for AI Vision
+    // For images: create optimized version
     let optimizedUrl: string | undefined;
     let optimizedBase64: string | undefined;
     let wasOptimized = false;
@@ -194,30 +180,26 @@ export async function POST(request: NextRequest) {
       wasOptimized = didOptimize;
       
       if (didOptimize) {
-        // Save optimized version
-        const optimizedPath = path.join(userDir, optimizedFilename);
-        await writeFile(optimizedPath, optimizedBuffer);
-        optimizedUrl = `/uploads/${userId}/${optimizedFilename}`;
+        optimizedUrl = await saveFile(optimizedBuffer, userId, optimizedFilename, 'image/jpeg');
       }
       
-      // Base64 of optimized version for immediate Claude Vision use
       optimizedBase64 = (didOptimize ? optimizedBuffer : buffer).toString('base64');
     }
 
-    // For PDFs, still provide base64 (they're usually small)
+    // PDF base64
     let base64: string | undefined;
     if (file.type === 'application/pdf' && buffer.length < AI_MAX_SIZE) {
       base64 = buffer.toString('base64');
     }
 
-    // Save to database with both URLs
+    // Save to database
     const [fileRecord] = await db.insert(files).values({
       name: filename,
       originalName: file.name,
-      url,                          // Original full-quality
-      optimizedUrl,                 // AI-optimized version (if created)
+      url,
+      optimizedUrl,
       mimeType: file.type,
-      category: category || 'document',
+      category,
       extension: ext,
       size: file.size,
       userId,
@@ -225,18 +207,17 @@ export async function POST(request: NextRequest) {
       status: 'ready',
     }).returning();
 
-    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-    console.log(`[Upload] ✅ ${file.name} (${sizeMB}MB) → ${url}${wasOptimized ? ' + optimized' : ''} (DB: ${fileRecord.id})`);
+    console.log(`[Upload] ${IS_PRODUCTION ? 'BLOB' : 'LOCAL'}: ${file.name} -> ${url}`);
 
     return NextResponse.json({
       id: fileRecord.id,
       name: file.name,
-      url,                          // Original for display
-      optimizedUrl,                 // Optimized for AI (if exists)
+      url,
+      optimizedUrl,
       type: file.type,
-      category: category || 'document',
+      category,
       size: file.size,
-      base64: optimizedBase64 || base64, // Optimized base64 for immediate use
+      base64: optimizedBase64 || base64,
       wasOptimized,
     });
 
@@ -247,7 +228,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET - Fetch file as base64 (returns optimized version for AI)
+// GET - Fetch file as base64
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -261,39 +242,30 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const fileUrl = searchParams.get('url');
-    const forAI = searchParams.get('forAI') === 'true';
 
     if (!fileUrl) {
       return NextResponse.json({ error: 'URL required' }, { status: 400 });
     }
 
+    // For Blob URLs, fetch remotely
+    if (fileUrl.startsWith('http')) {
+      const response = await fetch(fileUrl);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return NextResponse.json({ base64: buffer.toString('base64'), size: buffer.length });
+    }
+
+    // For local files
     if (!fileUrl.includes(`/uploads/${userId}/`)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    let targetPath = path.join(process.cwd(), 'public', fileUrl);
-    
-    // If requesting for AI, try to find optimized version
-    if (forAI) {
-      const dir = path.dirname(targetPath);
-      const basename = path.basename(targetPath);
-      const optimizedName = basename.replace(/^(\d+-\w+-)/, '$1optimized-').replace(/\.[^.]+$/, '.jpg');
-      const optimizedPath = path.join(dir, optimizedName);
-      
-      if (existsSync(optimizedPath)) {
-        targetPath = optimizedPath;
-      }
-    }
-
+    const targetPath = path.join(process.cwd(), 'public', fileUrl);
     if (!existsSync(targetPath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
     const buffer = await readFile(targetPath);
-    return NextResponse.json({ 
-      base64: buffer.toString('base64'),
-      size: buffer.length,
-    });
+    return NextResponse.json({ base64: buffer.toString('base64'), size: buffer.length });
 
   } catch (error) {
     console.error('[Upload] GET error:', error);
@@ -302,7 +274,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE - Remove file
+// DELETE
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function DELETE(request: NextRequest) {
@@ -322,7 +294,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     await db.update(files).set({ deletedAt: new Date() }).where(eq(files.id, fileId));
-
     return NextResponse.json({ success: true });
 
   } catch (error) {
