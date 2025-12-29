@@ -10,7 +10,7 @@ import AuthModal from '@/components/AuthModal';
 
 const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
   ssr: false,
-  loading: () => <div style={{ width: 280, height: 280 }} />
+  loading: () => <div style={{ width: 200, height: 200 }} />
 });
 
 interface ChatMessage {
@@ -239,7 +239,7 @@ export default function AlfredChat() {
       timestamp: new Date(),
       files: attachments?.map(a => ({ ...a, url: a.preview || a.url })),
     };
-
+    
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setStreamingContent('');
@@ -324,7 +324,7 @@ export default function AlfredChat() {
     setSidebarOpen(false);
     setIsLoadingConversation(true);
     setMessages([]);
-
+    
     try {
       const res = await fetch('/api/conversations/' + id);
       if (res.ok) {
@@ -388,13 +388,12 @@ export default function AlfredChat() {
             <ConversationLoader />
           ) : !hasMessages ? (
             <div className="chat-empty">
-              {isSignedIn ? (
-                <GoldenSpiral3D />
-              ) : (
-                <>
+              {isSignedIn && <GoldenSpiral3D />}
+              {!isSignedIn && (
+                <div className="brand-container">
                   <h1 className="chat-empty-brand">Alfred</h1>
                   <p className="chat-empty-tagline">A product architect with taste</p>
-                </>
+                </div>
               )}
             </div>
           ) : (
@@ -503,6 +502,17 @@ export default function AlfredChat() {
         .line-3.open {
           width: 22px;
           transform: rotate(45deg) translateX(2px) translateY(1px);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* BRAND CONTAINER - For non-signed-in state                                       */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .brand-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
         }
         
         @media (max-width: 768px) {
