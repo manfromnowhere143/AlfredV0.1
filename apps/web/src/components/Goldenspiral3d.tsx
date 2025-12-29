@@ -383,11 +383,6 @@ export default function GoldenSpiral3D() {
           height={180}
           className="particle-canvas"
         />
-
-        {/* Hint */}
-        <p className="spiral-hint">
-          {isExploded ? 'click to reform' : 'click to interact'}
-        </p>
       </div>
 
       <style jsx>{`
@@ -397,9 +392,8 @@ export default function GoldenSpiral3D() {
           top: 50%;
           transform: translate(-50%, -50%);
           width: 180px;
-          height: 200px;
+          height: 180px;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
           opacity: 0;
@@ -451,24 +445,6 @@ export default function GoldenSpiral3D() {
           pointer-events: none;
         }
         
-        .spiral-hint {
-          position: absolute;
-          bottom: 0;
-          font-size: 9px;
-          font-family: 'JetBrains Mono', 'SF Mono', monospace;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--text-muted, rgba(255,255,255,0.2));
-          opacity: 0;
-          transition: opacity 0.3s ease, color 0.3s ease;
-          margin: 0;
-        }
-        
-        .golden-spiral:hover .spiral-hint {
-          opacity: 1;
-          color: var(--text-secondary, rgba(255,255,255,0.35));
-        }
-        
         @keyframes rotate {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -492,7 +468,7 @@ export default function GoldenSpiral3D() {
         @media (max-width: 768px) {
           .golden-spiral {
             width: 150px;
-            height: 170px;
+            height: 150px;
           }
           .spiral-svg, .particle-canvas {
             width: 150px;
