@@ -145,6 +145,17 @@ function normalizeMimeType(type: string, filename: string): string {
 
 async function readFileFromUrl(url: string): Promise<string | null> {
   try {
+    // Handle remote URLs (Vercel Blob, S3, etc)
+    if (url.startsWith('http')) {
+      console.log('[Chat] Fetching remote file:', url);
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return buffer.toString('base64');
+    }
+  } catch (e) { console.error('[Chat] Remote fetch error:', e); }
+  // Original local file logic below
+  try {
     const filepath = path.join(process.cwd(), 'public', url);
     if (!existsSync(filepath)) {
       console.log(`[Chat] File not found on disk: ${filepath}`);
