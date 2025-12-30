@@ -312,14 +312,14 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
           align-items: center;
           gap: 10px;
           padding: 8px 10px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(0, 0, 0, 0.03);
+          border: 1px solid rgba(0, 0, 0, 0.08);
           border-radius: 12px;
           transition: border-color 0.2s ease;
         }
 
         .attachment-preview:hover {
-          border-color: rgba(255, 255, 255, 0.1);
+          border-color: rgba(0, 0, 0, 0.15);
         }
 
         .attachment-preview--error {
@@ -333,7 +333,7 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
           height: 44px;
           border-radius: 8px;
           overflow: hidden;
-          background: rgba(255, 255, 255, 0.04);
+          background: rgba(0, 0, 0, 0.04);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -361,7 +361,7 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
         }
 
         .attachment-preview__icon {
-          color: rgba(255, 255, 255, 0.3);
+          color: rgba(0, 0, 0, 0.3);
         }
 
         .attachment-preview__upload-overlay {
@@ -397,7 +397,7 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
         .attachment-preview__name {
           font-size: 12px;
           font-weight: 500;
-          color: rgba(255, 255, 255, 0.85);
+          color: rgba(0, 0, 0, 0.8);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -405,7 +405,7 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
 
         .attachment-preview__meta {
           font-size: 10px;
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(0, 0, 0, 0.4);
         }
 
         .attachment-preview__meta--error {
@@ -417,8 +417,8 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
           height: 24px;
           border-radius: 50%;
           border: none;
-          background: rgba(255, 255, 255, 0.04);
-          color: rgba(255, 255, 255, 0.4);
+          background: rgba(0, 0, 0, 0.04);
+          color: rgba(0, 0, 0, 0.4);
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -428,13 +428,46 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
         }
 
         .attachment-preview__remove:hover {
-          background: rgba(255, 59, 48, 0.12);
-          color: #ff453a;
+          background: rgba(0, 0, 0, 0.08);
+          color: rgba(0, 0, 0, 0.7);
         }
 
-        .attachment-preview__remove:focus-visible {
-          outline: 2px solid rgba(255, 255, 255, 0.3);
-          outline-offset: 2px;
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+          .attachment-preview {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.06);
+          }
+
+          .attachment-preview:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+          }
+
+          .attachment-preview__thumb {
+            background: rgba(255, 255, 255, 0.04);
+          }
+
+          .attachment-preview__icon {
+            color: rgba(255, 255, 255, 0.3);
+          }
+
+          .attachment-preview__name {
+            color: rgba(255, 255, 255, 0.85);
+          }
+
+          .attachment-preview__meta {
+            color: rgba(255, 255, 255, 0.35);
+          }
+
+          .attachment-preview__remove {
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.4);
+          }
+
+          .attachment-preview__remove:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.8);
+          }
         }
       `}</style>
     </div>
@@ -1413,8 +1446,8 @@ export default function ChatInput({
                   disabled={disabled || attachments.length >= CONFIG.MAX_FILES}
                   aria-label="Attach files"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                   </svg>
                 </button>
 
@@ -1456,11 +1489,12 @@ export default function ChatInput({
                     }}
                     disabled={disabled || isEnhancing}
                     aria-label="Enhance with Alfred"
-                    title="Enhance with Alfred"
+                    title="Enhance prompt"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9.5 2L10.5 5L13.5 6L10.5 7L9.5 10L8.5 7L5.5 6L8.5 5L9.5 2Z" />
+                      <path d="M19 8L20 10L22 11L20 12L19 14L18 12L16 11L18 10L19 8Z" />
+                      <path d="M14.5 14L15.5 17L18.5 18L15.5 19L14.5 22L13.5 19L10.5 18L13.5 17L14.5 14Z" />
                     </svg>
                   </button>
                 )}
@@ -1473,10 +1507,10 @@ export default function ChatInput({
                     disabled={disabled}
                     aria-label="Start voice recording"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
                       <path d="M19 10v2a7 7 0 01-14 0v-2" />
-                      <path d="M12 19v4M8 23h8" strokeLinecap="round" />
+                      <path d="M12 19v4M8 23h8" />
                     </svg>
                   </button>
                 ) : (
@@ -1489,8 +1523,14 @@ export default function ChatInput({
                     {isUploading ? (
                       <div className="chat-input__spinner" />
                     ) : (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path 
+                          d="M12 4L12 20M12 4L6 10M12 4L18 10" 
+                          stroke="currentColor" 
+                          strokeWidth="2.5" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     )}
                   </button>
@@ -1607,34 +1647,57 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
-           MAIN CONTAINER - Frosted Glass (works on any background)
+           MAIN CONTAINER - Adaptive for Light/Dark backgrounds
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__container {
           position: relative;
           width: 100%;
           max-width: 720px;
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(24px) saturate(180%);
           -webkit-backdrop-filter: blur(24px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(0, 0, 0, 0.08);
           border-radius: 24px;
           transition: all 0.2s ease;
           box-shadow: 
-            0 4px 24px -4px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          color: white;
+            0 2px 8px rgba(0, 0, 0, 0.04),
+            0 4px 24px -4px rgba(0, 0, 0, 0.08);
+          color: black;
         }
 
         .chat-input__container:focus-within {
-          border-color: rgba(255, 255, 255, 0.18);
+          border-color: rgba(0, 0, 0, 0.15);
           box-shadow: 
-            0 4px 32px -4px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            0 2px 8px rgba(0, 0, 0, 0.06),
+            0 4px 32px -4px rgba(0, 0, 0, 0.12);
         }
 
         .chat-input__container--recording {
-          border-color: rgba(255, 255, 255, 0.15);
+          border-color: rgba(0, 0, 0, 0.12);
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+          .chat-input__container {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 
+              0 4px 24px -4px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            color: white;
+          }
+
+          .chat-input__container:focus-within {
+            border-color: rgba(255, 255, 255, 0.18);
+            box-shadow: 
+              0 4px 32px -4px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          }
+
+          .chat-input__container--recording {
+            border-color: rgba(255, 255, 255, 0.15);
+          }
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1645,10 +1708,16 @@ export default function ChatInput({
           display: flex;
           gap: 8px;
           padding: 14px 16px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
           flex-wrap: wrap;
           max-height: 200px;
           overflow-y: auto;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .chat-input__attachments {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+          }
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1658,8 +1727,8 @@ export default function ChatInput({
         .chat-input__row {
           display: flex;
           align-items: flex-end;
-          gap: 8px;
-          padding: 12px 14px;
+          gap: 6px;
+          padding: 10px 12px;
         }
 
         .chat-input__textarea {
@@ -1669,7 +1738,7 @@ export default function ChatInput({
           outline: none;
           font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
           font-size: 16px;
-          color: rgba(255, 255, 255, 0.92);
+          color: rgba(0, 0, 0, 0.85);
           resize: none;
           min-height: 24px;
           max-height: 150px;
@@ -1677,7 +1746,11 @@ export default function ChatInput({
           padding: 0;
           overflow-y: auto;
           scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.2) transparent;
+          scrollbar-color: rgba(0,0,0,0.15) transparent;
+        }
+
+        .chat-input__textarea::placeholder {
+          color: rgba(0, 0, 0, 0.4);
         }
 
         .chat-input__textarea::-webkit-scrollbar {
@@ -1689,8 +1762,23 @@ export default function ChatInput({
         }
 
         .chat-input__textarea::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(0, 0, 0, 0.15);
           border-radius: 2px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .chat-input__textarea {
+            color: rgba(255, 255, 255, 0.92);
+            scrollbar-color: rgba(255,255,255,0.2) transparent;
+          }
+
+          .chat-input__textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+          }
+
+          .chat-input__textarea::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+          }
         }
 
         .chat-input__textarea::placeholder {
@@ -1707,50 +1795,48 @@ export default function ChatInput({
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__btn {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
           border: none;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          transition: all 0.2s ease;
+          transition: all 0.15s ease;
           -webkit-tap-highlight-color: transparent;
         }
 
         .chat-input__btn:disabled {
-          opacity: 0.25;
+          opacity: 0.3;
           cursor: not-allowed;
           transform: none !important;
         }
 
         .chat-input__btn:focus-visible {
-          outline: 2px solid rgba(255, 255, 255, 0.3);
+          outline: 2px solid rgba(255, 255, 255, 0.25);
           outline-offset: 2px;
         }
 
         .chat-input__btn--attach {
           background: transparent;
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(0, 0, 0, 0.35);
         }
 
         .chat-input__btn--attach:hover:not(:disabled) {
-          color: rgba(255, 255, 255, 0.7);
+          color: rgba(0, 0, 0, 0.7);
+          background: rgba(0, 0, 0, 0.04);
         }
 
         .chat-input__btn--refine {
-          background: rgba(255, 255, 255, 0.06);
-          color: rgba(255, 255, 255, 0.5);
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
+          background: rgba(0, 0, 0, 0.04);
+          color: rgba(0, 0, 0, 0.45);
         }
 
         .chat-input__btn--refine:hover:not(:disabled) {
-          color: white;
-          background: rgba(255, 255, 255, 0.12);
+          color: rgba(0, 0, 0, 0.8);
+          background: rgba(0, 0, 0, 0.08);
         }
 
         .chat-input__btn--refine:active:not(:disabled) {
@@ -1759,30 +1845,84 @@ export default function ChatInput({
 
         .chat-input__btn--voice {
           background: transparent;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(0, 0, 0, 0.4);
         }
 
         .chat-input__btn--voice:hover:not(:disabled) {
-          color: white;
+          color: rgba(0, 0, 0, 0.8);
+          background: rgba(0, 0, 0, 0.04);
         }
 
         .chat-input__btn--voice:active:not(:disabled) {
-          transform: scale(0.9);
-          background: rgba(255, 255, 255, 0.1);
+          transform: scale(0.95);
         }
 
         .chat-input__btn--send {
-          background: white;
-          color: black;
+          background: black;
+          color: white;
+          border-radius: 12px;
+        }
+
+        .chat-input__btn--send:disabled {
+          background: rgba(0, 0, 0, 0.1);
+          color: rgba(0, 0, 0, 0.3);
         }
 
         .chat-input__btn--send:hover:not(:disabled) {
-          transform: scale(1.05);
-          box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12);
+          background: rgba(0, 0, 0, 0.85);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .chat-input__btn--send:active:not(:disabled) {
-          transform: scale(0.95);
+          transform: translateY(0);
+          box-shadow: none;
+        }
+
+        /* Dark mode buttons */
+        @media (prefers-color-scheme: dark) {
+          .chat-input__btn--attach {
+            color: rgba(255, 255, 255, 0.4);
+          }
+
+          .chat-input__btn--attach:hover:not(:disabled) {
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.06);
+          }
+
+          .chat-input__btn--refine {
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.5);
+          }
+
+          .chat-input__btn--refine:hover:not(:disabled) {
+            color: white;
+            background: rgba(255, 255, 255, 0.12);
+          }
+
+          .chat-input__btn--voice {
+            color: rgba(255, 255, 255, 0.5);
+          }
+
+          .chat-input__btn--voice:hover:not(:disabled) {
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+          }
+
+          .chat-input__btn--send {
+            background: white;
+            color: black;
+          }
+
+          .chat-input__btn--send:disabled {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.3);
+          }
+
+          .chat-input__btn--send:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+          }
         }
 
         .chat-input__spinner {
@@ -1792,6 +1932,13 @@ export default function ChatInput({
           border-top-color: black;
           border-radius: 50%;
           animation: spin 0.7s linear infinite;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .chat-input__spinner {
+            border-color: rgba(255, 255, 255, 0.15);
+            border-top-color: white;
+          }
         }
 
         @keyframes spin {
@@ -1879,7 +2026,7 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
-           PROMPT ENHANCE - Frosted Glass (works on any background)
+           PROMPT ENHANCE - Adaptive Light/Dark
            ═══════════════════════════════════════════════════════════════════════ */
         
         .prompt-enhance {
@@ -1892,17 +2039,17 @@ export default function ChatInput({
         }
 
         .prompt-enhance__card {
-          background: rgba(0, 0, 0, 0.75);
+          background: rgba(255, 255, 255, 0.98);
           backdrop-filter: blur(20px) saturate(180%);
           -webkit-backdrop-filter: blur(20px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(0, 0, 0, 0.08);
           border-radius: 16px;
           padding: 16px 20px;
           animation: enhanceSlide 0.2s ease-out;
           box-shadow: 
-            0 4px 24px -4px rgba(0, 0, 0, 0.25),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          color: white;
+            0 2px 8px rgba(0, 0, 0, 0.04),
+            0 4px 24px -4px rgba(0, 0, 0, 0.1);
+          color: black;
         }
 
         @keyframes enhanceSlide {
@@ -1928,8 +2075,7 @@ export default function ChatInput({
         .prompt-enhance__dot {
           width: 5px;
           height: 5px;
-          background: white;
-          opacity: 0.4;
+          background: rgba(0, 0, 0, 0.3);
           border-radius: 50%;
           animation: enhanceDot 1.2s ease-in-out infinite;
         }
@@ -1958,11 +2104,11 @@ export default function ChatInput({
           margin: 0;
           font-size: 14px;
           line-height: 1.55;
-          color: rgba(255, 255, 255, 0.92);
+          color: rgba(0, 0, 0, 0.85);
           max-height: 100px;
           overflow-y: auto;
           scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.15) transparent;
+          scrollbar-color: rgba(0,0,0,0.1) transparent;
         }
 
         .prompt-enhance__text::-webkit-scrollbar {
@@ -1974,14 +2120,14 @@ export default function ChatInput({
         }
 
         .prompt-enhance__text::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(0, 0, 0, 0.1);
           border-radius: 3px;
         }
 
         /* Divider */
         .prompt-enhance__divider {
           height: 1px;
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(0, 0, 0, 0.06);
           margin: 12px 0;
         }
 
@@ -1995,7 +2141,7 @@ export default function ChatInput({
 
         .prompt-enhance__hint {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.4);
+          color: rgba(0, 0, 0, 0.4);
           letter-spacing: 0.01em;
         }
 
@@ -2017,23 +2163,73 @@ export default function ChatInput({
         .prompt-enhance__btn--dismiss {
           background: transparent;
           border: none;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(0, 0, 0, 0.45);
         }
 
         .prompt-enhance__btn--dismiss:hover {
-          color: rgba(255, 255, 255, 0.8);
+          color: rgba(0, 0, 0, 0.7);
         }
 
         .prompt-enhance__btn--apply {
-          background: white;
+          background: black;
           border: none;
-          color: black;
+          color: white;
           font-weight: 600;
         }
 
         .prompt-enhance__btn--apply:hover {
-          background: rgba(255, 255, 255, 0.9);
+          background: rgba(0, 0, 0, 0.85);
           transform: translateY(-1px);
+        }
+
+        /* Dark mode enhancer */
+        @media (prefers-color-scheme: dark) {
+          .prompt-enhance__card {
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 
+              0 4px 24px -4px rgba(0, 0, 0, 0.25),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            color: white;
+          }
+
+          .prompt-enhance__dot {
+            background: rgba(255, 255, 255, 0.4);
+          }
+
+          .prompt-enhance__text {
+            color: rgba(255, 255, 255, 0.92);
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+          }
+
+          .prompt-enhance__text::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+          }
+
+          .prompt-enhance__divider {
+            background: rgba(255, 255, 255, 0.1);
+          }
+
+          .prompt-enhance__hint {
+            color: rgba(255, 255, 255, 0.4);
+          }
+
+          .prompt-enhance__btn--dismiss {
+            color: rgba(255, 255, 255, 0.5);
+          }
+
+          .prompt-enhance__btn--dismiss:hover {
+            color: rgba(255, 255, 255, 0.8);
+          }
+
+          .prompt-enhance__btn--apply {
+            background: white;
+            color: black;
+          }
+
+          .prompt-enhance__btn--apply:hover {
+            background: rgba(255, 255, 255, 0.9);
+          }
         }
 
 
@@ -2051,17 +2247,17 @@ export default function ChatInput({
           }
 
           .chat-input__row {
-            padding: 10px 12px;
+            padding: 8px 10px;
           }
 
           .chat-input__btn {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
           }
 
           .chat-input__recording-btn {
-            width: 42px;
-            height: 42px;
+            width: 40px;
+            height: 40px;
           }
 
           .chat-input__attachments {
