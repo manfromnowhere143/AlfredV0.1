@@ -15,6 +15,13 @@
       "when": 1766842806059,
       "tag": "0001_sturdy_whirlwind",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767124947620,
+      "tag": "0002_glorious_avengers",
+      "breakpoints": true
     }
   ]
 }

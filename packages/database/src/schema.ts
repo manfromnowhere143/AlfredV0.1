@@ -25,6 +25,7 @@ import {
   index,
   uniqueIndex,
   pgEnum,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -51,7 +52,10 @@ export const fileStatusEnum = pgEnum('file_status', ['pending', 'processing', 'r
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 255 }),
   email: varchar('email', { length: 255 }).unique(),
+  emailVerified: timestamp('email_verified', { withTimezone: true }),
+  image: text('image'),
   externalId: varchar('external_id', { length: 255 }).unique(),
   tier: userTierEnum('tier').notNull().default('free'),
   
@@ -76,6 +80,43 @@ export const users = pgTable('users', {
   index('users_external_id_idx').on(table.externalId),
   index('users_tier_idx').on(table.tier),
   index('users_created_at_idx').on(table.createdAt),
+]);
+
+// ============================================================================
+// AUTH.JS TABLES — For OAuth & Magic Links
+// ============================================================================
+
+export const accounts = pgTable('accounts', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 255 }).notNull(),
+  provider: varchar('provider', { length: 255 }).notNull(),
+  providerAccountId: varchar('provider_account_id', { length: 255 }).notNull(),
+  refresh_token: text('refresh_token'),
+  access_token: text('access_token'),
+  expires_at: integer('expires_at'),
+  token_type: varchar('token_type', { length: 255 }),
+  scope: varchar('scope', { length: 255 }),
+  id_token: text('id_token'),
+  session_state: varchar('session_state', { length: 255 }),
+}, (table) => [
+  primaryKey({ columns: [table.provider, table.providerAccountId] }),
+  index('accounts_user_id_idx').on(table.userId),
+]);
+
+export const sessions = pgTable('sessions', {
+  sessionToken: varchar('session_token', { length: 255 }).primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expires: timestamp('expires', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('sessions_user_id_idx').on(table.userId),
+]);
+
+export const verificationTokens = pgTable('verification_tokens', {
+  identifier: varchar('identifier', { length: 255 }).notNull(),
+  token: varchar('token', { length: 255 }).notNull(),
+  expires: timestamp('expires', { withTimezone: true }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.identifier, table.token] }),
 ]);
 
 // ============================================================================
@@ -510,12 +551,22 @@ export const usageRecords = pgTable('usage_records', {
 // ============================================================================
 
 export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  sessions: many(sessions),
   conversations: many(conversations),
   projects: many(projects),
   memoryEntries: many(memoryEntries),
   apiKeys: many(apiKeys),
   usageRecords: many(usageRecords),
   files: many(files),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, { fields: [accounts.userId], references: [users.id] }),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -585,6 +636,15 @@ export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+
+export type VerificationToken = typeof verificationTokens.$inferSelect;
+export type NewVerificationToken = typeof verificationTokens.$inferInsert;
 
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;

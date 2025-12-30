@@ -257,8 +257,8 @@ export default function AlfredChat() {
     if (method === 'google') {
       await signIn('google', { callbackUrl: '/' });
     } else if (method === 'email' && email) {
-      const result = await signIn('email', { email, redirect: false });
-      if (result?.ok) setAuthModalOpen(false);
+      await signIn('email', { email, redirect: false });
+      // AuthModal shows success view internally
     } else if (method === 'apple') {
       alert('Apple Sign In coming soon!');
     } else if (method === 'sso') {
