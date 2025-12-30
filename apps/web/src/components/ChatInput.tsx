@@ -677,26 +677,75 @@ export default function ChatInput({
   // Effects
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // Handle mobile keyboard - Apple-level smooth animation
+  // Handle mobile keyboard - State-of-the-art iOS-style approach
+  // Uses bottom positioning instead of transforms to avoid disturbing other elements
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
 
-    const handleResize = () => {
-      const heightDiff = window.innerHeight - viewport.height;
-      const kbHeight = heightDiff > 100 ? heightDiff : 0;
-      setKeyboardHeight(kbHeight);
-      // Also set CSS variable for smooth CSS-based animation
-      document.documentElement.style.setProperty('--keyboard-height', `${kbHeight}px`);
+    // Track if keyboard is actually open (not just viewport resize from rotation)
+    let lastHeight = viewport.height;
+    let isKeyboardOpen = false;
+
+    const updatePosition = () => {
+      // Calculate keyboard height from viewport
+      const windowHeight = window.innerHeight;
+      const viewportHeight = viewport.height;
+      const viewportOffsetTop = viewport.offsetTop;
+      
+      // The keyboard height is the difference, but only if it's significant
+      const heightDiff = windowHeight - viewportHeight - viewportOffsetTop;
+      const newKeyboardHeight = heightDiff > 100 ? heightDiff : 0;
+      
+      // Detect if keyboard just opened or closed
+      const keyboardJustOpened = newKeyboardHeight > 0 && !isKeyboardOpen;
+      const keyboardJustClosed = newKeyboardHeight === 0 && isKeyboardOpen;
+      
+      isKeyboardOpen = newKeyboardHeight > 0;
+      
+      // Update CSS variable for bottom positioning (not transform!)
+      document.documentElement.style.setProperty('--keyboard-height', `${newKeyboardHeight}px`);
+      
+      // On iOS Safari, we also need to handle the viewport offset
+      document.documentElement.style.setProperty('--viewport-offset', `${viewportOffsetTop}px`);
+      
+      setKeyboardHeight(newKeyboardHeight);
+      lastHeight = viewportHeight;
     };
 
-    viewport.addEventListener('resize', handleResize);
-    viewport.addEventListener('scroll', handleResize);
+    // Initial check
+    updatePosition();
+
+    // Use both resize and scroll events for iOS Safari compatibility
+    viewport.addEventListener('resize', updatePosition);
+    viewport.addEventListener('scroll', updatePosition);
+    
+    // Also listen for focus/blur on inputs for immediate response
+    const handleFocusIn = (e: FocusEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        // Small delay to let iOS calculate keyboard height
+        setTimeout(updatePosition, 100);
+        setTimeout(updatePosition, 300);
+      }
+    };
+    
+    const handleFocusOut = (e: FocusEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        // Reset after keyboard closes
+        setTimeout(updatePosition, 100);
+      }
+    };
+    
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
 
     return () => {
-      viewport.removeEventListener('resize', handleResize);
-      viewport.removeEventListener('scroll', handleResize);
+      viewport.removeEventListener('resize', updatePosition);
+      viewport.removeEventListener('scroll', updatePosition);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
       document.documentElement.style.setProperty('--keyboard-height', '0px');
+      document.documentElement.style.setProperty('--viewport-offset', '0px');
     };
   }, []);
 
@@ -1574,14 +1623,16 @@ export default function ChatInput({
 
       <style jsx>{`
         /* ═══════════════════════════════════════════════════════════════════════
-           CONTAINER - Apple-level keyboard handling
+           CONTAINER - State-of-the-art keyboard handling
+           Uses bottom positioning, NOT transforms, to avoid disturbing other elements
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input {
           position: fixed;
-          bottom: 0;
           left: 0;
           right: 0;
+          /* KEY FIX: Use bottom positioning instead of transform */
+          bottom: var(--keyboard-height, 0px);
           padding: 16px 20px;
           padding-bottom: max(16px, env(safe-area-inset-bottom));
           display: flex;
@@ -1589,13 +1640,22 @@ export default function ChatInput({
           align-items: center;
           gap: 12px;
           z-index: 50;
-          /* Smooth keyboard animation - Apple-level bezier curve */
-          transform: translateY(calc(-1 * var(--keyboard-height, 0px)));
-          transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-          will-change: transform;
-          /* GPU acceleration */
-          -webkit-transform: translateY(calc(-1 * var(--keyboard-height, 0px))) translate3d(0, 0, 0);
-          -webkit-backface-visibility: hidden;
+          /* Smooth animation with Apple-level bezier - only on bottom property */
+          transition: bottom 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
+          /* Isolation to prevent affecting other elements */
+          isolation: isolate;
+          /* Prevent any transform inheritance */
+          transform: none;
+          /* GPU acceleration without transform */
+          will-change: bottom;
+          contain: layout style;
+        }
+        
+        /* When keyboard is open, reduce bottom padding since keyboard provides safe area */
+        @supports (bottom: env(safe-area-inset-bottom)) {
+          .chat-input {
+            padding-bottom: calc(16px + max(0px, env(safe-area-inset-bottom) - var(--keyboard-height, 0px)));
+          }
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -2362,7 +2422,10 @@ export default function ChatInput({
         @media (max-width: 768px) {
           .chat-input {
             padding: 12px 16px;
-            padding-bottom: max(12px, env(safe-area-inset-bottom));
+            /* On mobile, when keyboard is open, we don't need safe area padding */
+            padding-bottom: calc(12px + max(0px, env(safe-area-inset-bottom) - var(--keyboard-height, 0px)));
+            /* Faster animation on mobile for snappier feel */
+            transition: bottom 0.22s cubic-bezier(0.25, 0.1, 0.25, 1);
           }
 
           .chat-input__container {
@@ -2445,7 +2508,7 @@ export default function ChatInput({
         @media (max-width: 480px) {
           .chat-input {
             padding: 10px 12px;
-            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            padding-bottom: calc(10px + max(0px, env(safe-area-inset-bottom) - var(--keyboard-height, 0px)));
           }
 
           .chat-input__textarea {
@@ -2475,6 +2538,14 @@ export default function ChatInput({
           .chat-input__orb {
             width: 14px;
             height: 14px;
+          }
+        }
+        
+        /* iOS Safari specific - use standalone display detection */
+        @supports (-webkit-touch-callout: none) {
+          .chat-input {
+            /* iOS uses different keyboard animation timing */
+            transition: bottom 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           }
         }
 
