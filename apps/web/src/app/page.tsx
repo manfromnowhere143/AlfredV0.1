@@ -193,7 +193,7 @@ export default function AlfredChat() {
       setLoadingProgress(100);
       await new Promise(r => setTimeout(r, 200));
       setIsAppReady(true);
-      if (!session?.user) setAuthModalOpen(true);
+      if (status !== "loading" && !session?.user) setAuthModalOpen(true);
     };
     initializeApp();
   }, []);
