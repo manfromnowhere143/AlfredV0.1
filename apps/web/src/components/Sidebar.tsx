@@ -53,7 +53,6 @@ export default function Sidebar({
   const [activePanel, setActivePanel] = useState<'none' | 'chats' | 'projects'>('none');
   const [isVisible, setIsVisible] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [fadeColor, setFadeColor] = useState('#0a0a0b');
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const currentTier = user?.tier || 'free';
@@ -62,15 +61,6 @@ export default function Sidebar({
     pro: 'Pro',
     enterprise: 'Enterprise',
   };
-
-  // Sync fade color with theme instantly
-  useEffect(() => {
-    const update = () => setFadeColor(document.documentElement.getAttribute('data-theme') === 'light' ? '#FFFFFF' : '#0a0a0b');
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -110,7 +100,7 @@ export default function Sidebar({
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     if (days === 0) return 'Today';
     if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d`;
+    if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
@@ -131,7 +121,7 @@ export default function Sidebar({
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* USER BUTTON - Top Left, separate from main icons                        */}
+      {/* USER BUTTON - Top Left                                                  */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <div className={`user-panel ${isOpen ? 'open' : 'closing'}`} ref={userMenuRef}>
         {user ? (
@@ -154,9 +144,7 @@ export default function Sidebar({
                 <span className="user-email">{user.email}</span>
               </div>
               
-              {/* ═══════════════════════════════════════════════════════════════ */}
-              {/* PLAN SECTION - Premium styled with upgrade CTA                  */}
-              {/* ═══════════════════════════════════════════════════════════════ */}
+              {/* Plan Section */}
               <div className="plan-section">
                 <div className="plan-row">
                   <span className="plan-label">Plan</span>
@@ -172,7 +160,7 @@ export default function Sidebar({
                 )}
                 {currentTier === 'pro' && (
                   <button className="upgrade-btn secondary" onClick={handleUpgrade}>
-                    Manage Plan
+                    View Plans
                   </button>
                 )}
               </div>
@@ -210,7 +198,7 @@ export default function Sidebar({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* LEFT ICONS - Centered, 3 icons aligned with 3 theme orbs               */}
+      {/* LEFT ICONS - Centered                                                   */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <aside className={`control-panel left ${isOpen ? 'open' : 'closing'}`}>
         <div className="icon-column">
@@ -246,7 +234,7 @@ export default function Sidebar({
       </aside>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* RIGHT THEME ORBS - Centered, 3 orbs aligned with 3 icons               */}
+      {/* RIGHT THEME ORBS                                                        */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <aside className={`control-panel right ${isOpen ? 'open' : 'closing'}`}>
         <div className="theme-column">
@@ -269,11 +257,25 @@ export default function Sidebar({
       </aside>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* LIST PANEL - Chats or Projects                                         */}
+      {/* LIST PANEL - Premium Styled                                             */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <div className={`list-panel ${activePanel !== 'none' && isOpen ? 'visible' : ''}`}>
+        {/* Header */}
         <div className="list-header">
-          <span className="list-label">{activePanel === 'projects' ? 'PROJECTS' : 'HISTORY'}</span>
+          <div className="list-header-left">
+            <div className="list-icon">
+              {activePanel === 'chats' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span className="list-title">{activePanel === 'projects' ? 'Projects' : 'History'}</span>
+          </div>
           <button className="list-close" onClick={() => setActivePanel('none')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
@@ -281,58 +283,110 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="list-body">
-          <div
-            className="fade-top"
-            style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
-          />
+        {/* Content */}
+        <div className="list-content">
+          {activePanel === 'chats' && (
+            isLoadingConversations ? (
+              <div className="list-loading">
+                <div className="loading-spinner" />
+                <span>Loading...</span>
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="list-empty-state">
+                <div className="empty-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <span className="empty-title">No conversations</span>
+                <span className="empty-subtitle">Start chatting to see history</span>
+              </div>
+            ) : (
+              <div className="list-items">
+                {conversations.map((c, i) => (
+                  <button
+                    key={c.id}
+                    className="list-item"
+                    onClick={() => { onSelectConversation?.(c.id); onClose(); }}
+                    style={{ animationDelay: `${i * 40}ms` }}
+                  >
+                    <div className="item-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div className="item-content">
+                      <span className="item-title">{c.title}</span>
+                      <span className="item-meta">{formatDate(c.timestamp)}</span>
+                    </div>
+                    <div className="item-arrow">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
 
-          <div className="list-scroll">
-            {activePanel === 'chats' && (
-              isLoadingConversations ? (
-                <div className="list-empty">Loading...</div>
-              ) : conversations.length === 0 ? (
-                <div className="list-empty">No chats yet</div>
-              ) : conversations.map((c, i) => (
-                <button
-                  key={c.id}
-                  className="list-item"
-                  onClick={() => { onSelectConversation?.(c.id); onClose(); }}
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  <span className="item-title">{c.title}</span>
-                  <span className="item-meta">{formatDate(c.timestamp)}</span>
-                </button>
-              ))
-            )}
-
-            {activePanel === 'projects' && (
-              projects.length === 0 ? (
-                <div className="list-empty">No projects yet</div>
-              ) : projects.map((p, i) => (
-                <button
-                  key={p.id}
-                  className="list-item"
-                  onClick={() => { onSelectProject?.(p.id); onClose(); }}
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  <span className="item-title">{p.name}</span>
-                  <span className="item-meta">{formatDate(p.lastActive)}</span>
-                </button>
-              ))
-            )}
-          </div>
-
-          <div
-            className="fade-bottom"
-            style={{ background: `linear-gradient(to top, ${fadeColor} 0%, ${fadeColor} 40%, transparent 100%)` }}
-          />
+          {activePanel === 'projects' && (
+            projects.length === 0 ? (
+              <div className="list-empty-state">
+                <div className="empty-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <span className="empty-title">No projects</span>
+                <span className="empty-subtitle">Projects will appear here</span>
+              </div>
+            ) : (
+              <div className="list-items">
+                {projects.map((p, i) => (
+                  <button
+                    key={p.id}
+                    className="list-item"
+                    onClick={() => { onSelectProject?.(p.id); onClose(); }}
+                    style={{ animationDelay: `${i * 40}ms` }}
+                  >
+                    <div className="item-icon project">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div className="item-content">
+                      <span className="item-title">{p.name}</span>
+                      <span className="item-meta">{formatDate(p.lastActive)}</span>
+                    </div>
+                    <div className="item-arrow">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
         </div>
+
+        {/* Footer */}
+        {activePanel === 'chats' && conversations.length > 0 && (
+          <div className="list-footer">
+            <button className="footer-btn" onClick={() => { onNewConversation?.(); onClose(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
+              </svg>
+              New conversation
+            </button>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* USER PANEL - Top Left, separate                                                 */
+        /* USER PANEL                                                                      */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .user-panel {
@@ -349,7 +403,7 @@ export default function Sidebar({
         .user-panel.closing { transform: translateX(-120%); opacity: 0; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CONTROL PANELS - Left icons & Right orbs, both centered                         */
+        /* CONTROL PANELS                                                                  */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .control-panel {
@@ -360,7 +414,6 @@ export default function Sidebar({
           transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
         }
         
-        /* LEFT - 3 action icons */
         .control-panel.left {
           left: 24px;
           transform: translateY(-50%) translateX(-120%);
@@ -368,7 +421,6 @@ export default function Sidebar({
         .control-panel.left.open { transform: translateY(-50%) translateX(0); opacity: 1; }
         .control-panel.left.closing { transform: translateY(-50%) translateX(-120%); opacity: 0; }
         
-        /* RIGHT - 3 theme orbs */
         .control-panel.right {
           right: 24px;
           transform: translateY(-50%) translateX(120%);
@@ -377,7 +429,7 @@ export default function Sidebar({
         .control-panel.right.closing { transform: translateY(-50%) translateX(120%); opacity: 0; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* ICON COLUMN - 3 icons with matching spacing to theme orbs                       */
+        /* ICON BUTTONS                                                                    */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .icon-column {
@@ -443,7 +495,6 @@ export default function Sidebar({
         .icon-btn svg { position: relative; z-index: 5; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
         .icon-btn.active svg { filter: drop-shadow(0 0 8px rgba(201, 185, 154, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
         
-        /* Light theme icons */
         :global([data-theme="light"]) .icon-btn {
           background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 50%, #ebebeb 100%);
           color: #1a1a1a;
@@ -453,14 +504,13 @@ export default function Sidebar({
         :global([data-theme="light"]) .icon-btn.active { background: linear-gradient(145deg, #f8f8f8 0%, #f0f0f0 50%, #e8e8e8 100%); color: #8B7355; }
         :global([data-theme="light"]) .icon-btn::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%); }
         
-        /* User button - circular */
         .user-btn { border-radius: 50%; }
         .user-btn::before, .user-btn::after { border-radius: 50%; }
         .avatar-img { width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 5; border-radius: 50%; }
         .avatar-initial { font-size: 18px; font-weight: 600; position: relative; z-index: 5; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* THEME COLUMN - 3 orbs with matching spacing to icons                            */
+        /* THEME ORBS                                                                      */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .theme-column {
@@ -508,20 +558,8 @@ export default function Sidebar({
         }
         .theme-orb.light::after { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
         
-        .theme-orb.active { 
-          transform: scale(1.2); 
-          box-shadow: 
-            0 0 0 2px rgba(255, 255, 255, 0.15),
-            0 8px 24px rgba(0, 0, 0, 0.5),
-            0 4px 12px rgba(0, 0, 0, 0.4);
-        }
-        
-        :global([data-theme="light"]) .theme-orb.active {
-          box-shadow: 
-            0 0 0 2px rgba(0, 0, 0, 0.1),
-            0 8px 24px rgba(0, 0, 0, 0.15),
-            0 4px 12px rgba(0, 0, 0, 0.1);
-        }
+        .theme-orb.active { transform: scale(1.2); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.5); }
+        :global([data-theme="light"]) .theme-orb.active { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.15); }
         .theme-orb:hover:not(.active) { transform: scale(1.1); }
         .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
         
@@ -542,7 +580,6 @@ export default function Sidebar({
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           z-index: 200;
-          
           opacity: 0;
           visibility: hidden;
           transform: translateX(-8px) scale(0.95);
@@ -567,12 +604,8 @@ export default function Sidebar({
         .user-name { font-size: 13px; font-weight: 500; color: var(--text-primary, #fff); }
         .user-email { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.5)); }
         
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* PLAN SECTION - Premium styled                                                   */
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        
         .plan-section {
-          padding: 12px;
+          padding: 10px 12px;
           background: var(--border-subtle, rgba(255,255,255,0.03));
           border-radius: 10px;
           margin: 4px 0;
@@ -582,7 +615,7 @@ export default function Sidebar({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
         
         .plan-label {
@@ -590,54 +623,22 @@ export default function Sidebar({
           color: var(--text-muted, rgba(255,255,255,0.5));
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          font-weight: 500;
         }
         
         .plan-badge {
           font-size: 11px;
           font-weight: 600;
-          padding: 4px 10px;
+          padding: 3px 8px;
           border-radius: 6px;
           letter-spacing: 0.02em;
         }
         
-        .plan-badge.free {
-          background: rgba(255,255,255,0.08);
-          color: rgba(255,255,255,0.7);
-        }
+        .plan-badge.free { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+        .plan-badge.pro { background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
+        .plan-badge.enterprise { background: linear-gradient(135deg, rgba(201,185,154,0.2) 0%, rgba(201,185,154,0.1) 100%); color: #C9B99A; border: 1px solid rgba(201,185,154,0.2); }
         
-        .plan-badge.pro {
-          background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%);
-          color: #fff;
-          border: 1px solid rgba(255,255,255,0.15);
-        }
-        
-        .plan-badge.enterprise {
-          background: linear-gradient(135deg, rgba(201,185,154,0.25) 0%, rgba(201,185,154,0.12) 100%);
-          color: #C9B99A;
-          border: 1px solid rgba(201,185,154,0.25);
-        }
-        
-        :global([data-theme="light"]) .plan-section {
-          background: rgba(0,0,0,0.03);
-        }
-        
-        :global([data-theme="light"]) .plan-badge.free {
-          background: rgba(0,0,0,0.06);
-          color: rgba(0,0,0,0.6);
-        }
-        
-        :global([data-theme="light"]) .plan-badge.pro {
-          background: linear-gradient(135deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 100%);
-          color: #1a1a1a;
-          border-color: rgba(0,0,0,0.1);
-        }
-        
-        :global([data-theme="light"]) .plan-badge.enterprise {
-          background: linear-gradient(135deg, rgba(139,115,85,0.2) 0%, rgba(139,115,85,0.1) 100%);
-          color: #8B7355;
-          border-color: rgba(139,115,85,0.2);
-        }
+        :global([data-theme="light"]) .plan-badge.free { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.6); }
+        :global([data-theme="light"]) .plan-badge.pro { background: linear-gradient(135deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.04) 100%); color: #1a1a1a; border-color: rgba(0,0,0,0.08); }
         
         .upgrade-btn {
           width: 100%;
@@ -645,7 +646,7 @@ export default function Sidebar({
           align-items: center;
           justify-content: center;
           gap: 6px;
-          padding: 10px 12px;
+          padding: 8px 12px;
           background: #fff;
           border: none;
           border-radius: 8px;
@@ -654,51 +655,15 @@ export default function Sidebar({
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s ease;
-          letter-spacing: 0.01em;
         }
         
-        .upgrade-btn:hover {
-          background: rgba(255,255,255,0.9);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(255,255,255,0.15);
-        }
+        .upgrade-btn:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
+        .upgrade-btn.secondary { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.1); }
+        .upgrade-btn.secondary:hover { background: rgba(255,255,255,0.12); color: #fff; }
         
-        .upgrade-btn:active {
-          transform: scale(0.98);
-        }
-        
-        .upgrade-btn.secondary {
-          background: rgba(255,255,255,0.08);
-          color: rgba(255,255,255,0.8);
-          border: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .upgrade-btn.secondary:hover {
-          background: rgba(255,255,255,0.12);
-          color: #fff;
-          box-shadow: none;
-        }
-        
-        :global([data-theme="light"]) .upgrade-btn {
-          background: #1a1a1a;
-          color: #fff;
-        }
-        
-        :global([data-theme="light"]) .upgrade-btn:hover {
-          background: #000;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        :global([data-theme="light"]) .upgrade-btn.secondary {
-          background: rgba(0,0,0,0.05);
-          color: rgba(0,0,0,0.7);
-          border-color: rgba(0,0,0,0.1);
-        }
-        
-        :global([data-theme="light"]) .upgrade-btn.secondary:hover {
-          background: rgba(0,0,0,0.08);
-          color: #000;
-        }
+        :global([data-theme="light"]) .upgrade-btn { background: #1a1a1a; color: #fff; }
+        :global([data-theme="light"]) .upgrade-btn:hover { background: #000; }
+        :global([data-theme="light"]) .upgrade-btn.secondary { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.7); border-color: rgba(0,0,0,0.08); }
         
         .dropdown-divider { height: 1px; background: var(--border-subtle, rgba(255,255,255,0.08)); margin: 6px 0; }
         
@@ -723,55 +688,78 @@ export default function Sidebar({
         .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); color: #f87171; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* LIST PANEL                                                                      */
+        /* LIST PANEL - Premium Styled                                                     */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .list-panel {
           position: fixed;
           top: 50%;
-          left: 100px;
-          width: min(220px, calc(100vw - 200px));
-          transform: translateY(-50%) translateX(-20px);
+          left: 90px;
+          width: 260px;
           max-height: 70vh;
+          transform: translateY(-50%) translateX(-20px);
+          z-index: 99;
+          background: var(--bg-secondary, rgba(10, 10, 11, 0.98));
+          border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 16px 48px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           display: flex;
           flex-direction: column;
-          z-index: 99;
-          background: linear-gradient(145deg, rgba(26, 26, 26, 0.98), rgba(10, 10, 11, 0.99));
-          border-radius: 16px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 12px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
           opacity: 0;
           pointer-events: none;
-          transition: all 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         
-        .list-panel.visible { opacity: 1; transform: translateY(-50%) translateX(0); pointer-events: auto; }
+        .list-panel.visible {
+          opacity: 1;
+          transform: translateY(-50%) translateX(0);
+          pointer-events: auto;
+        }
         
         :global([data-theme="light"]) .list-panel {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(250, 250, 248, 0.98));
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+          background: rgba(255, 255, 255, 0.98);
+          border-color: rgba(0, 0, 0, 0.06);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }
         
+        /* Header */
         .list-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 14px 16px 10px;
+          padding: 14px 16px;
           border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
         }
         
-        .list-label {
-          font-family: 'JetBrains Mono', 'SF Mono', monospace;
-          font-size: 10px;
+        .list-header-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .list-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: var(--border-subtle, rgba(255,255,255,0.06));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+        }
+        
+        .list-title {
+          font-size: 14px;
           font-weight: 500;
-          letter-spacing: 0.12em;
-          color: var(--text-muted, rgba(255,255,255,0.4));
+          color: var(--text-primary, #fff);
+          letter-spacing: -0.01em;
         }
         
         .list-close {
-          width: 26px;
-          height: 26px;
+          width: 28px;
+          height: 28px;
           border-radius: 8px;
           border: none;
           background: transparent;
@@ -783,43 +771,203 @@ export default function Sidebar({
           transition: all 0.15s ease;
         }
         
-        .list-close:hover { background: var(--border-subtle, rgba(255,255,255,0.08)); color: var(--text-primary, #fff); }
+        .list-close:hover {
+          background: var(--border-subtle, rgba(255,255,255,0.08));
+          color: var(--text-primary, #fff);
+        }
         
-        .list-body { position: relative; flex: 1; min-height: 180px; max-height: 50vh; overflow: hidden; }
+        /* Content */
+        .list-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 8px;
+          scrollbar-width: none;
+        }
         
-        .fade-top, .fade-bottom { position: absolute; left: 0; right: 0; height: 24px; pointer-events: none; z-index: 10; }
-        .fade-top { top: 0; }
-        .fade-bottom { bottom: 0; }
+        .list-content::-webkit-scrollbar { display: none; }
         
-        .list-scroll { height: 100%; overflow-y: auto; padding: 20px 12px; scrollbar-width: none; }
-        .list-scroll::-webkit-scrollbar { display: none; }
+        /* Loading State */
+        .list-loading {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          padding: 40px 20px;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          font-size: 12px;
+        }
         
-        .list-empty { padding: 32px 8px; text-align: center; color: var(--text-muted, rgba(255,255,255,0.35)); font-size: 12px; }
+        .loading-spinner {
+          width: 20px;
+          height: 20px;
+          border: 2px solid var(--border-subtle, rgba(255,255,255,0.1));
+          border-top-color: var(--text-muted, rgba(255,255,255,0.5));
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .list-empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 40px 20px;
+          text-align: center;
+        }
+        
+        .empty-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 14px;
+          background: var(--border-subtle, rgba(255,255,255,0.04));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.25));
+          margin-bottom: 4px;
+        }
+        
+        .empty-title {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+        }
+        
+        .empty-subtitle {
+          font-size: 12px;
+          color: var(--text-muted, rgba(255,255,255,0.35));
+        }
+        
+        /* List Items */
+        .list-items {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
         
         .list-item {
           width: 100%;
           display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 3px;
-          padding: 12px 14px;
-          margin-bottom: 6px;
-          border-radius: 12px;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          border-radius: 10px;
           background: transparent;
           border: none;
           cursor: pointer;
-          transition: background 0.15s ease;
-          animation: itemSlide 0.25s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+          transition: all 0.2s ease;
+          animation: itemFadeIn 0.3s ease backwards;
           text-align: left;
         }
         
-        @keyframes itemSlide { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes itemFadeIn {
+          from { opacity: 0; transform: translateX(-8px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
         
-        .list-item:hover { background: var(--border-subtle, rgba(255,255,255,0.06)); }
-        .list-item:active { transform: scale(0.98); }
+        .list-item:hover {
+          background: var(--border-subtle, rgba(255,255,255,0.06));
+        }
         
-        .item-title { font-size: 13px; font-weight: 400; color: var(--text-primary, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-        .item-meta { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.35)); }
+        .list-item:active {
+          transform: scale(0.98);
+        }
+        
+        .item-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+        
+        .item-icon.project {
+          background: linear-gradient(135deg, rgba(201,185,154,0.15) 0%, rgba(201,185,154,0.08) 100%);
+          color: rgba(201,185,154,0.8);
+        }
+        
+        .list-item:hover .item-icon {
+          background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%);
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+        }
+        
+        .list-item:hover .item-icon.project {
+          background: linear-gradient(135deg, rgba(201,185,154,0.2) 0%, rgba(201,185,154,0.12) 100%);
+          color: #C9B99A;
+        }
+        
+        .item-content {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        
+        .item-title {
+          font-size: 13px;
+          font-weight: 400;
+          color: var(--text-primary, #fff);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .item-meta {
+          font-size: 11px;
+          color: var(--text-muted, rgba(255,255,255,0.35));
+        }
+        
+        .item-arrow {
+          color: var(--text-muted, rgba(255,255,255,0.2));
+          opacity: 0;
+          transform: translateX(-4px);
+          transition: all 0.2s ease;
+        }
+        
+        .list-item:hover .item-arrow {
+          opacity: 1;
+          transform: translateX(0);
+          color: var(--text-muted, rgba(255,255,255,0.4));
+        }
+        
+        /* Footer */
+        .list-footer {
+          padding: 8px;
+          border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+        }
+        
+        .footer-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px dashed var(--border-subtle, rgba(255,255,255,0.15));
+          background: transparent;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        
+        .footer-btn:hover {
+          border-color: var(--text-muted, rgba(255,255,255,0.3));
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+          background: var(--border-subtle, rgba(255,255,255,0.04));
+        }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* MOBILE                                                                          */
@@ -827,25 +975,22 @@ export default function Sidebar({
         
         @media (max-width: 768px) {
           .user-panel { top: 16px; left: 16px; }
-          
           .control-panel.left { left: 16px; }
           .control-panel.right { right: 16px; }
-          
           .icon-column { gap: 10px; }
           .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
           .icon-btn svg { width: 18px; height: 18px; }
-          
           .theme-column { padding: 10px 8px; border-radius: 16px; gap: 10px; }
           .theme-orb { width: 24px; height: 24px; }
           
-          .list-panel { left: 76px; width: min(200px, calc(100vw - 160px)); max-height: 60vh; }
-          .list-body { min-height: 150px; max-height: 45vh; }
-          .list-item { padding: 10px 12px; }
-          .item-title { font-size: 12px; }
+          .list-panel {
+            left: 70px;
+            width: calc(100vw - 140px);
+            max-width: 280px;
+            max-height: 60vh;
+          }
           
-          .user-dropdown { min-width: 200px; left: 54px; }
-          .plan-section { padding: 10px; }
-          .upgrade-btn { padding: 9px 10px; font-size: 11px; }
+          .user-dropdown { min-width: 200px; }
         }
       `}</style>
     </>
