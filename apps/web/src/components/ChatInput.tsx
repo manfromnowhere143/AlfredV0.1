@@ -1664,23 +1664,40 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
-           SIGN IN BUTTON
+           SIGN IN BUTTON - Fixed for Light/Dark mode
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__sign-in {
           padding: 10px 24px;
           border-radius: 20px;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: white;
+          background: rgba(0, 0, 0, 0.85);
+          border: none;
+          color: #fff;
           font-size: 13px;
           font-weight: 500;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+          -webkit-tap-highlight-color: transparent;
         }
 
         .chat-input__sign-in:hover {
-          background: rgba(255, 255, 255, 0.12);
+          background: rgba(0, 0, 0, 0.7);
+          transform: translateY(-1px);
+        }
+
+        .chat-input__sign-in:active {
+          transform: scale(0.97);
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .chat-input__sign-in {
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+          }
+
+          .chat-input__sign-in:hover {
+            background: rgba(255, 255, 255, 0.8);
+          }
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1816,10 +1833,6 @@ export default function ChatInput({
           .chat-input__textarea::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.2);
           }
-        }
-
-        .chat-input__textarea::placeholder {
-          color: rgba(255, 255, 255, 0.3);
         }
 
         .chat-input__textarea:disabled {
