@@ -46,6 +46,18 @@ export const qualityTierEnum = pgEnum('quality_tier', ['gold', 'silver', 'bronze
 export const fileCategoryEnum = pgEnum('file_category', ['image', 'video', 'document', 'code', 'audio']);
 export const fileStatusEnum = pgEnum('file_status', ['pending', 'processing', 'ready', 'error']);
 
+// Subscription status enum
+export const subscriptionStatusEnum = pgEnum('subscription_status', [
+  'active',
+  'canceled',
+  'past_due',
+  'trialing',
+  'incomplete',
+  'incomplete_expired',
+  'unpaid',
+  'paused'
+]);
+
 // ============================================================================
 // USERS
 // ============================================================================
@@ -68,6 +80,15 @@ export const users = pgTable('users', {
   skillLevel: skillLevelEnum('skill_level').notNull().default('intermediate'),
   skillConfidence: real('skill_confidence').notNull().default(0),
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STRIPE BILLING — Subscription & Payment Management
+  // ═══════════════════════════════════════════════════════════════════════════
+  stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
+  stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }),
+  stripeSubscriptionStatus: varchar('stripe_subscription_status', { length: 50 }),
+  stripePriceId: varchar('stripe_price_id', { length: 255 }),
+  stripeCurrentPeriodEnd: timestamp('stripe_current_period_end', { withTimezone: true }),
+  
   // Metadata
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   
@@ -80,6 +101,7 @@ export const users = pgTable('users', {
   index('users_external_id_idx').on(table.externalId),
   index('users_tier_idx').on(table.tier),
   index('users_created_at_idx').on(table.createdAt),
+  index('users_stripe_customer_id_idx').on(table.stripeCustomerId),
 ]);
 
 // ============================================================================

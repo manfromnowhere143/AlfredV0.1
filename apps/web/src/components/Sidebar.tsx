@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -20,7 +21,12 @@ interface SidebarProps {
   onSelectProject?: (id: string) => void;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
-  user?: { name?: string | null; email?: string | null; image?: string | null } | null;
+  user?: { 
+    name?: string | null; 
+    email?: string | null; 
+    image?: string | null;
+    tier?: 'free' | 'pro' | 'enterprise';
+  } | null;
   onSignOut?: () => void;
   onSignIn?: () => void;
 }
@@ -42,12 +48,20 @@ export default function Sidebar({
   onSignOut,
   onSignIn,
 }: SidebarProps) {
+  const router = useRouter();
   const [theme, setTheme] = useState<Theme>('dark');
   const [activePanel, setActivePanel] = useState<'none' | 'chats' | 'projects'>('none');
   const [isVisible, setIsVisible] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [fadeColor, setFadeColor] = useState('#0a0a0b');
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const currentTier = user?.tier || 'free';
+  const tierLabels: Record<string, string> = {
+    free: 'Free',
+    pro: 'Pro',
+    enterprise: 'Enterprise',
+  };
 
   // Sync fade color with theme instantly
   useEffect(() => {
@@ -106,6 +120,12 @@ export default function Sidebar({
     return '?';
   };
 
+  const handleUpgrade = () => {
+    setShowUserMenu(false);
+    onClose();
+    router.push('/pricing');
+  };
+
   if (!isVisible && !isOpen) return null;
 
   return (
@@ -133,6 +153,30 @@ export default function Sidebar({
                 <span className="user-name">{user.name || 'User'}</span>
                 <span className="user-email">{user.email}</span>
               </div>
+              
+              {/* ═══════════════════════════════════════════════════════════════ */}
+              {/* PLAN SECTION - Premium styled with upgrade CTA                  */}
+              {/* ═══════════════════════════════════════════════════════════════ */}
+              <div className="plan-section">
+                <div className="plan-row">
+                  <span className="plan-label">Plan</span>
+                  <span className={`plan-badge ${currentTier}`}>{tierLabels[currentTier]}</span>
+                </div>
+                {currentTier === 'free' && (
+                  <button className="upgrade-btn" onClick={handleUpgrade}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Upgrade to Pro
+                  </button>
+                )}
+                {currentTier === 'pro' && (
+                  <button className="upgrade-btn secondary" onClick={handleUpgrade}>
+                    Manage Plan
+                  </button>
+                )}
+              </div>
+              
               <div className="dropdown-divider" />
               <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -489,7 +533,7 @@ export default function Sidebar({
           position: absolute;
           top: 0;
           left: 60px;
-          min-width: 200px;
+          min-width: 220px;
           background: var(--bg-secondary, rgba(10, 10, 11, 0.98));
           border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
           border-radius: 14px;
@@ -522,6 +566,140 @@ export default function Sidebar({
         .user-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
         .user-name { font-size: 13px; font-weight: 500; color: var(--text-primary, #fff); }
         .user-email { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.5)); }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* PLAN SECTION - Premium styled                                                   */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .plan-section {
+          padding: 12px;
+          background: var(--border-subtle, rgba(255,255,255,0.03));
+          border-radius: 10px;
+          margin: 4px 0;
+        }
+        
+        .plan-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        
+        .plan-label {
+          font-size: 11px;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 500;
+        }
+        
+        .plan-badge {
+          font-size: 11px;
+          font-weight: 600;
+          padding: 4px 10px;
+          border-radius: 6px;
+          letter-spacing: 0.02em;
+        }
+        
+        .plan-badge.free {
+          background: rgba(255,255,255,0.08);
+          color: rgba(255,255,255,0.7);
+        }
+        
+        .plan-badge.pro {
+          background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%);
+          color: #fff;
+          border: 1px solid rgba(255,255,255,0.15);
+        }
+        
+        .plan-badge.enterprise {
+          background: linear-gradient(135deg, rgba(201,185,154,0.25) 0%, rgba(201,185,154,0.12) 100%);
+          color: #C9B99A;
+          border: 1px solid rgba(201,185,154,0.25);
+        }
+        
+        :global([data-theme="light"]) .plan-section {
+          background: rgba(0,0,0,0.03);
+        }
+        
+        :global([data-theme="light"]) .plan-badge.free {
+          background: rgba(0,0,0,0.06);
+          color: rgba(0,0,0,0.6);
+        }
+        
+        :global([data-theme="light"]) .plan-badge.pro {
+          background: linear-gradient(135deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 100%);
+          color: #1a1a1a;
+          border-color: rgba(0,0,0,0.1);
+        }
+        
+        :global([data-theme="light"]) .plan-badge.enterprise {
+          background: linear-gradient(135deg, rgba(139,115,85,0.2) 0%, rgba(139,115,85,0.1) 100%);
+          color: #8B7355;
+          border-color: rgba(139,115,85,0.2);
+        }
+        
+        .upgrade-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 10px 12px;
+          background: #fff;
+          border: none;
+          border-radius: 8px;
+          color: #000;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          letter-spacing: 0.01em;
+        }
+        
+        .upgrade-btn:hover {
+          background: rgba(255,255,255,0.9);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(255,255,255,0.15);
+        }
+        
+        .upgrade-btn:active {
+          transform: scale(0.98);
+        }
+        
+        .upgrade-btn.secondary {
+          background: rgba(255,255,255,0.08);
+          color: rgba(255,255,255,0.8);
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .upgrade-btn.secondary:hover {
+          background: rgba(255,255,255,0.12);
+          color: #fff;
+          box-shadow: none;
+        }
+        
+        :global([data-theme="light"]) .upgrade-btn {
+          background: #1a1a1a;
+          color: #fff;
+        }
+        
+        :global([data-theme="light"]) .upgrade-btn:hover {
+          background: #000;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        :global([data-theme="light"]) .upgrade-btn.secondary {
+          background: rgba(0,0,0,0.05);
+          color: rgba(0,0,0,0.7);
+          border-color: rgba(0,0,0,0.1);
+        }
+        
+        :global([data-theme="light"]) .upgrade-btn.secondary:hover {
+          background: rgba(0,0,0,0.08);
+          color: #000;
+        }
+        
         .dropdown-divider { height: 1px; background: var(--border-subtle, rgba(255,255,255,0.08)); margin: 6px 0; }
         
         .dropdown-item {
@@ -664,6 +842,10 @@ export default function Sidebar({
           .list-body { min-height: 150px; max-height: 45vh; }
           .list-item { padding: 10px 12px; }
           .item-title { font-size: 12px; }
+          
+          .user-dropdown { min-width: 200px; left: 54px; }
+          .plan-section { padding: 10px; }
+          .upgrade-btn { padding: 9px 10px; font-size: 11px; }
         }
       `}</style>
     </>
