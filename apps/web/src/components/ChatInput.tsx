@@ -1607,30 +1607,34 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
-           MAIN CONTAINER
+           MAIN CONTAINER - Frosted Glass (works on any background)
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__container {
           position: relative;
           width: 100%;
           max-width: 720px;
-          background: rgba(28, 28, 30, 0.95);
-          backdrop-filter: blur(40px);
-          -webkit-backdrop-filter: blur(40px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 26px;
-          transition: all 0.25s ease;
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 24px;
+          transition: all 0.2s ease;
+          box-shadow: 
+            0 4px 24px -4px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          color: white;
         }
 
         .chat-input__container:focus-within {
-          border-color: rgba(255, 255, 255, 0.15);
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+          border-color: rgba(255, 255, 255, 0.18);
+          box-shadow: 
+            0 4px 32px -4px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
         .chat-input__container--recording {
-          background: rgba(28, 28, 30, 0.98);
-          border-color: rgba(255, 255, 255, 0.12);
+          border-color: rgba(255, 255, 255, 0.15);
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1875,7 +1879,7 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
-           PROMPT ENHANCE - Floating Above Input
+           PROMPT ENHANCE - Frosted Glass (works on any background)
            ═══════════════════════════════════════════════════════════════════════ */
         
         .prompt-enhance {
@@ -1888,14 +1892,17 @@ export default function ChatInput({
         }
 
         .prompt-enhance__card {
-          background: rgba(32, 32, 35, 0.98);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(0, 0, 0, 0.75);
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 16px;
           padding: 16px 20px;
           animation: enhanceSlide 0.2s ease-out;
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+          box-shadow: 
+            0 4px 24px -4px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          color: white;
         }
 
         @keyframes enhanceSlide {
@@ -1921,7 +1928,8 @@ export default function ChatInput({
         .prompt-enhance__dot {
           width: 5px;
           height: 5px;
-          background: rgba(255, 255, 255, 0.4);
+          background: white;
+          opacity: 0.4;
           border-radius: 50%;
           animation: enhanceDot 1.2s ease-in-out infinite;
         }
@@ -1941,7 +1949,7 @@ export default function ChatInput({
           }
           40% {
             transform: scale(1);
-            opacity: 0.8;
+            opacity: 0.7;
           }
         }
 
@@ -1954,7 +1962,7 @@ export default function ChatInput({
           max-height: 100px;
           overflow-y: auto;
           scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.1) transparent;
+          scrollbar-color: rgba(255,255,255,0.15) transparent;
         }
 
         .prompt-enhance__text::-webkit-scrollbar {
@@ -1966,14 +1974,14 @@ export default function ChatInput({
         }
 
         .prompt-enhance__text::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.15);
           border-radius: 3px;
         }
 
         /* Divider */
         .prompt-enhance__divider {
           height: 1px;
-          background: rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.1);
           margin: 12px 0;
         }
 
@@ -1987,7 +1995,7 @@ export default function ChatInput({
 
         .prompt-enhance__hint {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(255, 255, 255, 0.4);
           letter-spacing: 0.01em;
         }
 
@@ -2003,27 +2011,29 @@ export default function ChatInput({
           font-weight: 500;
           font-family: inherit;
           cursor: pointer;
-          transition: all 0.12s ease;
+          transition: all 0.15s ease;
         }
 
         .prompt-enhance__btn--dismiss {
           background: transparent;
           border: none;
-          color: rgba(255, 255, 255, 0.4);
+          color: rgba(255, 255, 255, 0.5);
         }
 
         .prompt-enhance__btn--dismiss:hover {
-          color: rgba(255, 255, 255, 0.7);
+          color: rgba(255, 255, 255, 0.8);
         }
 
         .prompt-enhance__btn--apply {
-          background: rgba(255, 255, 255, 0.9);
+          background: white;
           border: none;
-          color: rgba(0, 0, 0, 0.85);
+          color: black;
+          font-weight: 600;
         }
 
         .prompt-enhance__btn--apply:hover {
-          background: white;
+          background: rgba(255, 255, 255, 0.9);
+          transform: translateY(-1px);
         }
 
 
