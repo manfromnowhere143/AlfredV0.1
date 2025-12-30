@@ -6,7 +6,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -61,7 +61,7 @@ const plans = [
   },
 ];
 
-export default function PricingPage() {
+function PricingContent() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -498,5 +498,39 @@ export default function PricingPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+// Loading fallback
+function PricingLoading() {
+  return (
+    <div style={{ 
+      minHeight: '100vh', 
+      background: '#000', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center' 
+    }}>
+      <div style={{
+        width: 24,
+        height: 24,
+        border: '2px solid rgba(255,255,255,0.1)',
+        borderTopColor: 'rgba(255,255,255,0.5)',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <style jsx>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
+// Main export with Suspense wrapper
+export default function PricingPage() {
+  return (
+    <Suspense fallback={<PricingLoading />}>
+      <PricingContent />
+    </Suspense>
   );
 }
