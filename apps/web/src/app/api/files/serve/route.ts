@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, files, eq } from '@alfred/database';
 import { readFile } from 'fs/promises';
