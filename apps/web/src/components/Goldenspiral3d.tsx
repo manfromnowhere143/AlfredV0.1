@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GOLDEN SPIRAL — Ethereal Flowing Particles
+// GOLDEN SPIRAL — Ethereal Flowing Particles with Magnetic Interaction
 // Perplexity-inspired elegance with golden ratio mathematics
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -19,6 +19,9 @@ interface FlowParticle {
   opacity: number;
   phase: number;
   trail: { x: number; y: number }[];
+  // For magnetic displacement
+  offsetX: number;
+  offsetY: number;
 }
 
 let audioLevelCallbacks: ((level: number) => void)[] = [];
@@ -53,6 +56,7 @@ export default function GoldenSpiral3D() {
   const animationRef = useRef<number>(0);
   const audioLevelRef = useRef(0);
   const timeRef = useRef(0);
+  const mouseRef = useRef({ x: -1000, y: -1000, isOver: false });
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 150);
@@ -102,12 +106,14 @@ export default function GoldenSpiral3D() {
         particlesRef.current.push({
           t: i / particlesPerArm,
           arm,
-          speed: 0.0008 + Math.random() * 0.0015,
+          speed: 0.0003 + Math.random() * 0.0005, // SLOWED DOWN significantly
           size: 0.3 + Math.random() * 0.5,
           tailLength: 12 + Math.random() * 20,
           opacity: 0.15 + Math.random() * 0.35,
           phase: Math.random() * TAU,
           trail: [],
+          offsetX: 0,
+          offsetY: 0,
         });
       }
     }
@@ -126,7 +132,12 @@ export default function GoldenSpiral3D() {
       const audio = audioLevelRef.current;
       const isActive = audio > 0.05;
       const expansion = 1 + (isActive ? audio * 0.25 : 0);
-      const speedMult = 1 + (isActive ? audio * 2.5 : 0);
+      const speedMult = 1 + (isActive ? audio * 2 : 0); // Reduced audio speed boost
+
+      // Mouse interaction params
+      const mouse = mouseRef.current;
+      const magnetRadius = 60;
+      const magnetStrength = 25;
 
       // Ultra-subtle spiral guides
       ctx.globalAlpha = 0.025;
@@ -150,7 +161,42 @@ export default function GoldenSpiral3D() {
           particle.opacity = 0.15 + Math.random() * 0.35;
         }
 
-        const pos = getSpiral(particle.t, particle.arm, center, expansion);
+        // Base position from spiral
+        const basePos = getSpiral(particle.t, particle.arm, center, expansion);
+        
+        // Magnetic field interaction
+        if (mouse.isOver) {
+          const dx = basePos.x - mouse.x;
+          const dy = basePos.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < magnetRadius && dist > 0) {
+            // Repulsion force - particles push away from cursor
+            const force = (1 - dist / magnetRadius) * magnetStrength;
+            const angle = Math.atan2(dy, dx);
+            
+            // Smooth lerp toward target offset
+            const targetOffsetX = Math.cos(angle) * force;
+            const targetOffsetY = Math.sin(angle) * force;
+            
+            particle.offsetX += (targetOffsetX - particle.offsetX) * 0.15;
+            particle.offsetY += (targetOffsetY - particle.offsetY) * 0.15;
+          } else {
+            // Decay offset when outside radius
+            particle.offsetX *= 0.92;
+            particle.offsetY *= 0.92;
+          }
+        } else {
+          // Smooth return when mouse leaves
+          particle.offsetX *= 0.95;
+          particle.offsetY *= 0.95;
+        }
+        
+        // Final position with magnetic offset
+        const pos = {
+          x: basePos.x + particle.offsetX,
+          y: basePos.y + particle.offsetY,
+        };
         
         particle.trail.unshift({ x: pos.x, y: pos.y });
         
@@ -160,8 +206,8 @@ export default function GoldenSpiral3D() {
         if (particle.trail.length < 2) return;
 
         // Smooth breathing
-        const breathe = Math.sin(time * 1.2 + particle.phase) * 0.12;
-        const audioPulse = isActive ? Math.sin(time * 8 + idx * 0.5) * audio * 0.25 : 0;
+        const breathe = Math.sin(time * 0.8 + particle.phase) * 0.12; // Slower breathing
+        const audioPulse = isActive ? Math.sin(time * 6 + idx * 0.5) * audio * 0.25 : 0;
         const finalOpacity = Math.max(0.08, particle.opacity + breathe + audioPulse);
 
         const useAccent = isActive ? idx % 3 === 0 : idx % 6 === 0;
@@ -210,7 +256,7 @@ export default function GoldenSpiral3D() {
       });
 
       // Center focal point
-      const pulse = 1 + Math.sin(time * 1.5) * 0.12 + (isActive ? audio * 0.35 : 0);
+      const pulse = 1 + Math.sin(time * 1) * 0.12 + (isActive ? audio * 0.35 : 0); // Slower pulse
       
       // Soft glow rings
       [12, 8, 5].forEach((r, i) => {
@@ -243,9 +289,44 @@ export default function GoldenSpiral3D() {
     return () => cancelAnimationFrame(animationRef.current);
   }, [theme]);
 
+  // Mouse handlers
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    mouseRef.current.x = e.clientX - rect.left;
+    mouseRef.current.y = e.clientY - rect.top;
+  };
+
+  const handleMouseEnter = () => {
+    mouseRef.current.isOver = true;
+  };
+
+  const handleMouseLeave = () => {
+    mouseRef.current.isOver = false;
+  };
+
+  // Touch handlers for mobile
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const touch = e.touches[0];
+    mouseRef.current.x = touch.clientX - rect.left;
+    mouseRef.current.y = touch.clientY - rect.top;
+    mouseRef.current.isOver = true;
+  };
+
+  const handleTouchEnd = () => {
+    mouseRef.current.isOver = false;
+  };
+
   return (
     <>
-      <div className={`golden-spiral ${isLoaded ? 'loaded' : ''}`}>
+      <div 
+        className={`golden-spiral ${isLoaded ? 'loaded' : ''}`}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         <canvas ref={canvasRef} className="spiral-canvas" />
       </div>
 
@@ -262,6 +343,8 @@ export default function GoldenSpiral3D() {
           transition: 
             opacity 1.8s cubic-bezier(0.4, 0, 0.2, 1),
             transform 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: default;
+          touch-action: none;
         }
         
         .golden-spiral.loaded {
