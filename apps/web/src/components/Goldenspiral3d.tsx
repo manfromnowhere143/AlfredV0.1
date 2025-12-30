@@ -1,31 +1,29 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GOLDEN SPIRAL — Audio-Reactive Sacred Geometry
-// Responds to voice recording, click interaction, theme-aware
+// GOLDEN SPIRAL — Ethereal Flowing Particles
+// Perplexity-inspired elegance with golden ratio mathematics
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PHI = 1.618033988749;
+const TAU = Math.PI * 2;
 
-interface Particle {
-  x: number;
-  y: number;
-  originX: number;
-  originY: number;
-  vx: number;
-  vy: number;
+interface FlowParticle {
+  t: number;
+  arm: number;
+  speed: number;
   size: number;
+  tailLength: number;
   opacity: number;
+  phase: number;
+  trail: { x: number; y: number }[];
 }
 
-// Global audio level setter (set by useVoiceRecorder)
-let globalAudioLevel = 0;
 let audioLevelCallbacks: ((level: number) => void)[] = [];
 
 export const setGlobalAudioLevel = (level: number) => {
-  globalAudioLevel = level;
   audioLevelCallbacks.forEach(cb => cb(level));
 };
 
@@ -36,20 +34,28 @@ export const subscribeToAudioLevel = (callback: (level: number) => void) => {
   };
 };
 
+// Logarithmic golden spiral
+const getSpiral = (t: number, arm: number, center: number, scale: number = 1): { x: number; y: number } => {
+  const armOffset = (arm / 4) * TAU;
+  const theta = t * TAU * 2.5 + armOffset;
+  const r = 3 * Math.exp(0.17 * theta) * scale;
+  return {
+    x: center + r * Math.cos(theta),
+    y: center + r * Math.sin(theta),
+  };
+};
+
 export default function GoldenSpiral3D() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isExploded, setIsExploded] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
-  const isExplodedRef = useRef(false);
-  const mouseRef = useRef({ x: 0, y: 0, isOver: false });
+  const particlesRef = useRef<FlowParticle[]>([]);
   const animationRef = useRef<number>(0);
   const audioLevelRef = useRef(0);
+  const timeRef = useRef(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 100);
+    const timer = setTimeout(() => setIsLoaded(true), 150);
 
     const detectTheme = () => {
       const dataTheme = document.documentElement.getAttribute('data-theme');
@@ -57,17 +63,11 @@ export default function GoldenSpiral3D() {
     };
 
     detectTheme();
-
     const observer = new MutationObserver(detectTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    // Subscribe to audio level updates
     const unsubscribe = subscribeToAudioLevel((level) => {
       audioLevelRef.current = level;
-      setAudioLevel(level);
     });
 
     return () => {
@@ -77,499 +77,211 @@ export default function GoldenSpiral3D() {
     };
   }, []);
 
-  // Initialize particles along the spiral path
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    const size = 180;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = 200;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.scale(dpr, dpr);
+
     const center = size / 2;
-    const particles: Particle[] = [];
 
-    // Generate particles along golden spiral
-    for (let i = 0; i < 120; i++) {
-      const t = (i / 120) * 4 * Math.PI;
-      const r = 8 * Math.pow(PHI, t / (Math.PI * 2));
-      const x = center + r * Math.cos(t);
-      const y = center + r * Math.sin(t);
-      
-      if (r < 70) {
-        particles.push({
-          x, y,
-          originX: x,
-          originY: y,
-          vx: 0,
-          vy: 0,
-          size: 1.5 + Math.random() * 1,
-          opacity: 0.6 + Math.random() * 0.4,
+    // Create particles across 4 spiral arms
+    particlesRef.current = [];
+    const particlesPerArm = 18;
+    for (let arm = 0; arm < 4; arm++) {
+      for (let i = 0; i < particlesPerArm; i++) {
+        particlesRef.current.push({
+          t: i / particlesPerArm,
+          arm,
+          speed: 0.0008 + Math.random() * 0.0015,
+          size: 0.3 + Math.random() * 0.5,
+          tailLength: 12 + Math.random() * 20,
+          opacity: 0.15 + Math.random() * 0.35,
+          phase: Math.random() * TAU,
+          trail: [],
         });
       }
     }
 
-    // Add particles for golden rectangles
-    const rectSizes = [56, 34.6, 21.4, 13.2, 8.2];
-    rectSizes.forEach((rectSize, ri) => {
-      const h = rectSize / PHI;
-      for (let i = 0; i < 20; i++) {
-        const t = i / 20;
-        const side = Math.floor(t * 4);
-        const pos = (t * 4) % 1;
-        let x = center, y = center;
-        
-        if (side === 0) { x = center - rectSize/2 + pos * rectSize; y = center - h/2; }
-        else if (side === 1) { x = center + rectSize/2; y = center - h/2 + pos * h; }
-        else if (side === 2) { x = center + rectSize/2 - pos * rectSize; y = center + h/2; }
-        else { x = center - rectSize/2; y = center + h/2 - pos * h; }
-        
-        const angle = ri * Math.PI / 2;
-        const dx = x - center;
-        const dy = y - center;
-        const rx = dx * Math.cos(angle) - dy * Math.sin(angle);
-        const ry = dx * Math.sin(angle) + dy * Math.cos(angle);
-        
-        particles.push({
-          x: center + rx,
-          y: center + ry,
-          originX: center + rx,
-          originY: center + ry,
-          vx: 0,
-          vy: 0,
-          size: 1 + Math.random() * 0.5,
-          opacity: 0.3 + Math.random() * 0.2,
-        });
-      }
-    });
-
-    // Add center particles
-    for (let i = 0; i < 15; i++) {
-      const angle = (i / 15) * Math.PI * 2;
-      const r = 3 + Math.random() * 5;
-      particles.push({
-        x: center + r * Math.cos(angle),
-        y: center + r * Math.sin(angle),
-        originX: center + r * Math.cos(angle),
-        originY: center + r * Math.sin(angle),
-        vx: 0,
-        vy: 0,
-        size: 1.5 + Math.random() * 1,
-        opacity: 0.8,
-      });
-    }
-
-    particlesRef.current = particles;
-
-    // Animation loop
-    let time = 0;
     const animate = () => {
-      time += 0.016;
+      timeRef.current += 0.012;
+      const time = timeRef.current;
+      
+      // Clear canvas completely for transparent bg
       ctx.clearRect(0, 0, size, size);
       
-      const color = theme === 'light' ? '26, 26, 26' : '250, 250, 248';
-      const accentColor = theme === 'light' ? '139, 115, 85' : '201, 185, 154';
-      const currentAudioLevel = audioLevelRef.current;
-      const isAudioActive = currentAudioLevel > 0.05;
+      const isDark = theme === 'dark';
+      const primaryRGB = isDark ? '255, 255, 253' : '20, 20, 20';
+      const accentRGB = isDark ? '201, 185, 154' : '160, 140, 100';
       
-      particlesRef.current.forEach((p, i) => {
-        if (isExplodedRef.current) {
-          // EXPLODED STATE - Click triggered
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vx *= 0.98;
-          p.vy *= 0.98;
-          
-          // Slight gravity toward center
-          const dx = center - p.x;
-          const dy = center - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 5) {
-            p.vx += dx * 0.0001;
-            p.vy += dy * 0.0001;
-          }
-          
-          // Mouse repulsion
-          if (mouseRef.current.isOver) {
-            const mx = mouseRef.current.x;
-            const my = mouseRef.current.y;
-            const mdx = p.x - mx;
-            const mdy = p.y - my;
-            const mDist = Math.sqrt(mdx * mdx + mdy * mdy);
-            if (mDist < 50 && mDist > 0) {
-              const force = (50 - mDist) / 50 * 0.8;
-              p.vx += (mdx / mDist) * force;
-              p.vy += (mdy / mDist) * force;
-            }
-          }
-          
-          // Boundaries
-          if (p.x < 5 || p.x > size - 5) p.vx *= -0.5;
-          if (p.y < 5 || p.y > size - 5) p.vy *= -0.5;
-          p.x = Math.max(5, Math.min(size - 5, p.x));
-          p.y = Math.max(5, Math.min(size - 5, p.y));
-          
-        } else if (isAudioActive) {
-          // AUDIO REACTIVE STATE - Pulse with voice
-          const dx = p.originX - center;
-          const dy = p.originY - center;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx);
-          
-          // Expand outward based on audio level
-          const expansion = 1 + currentAudioLevel * 0.5;
-          const targetX = center + dx * expansion;
-          const targetY = center + dy * expansion;
-          
-          // Add pulsing motion
-          const pulse = Math.sin(time * 8 + i * 0.3) * currentAudioLevel * 5;
-          const pulseX = Math.cos(angle) * pulse;
-          const pulseY = Math.sin(angle) * pulse;
-          
-          // Smooth movement
-          p.x += (targetX + pulseX - p.x) * 0.15;
-          p.y += (targetY + pulseY - p.y) * 0.15;
-          
-        } else {
-          // IDLE STATE - Return to origin
-          const dx = p.originX - p.x;
-          const dy = p.originY - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          
-          if (dist > 0.1) {
-            p.vx += dx * 0.08;
-            p.vy += dy * 0.08;
-            p.vx *= 0.85;
-            p.vy *= 0.85;
-            p.x += p.vx;
-            p.y += p.vy;
-          } else {
-            p.x = p.originX;
-            p.y = p.originY;
-            p.vx = 0;
-            p.vy = 0;
-          }
+      const audio = audioLevelRef.current;
+      const isActive = audio > 0.05;
+      const expansion = 1 + (isActive ? audio * 0.25 : 0);
+      const speedMult = 1 + (isActive ? audio * 2.5 : 0);
+
+      // Ultra-subtle spiral guides
+      ctx.globalAlpha = 0.025;
+      ctx.strokeStyle = `rgb(${primaryRGB})`;
+      ctx.lineWidth = 0.4;
+      for (let arm = 0; arm < 4; arm++) {
+        ctx.beginPath();
+        for (let t = 0; t <= 1; t += 0.008) {
+          const p = getSpiral(t, arm, center, 1);
+          t === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Draw particles
+      particlesRef.current.forEach((particle, idx) => {
+        particle.t += particle.speed * speedMult;
+        if (particle.t > 1) {
+          particle.t = 0;
+          particle.opacity = 0.15 + Math.random() * 0.35;
+        }
+
+        const pos = getSpiral(particle.t, particle.arm, center, expansion);
+        
+        particle.trail.unshift({ x: pos.x, y: pos.y });
+        
+        const maxTrail = Math.floor(particle.tailLength * (isActive ? 1.4 : 1));
+        while (particle.trail.length > maxTrail) particle.trail.pop();
+
+        if (particle.trail.length < 2) return;
+
+        // Smooth breathing
+        const breathe = Math.sin(time * 1.2 + particle.phase) * 0.12;
+        const audioPulse = isActive ? Math.sin(time * 8 + idx * 0.5) * audio * 0.25 : 0;
+        const finalOpacity = Math.max(0.08, particle.opacity + breathe + audioPulse);
+
+        const useAccent = isActive ? idx % 3 === 0 : idx % 6 === 0;
+        const colorRGB = useAccent ? accentRGB : primaryRGB;
+
+        // Draw smooth curved trail
+        ctx.beginPath();
+        ctx.moveTo(particle.trail[0].x, particle.trail[0].y);
+        
+        for (let i = 1; i < particle.trail.length - 1; i++) {
+          const curr = particle.trail[i];
+          const next = particle.trail[i + 1];
+          ctx.quadraticCurveTo(curr.x, curr.y, (curr.x + next.x) / 2, (curr.y + next.y) / 2);
         }
         
-        // Calculate dynamic size based on audio
-        const audioSizeBoost = isAudioActive ? (1 + currentAudioLevel * 0.5) : 1;
-        const drawSize = p.size * audioSizeBoost;
+        // Gradient trail
+        const last = particle.trail[particle.trail.length - 1];
+        const gradient = ctx.createLinearGradient(
+          particle.trail[0].x, particle.trail[0].y, last.x, last.y
+        );
+        gradient.addColorStop(0, `rgba(${colorRGB}, ${finalOpacity})`);
+        gradient.addColorStop(0.6, `rgba(${colorRGB}, ${finalOpacity * 0.25})`);
+        gradient.addColorStop(1, `rgba(${colorRGB}, 0)`);
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = particle.size * (isActive ? 1.2 : 1);
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Soft head glow
+        const glowSize = particle.size * 3;
+        const headGlow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowSize);
+        headGlow.addColorStop(0, `rgba(${colorRGB}, ${finalOpacity * 0.6})`);
+        headGlow.addColorStop(1, `rgba(${colorRGB}, 0)`);
         
-        // Use accent color for some particles when audio is active
-        const useAccent = isAudioActive && i % 5 === 0;
-        const particleColor = useAccent ? accentColor : color;
-        
-        // Draw particle with glow
         ctx.beginPath();
-        ctx.arc(p.x, p.y, drawSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${particleColor}, ${p.opacity})`;
+        ctx.arc(pos.x, pos.y, glowSize, 0, TAU);
+        ctx.fillStyle = headGlow;
         ctx.fill();
-        
-        // Enhanced glow when audio active
-        const glowSize = isAudioActive ? drawSize * 3 : drawSize * 2;
-        const glowOpacity = isAudioActive ? p.opacity * 0.25 : p.opacity * 0.15;
+
+        // Sharp particle head
         ctx.beginPath();
-        ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${particleColor}, ${glowOpacity})`;
+        ctx.arc(pos.x, pos.y, particle.size * 0.7, 0, TAU);
+        ctx.fillStyle = `rgba(${colorRGB}, ${Math.min(1, finalOpacity * 1.3)})`;
         ctx.fill();
       });
+
+      // Center focal point
+      const pulse = 1 + Math.sin(time * 1.5) * 0.12 + (isActive ? audio * 0.35 : 0);
       
+      // Soft glow rings
+      [12, 8, 5].forEach((r, i) => {
+        const ringGlow = ctx.createRadialGradient(center, center, 0, center, center, r * pulse);
+        ringGlow.addColorStop(0, `rgba(${accentRGB}, ${(0.12 - i * 0.03) * (isActive ? 1.4 : 1)})`);
+        ringGlow.addColorStop(1, `rgba(${accentRGB}, 0)`);
+        ctx.beginPath();
+        ctx.arc(center, center, r * pulse, 0, TAU);
+        ctx.fillStyle = ringGlow;
+        ctx.fill();
+      });
+
+      // Core dot
+      ctx.beginPath();
+      ctx.arc(center, center, 2 * pulse, 0, TAU);
+      ctx.fillStyle = `rgba(${primaryRGB}, 0.85)`;
+      ctx.fill();
+
+      // Accent ring
+      ctx.beginPath();
+      ctx.arc(center, center, 4.5 * pulse, 0, TAU);
+      ctx.strokeStyle = `rgba(${accentRGB}, ${isActive ? 0.45 : 0.2})`;
+      ctx.lineWidth = 0.4;
+      ctx.stroke();
+
       animationRef.current = requestAnimationFrame(animate);
     };
 
     animate();
-
-    return () => {
-      cancelAnimationFrame(animationRef.current);
-    };
+    return () => cancelAnimationFrame(animationRef.current);
   }, [theme]);
-
-  const handleClick = useCallback(() => {
-    // Don't allow click explosion during audio
-    if (audioLevelRef.current > 0.05) return;
-    
-    const newState = !isExplodedRef.current;
-    isExplodedRef.current = newState;
-    setIsExploded(newState);
-    
-    if (newState) {
-      const center = 90;
-      particlesRef.current.forEach(p => {
-        const angle = Math.atan2(p.y - center, p.x - center) + (Math.random() - 0.5) * 2;
-        const force = 2 + Math.random() * 4;
-        p.vx = Math.cos(angle) * force;
-        p.vy = Math.sin(angle) * force;
-      });
-    }
-  }, []);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mouseRef.current.x = (e.clientX - rect.left) * (180 / rect.width);
-    mouseRef.current.y = (e.clientY - rect.top) * (180 / rect.height);
-  }, []);
-
-  // Touch handlers for mobile
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (audioLevelRef.current > 0.05) return;
-    handleClick();
-  }, [handleClick]);
-
-  const strokeColor = theme === 'light' ? '#1a1a1a' : '#fafaf8';
-  const glowColor = theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
 
   return (
     <>
-      <div 
-        className={`golden-spiral ${isLoaded ? 'loaded' : ''} ${isExploded ? 'exploded' : ''} ${audioLevel > 0.05 ? 'audio-active' : ''}`}
-        onClick={handleClick}
-        onTouchStart={handleTouchStart}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => { mouseRef.current.isOver = true; }}
-        onMouseLeave={() => { mouseRef.current.isOver = false; }}
-      >
-        {/* SVG Base Layer */}
-        <svg 
-          viewBox="0 0 200 200" 
-          className="spiral-svg"
-        >
-          <defs>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-          </defs>
-
-          <g className="spiral-group" filter="url(#glow)">
-            {/* Outer circle */}
-            <circle 
-              cx="100" 
-              cy="100" 
-              r="80" 
-              fill="none" 
-              stroke={strokeColor}
-              strokeWidth="0.3"
-              opacity="0.2"
-              className="outer-ring"
-            />
-
-            {/* Golden rectangles */}
-            {[0, 1, 2, 3, 4].map((i) => {
-              const scale = Math.pow(1/PHI, i);
-              const size = 112 * scale;
-              const offset = 100 - size/2;
-              return (
-                <rect
-                  key={`rect-${i}`}
-                  x={offset}
-                  y={offset}
-                  width={size}
-                  height={size / PHI}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth="0.25"
-                  opacity={0.25 - i * 0.04}
-                  transform={`rotate(${i * 90}, 100, 100)`}
-                  className="golden-rect"
-                />
-              );
-            })}
-
-            {/* Fibonacci spiral */}
-            <path
-              d={`
-                M 100 37
-                A 63 63 0 0 1 163 100
-                A 39 39 0 0 1 124 139
-                A 24 24 0 0 1 100 115
-                A 14.8 14.8 0 0 1 114.8 100
-                A 9.2 9.2 0 0 1 105.6 90.8
-                A 5.7 5.7 0 0 1 100 96.5
-              `}
-              fill="none"
-              stroke={strokeColor}
-              strokeWidth="1"
-              strokeLinecap="round"
-              opacity="0.7"
-              className="main-spiral"
-            />
-
-            {/* Concentric circles */}
-            {[1, 2, 3, 4].map((i) => (
-              <circle
-                key={`circle-${i}`}
-                cx="100"
-                cy="100"
-                r={63 / Math.pow(PHI, i)}
-                fill="none"
-                stroke={strokeColor}
-                strokeWidth="0.2"
-                opacity={0.3 - i * 0.06}
-              />
-            ))}
-
-            {/* Radiating lines */}
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
-              <line
-                key={`line-${angle}`}
-                x1="100"
-                y1="100"
-                x2={100 + 75 * Math.cos(angle * Math.PI / 180)}
-                y2={100 + 75 * Math.sin(angle * Math.PI / 180)}
-                stroke={strokeColor}
-                strokeWidth="0.15"
-                opacity="0.15"
-              />
-            ))}
-
-            {/* Center point */}
-            <circle
-              cx="100"
-              cy="100"
-              r="2.5"
-              fill={strokeColor}
-              opacity="0.9"
-              className="center-dot"
-            />
-            <circle
-              cx="100"
-              cy="100"
-              r="5"
-              fill={glowColor}
-              className="center-glow"
-            />
-          </g>
-        </svg>
-
-        {/* Canvas Particle Layer */}
-        <canvas
-          ref={canvasRef}
-          width={180}
-          height={180}
-          className="particle-canvas"
-        />
+      <div className={`golden-spiral ${isLoaded ? 'loaded' : ''}`}>
+        <canvas ref={canvasRef} className="spiral-canvas" />
       </div>
 
       <style jsx>{`
         .golden-spiral {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 180px;
-          height: 180px;
+          position: relative;
+          width: 200px;
+          height: 200px;
           display: flex;
           align-items: center;
           justify-content: center;
           opacity: 0;
-          transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
-          cursor: pointer;
-          z-index: 1;
-          touch-action: manipulation;
-          -webkit-tap-highlight-color: transparent;
+          transform: scale(0.92);
+          transition: 
+            opacity 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+            transform 1.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .golden-spiral.loaded {
           opacity: 1;
+          transform: scale(1);
         }
         
-        .spiral-svg {
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          transition: opacity 0.5s ease, transform 0.5s ease;
-        }
-        
-        .golden-spiral.exploded .spiral-svg {
-          opacity: 0.15;
-        }
-        
-        .golden-spiral.audio-active .spiral-svg {
-          opacity: 0.3;
-          transform: scale(1.05);
-        }
-        
-        .spiral-group {
-          transform-origin: center center;
-          animation: rotate 60s linear infinite;
-        }
-        
-        .golden-spiral.exploded .spiral-group {
-          animation: rotate 20s linear infinite;
-        }
-        
-        .golden-spiral.audio-active .spiral-group {
-          animation: rotate 10s linear infinite;
-        }
-        
-        .center-glow {
-          animation: pulse 4s ease-in-out infinite;
-        }
-        
-        .golden-spiral.exploded .center-glow {
-          animation: pulse-fast 1s ease-in-out infinite;
-        }
-        
-        .golden-spiral.audio-active .center-glow {
-          animation: pulse-audio 0.3s ease-in-out infinite;
-        }
-        
-        .outer-ring {
-          animation: breathe 8s ease-in-out infinite;
-        }
-        
-        .golden-spiral.audio-active .outer-ring {
-          animation: breathe-audio 0.5s ease-in-out infinite;
-        }
-        
-        .particle-canvas {
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          pointer-events: none;
-        }
-        
-        @keyframes rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 0.2; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.3); }
-        }
-        
-        @keyframes pulse-fast {
-          0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50% { opacity: 0.8; transform: scale(1.5); }
-        }
-        
-        @keyframes pulse-audio {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.9; transform: scale(1.8); }
-        }
-        
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 0.2; }
-          50% { transform: scale(1.02); opacity: 0.3; }
-        }
-        
-        @keyframes breathe-audio {
-          0%, 100% { transform: scale(1); opacity: 0.3; }
-          50% { transform: scale(1.08); opacity: 0.5; }
+        .spiral-canvas {
+          width: 200px;
+          height: 200px;
         }
         
         @media (max-width: 768px) {
           .golden-spiral {
-            width: 150px;
-            height: 150px;
+            width: 160px;
+            height: 160px;
           }
-          .spiral-svg, .particle-canvas {
-            width: 150px;
-            height: 150px;
+          .spiral-canvas {
+            width: 160px;
+            height: 160px;
           }
         }
       `}</style>

@@ -567,8 +567,8 @@ export default function AlfredChat() {
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: flex-start;
-          padding-top: 22vh;
+          justify-content: center;
+          padding-bottom: 15vh;
           pointer-events: none;
           overflow: hidden;
           /* GPU acceleration for smooth rendering */
@@ -587,7 +587,6 @@ export default function AlfredChat() {
           user-select: none;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
-          /* Absolutely positioned relative to container, not affected by keyboard */
           position: relative;
         }
         
@@ -616,7 +615,7 @@ export default function AlfredChat() {
           .line-3.open { width: 20px; }
           
           .chat-empty {
-            padding-top: 15vh;
+            padding-bottom: 12vh;
           }
           
           .chat-empty-brand {
@@ -624,7 +623,7 @@ export default function AlfredChat() {
           }
           
           .spiral-container {
-            transform: scale(0.85);
+            transform: scale(0.9);
           }
         }
         
