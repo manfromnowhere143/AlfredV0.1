@@ -2,59 +2,56 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VOICE TRANSCRIPTION API
-// Supports: Groq (FREE!), OpenAI Whisper, Local Whisper
+// Supports: Groq (FREE!), OpenAI Whisper
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  
   try {
+    // Get audio from FormData
     const formData = await request.formData();
-    const audioFile = formData.get('audio') as File | null;
+    const audioFile = formData.get('audio') as File;
 
     if (!audioFile) {
-      return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'No audio file provided' },
+        { status: 400 }
+      );
     }
 
-    console.log('[Transcribe] Received:', {
-      type: audioFile.type,
-      size: `${(audioFile.size / 1024).toFixed(1)}KB`,
+    console.log('[Transcribe] Received:', { 
+      type: audioFile.type, 
+      size: `${(audioFile.size / 1024).toFixed(1)}KB` 
     });
 
-    // Minimum size check
-    if (audioFile.size < 1000) {
-      return NextResponse.json({ text: '', message: 'Recording too short' });
-    }
-
-    // Try providers in order: Groq (free) → OpenAI (paid) → Local
+    // Get API keys
     const groqKey = process.env.GROQ_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
-    const localWhisperUrl = process.env.LOCAL_WHISPER_URL;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OPTION 1: GROQ (FREE!)
-    // Get free API key at: https://console.groq.com
     // ═══════════════════════════════════════════════════════════════════════════
     if (groqKey) {
       console.log('[Transcribe] Using Groq (FREE)...');
       
       const groqFormData = new FormData();
-      groqFormData.append('file', audioFile, 'audio.webm');
+      groqFormData.append('file', audioFile, 'recording.webm');
       groqFormData.append('model', 'whisper-large-v3-turbo');
-      groqFormData.append('language', 'en');
       groqFormData.append('response_format', 'json');
+      groqFormData.append('language', 'en');
 
       const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${groqKey}` },
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+        },
         body: groqFormData,
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const text = cleanTranscription(result.text || '');
+        const data = await response.json();
+        const text = cleanTranscription(data.text);
         console.log('[Transcribe] Groq success:', text.substring(0, 50));
-        return NextResponse.json({ text, provider: 'groq', duration: Date.now() - startTime });
+        return NextResponse.json({ text, provider: 'groq' });
       } else {
         const err = await response.json().catch(() => ({}));
         console.error('[Transcribe] Groq error:', err);
@@ -62,90 +59,66 @@ export async function POST(request: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // OPTION 2: OPENAI WHISPER (Paid, ~$0.006/min)
+    // OPTION 2: OPENAI WHISPER ($0.006/min)
     // ═══════════════════════════════════════════════════════════════════════════
     if (openaiKey) {
       console.log('[Transcribe] Using OpenAI Whisper...');
       
-      const whisperFormData = new FormData();
-      whisperFormData.append('file', audioFile, 'audio.webm');
-      whisperFormData.append('model', 'whisper-1');
-      whisperFormData.append('language', 'en');
-      whisperFormData.append('response_format', 'json');
+      const openaiFormData = new FormData();
+      openaiFormData.append('file', audioFile, 'recording.webm');
+      openaiFormData.append('model', 'whisper-1');
+      openaiFormData.append('response_format', 'json');
 
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${openaiKey}` },
-        body: whisperFormData,
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+        },
+        body: openaiFormData,
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const text = cleanTranscription(result.text || '');
+        const data = await response.json();
+        const text = cleanTranscription(data.text);
         console.log('[Transcribe] OpenAI success:', text.substring(0, 50));
-        return NextResponse.json({ text, provider: 'openai', duration: Date.now() - startTime });
+        return NextResponse.json({ text, provider: 'openai' });
       } else {
         const err = await response.json().catch(() => ({}));
         console.error('[Transcribe] OpenAI error:', err);
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // OPTION 3: LOCAL WHISPER (Run your own server)
-    // ═══════════════════════════════════════════════════════════════════════════
-    if (localWhisperUrl) {
-      console.log('[Transcribe] Using Local Whisper...');
-      
-      const localFormData = new FormData();
-      localFormData.append('file', audioFile);
-
-      const response = await fetch(`${localWhisperUrl}/transcribe`, {
-        method: 'POST',
-        body: localFormData,
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const text = cleanTranscription(result.text || '');
-        console.log('[Transcribe] Local success:', text.substring(0, 50));
-        return NextResponse.json({ text, provider: 'local', duration: Date.now() - startTime });
-      }
-    }
-
-    // No provider configured
+    // No provider available
     console.log('[Transcribe] No API key configured');
-    return NextResponse.json({ 
-      text: null, 
+    return NextResponse.json({
+      error: 'No transcription service configured',
       message: 'Add GROQ_API_KEY (free!) or OPENAI_API_KEY to .env.local',
-    });
+    }, { status: 500 });
 
   } catch (error: any) {
     console.error('[Transcribe] Error:', error);
-    return NextResponse.json({ text: null, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLEAN TRANSCRIPTION
+// HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function cleanTranscription(text: string): string {
   if (!text) return '';
   
-  let cleaned = text.trim();
-  
-  // Remove filler words at start
-  cleaned = cleaned.replace(/^(um|uh|ah|er|like|so|well|okay|ok)\s*,?\s*/i, '');
-  
-  // Capitalize first letter
-  if (cleaned.length > 0) {
-    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-  }
-  
-  // Ensure ending punctuation
-  if (cleaned.length > 0 && !/[.!?]$/.test(cleaned)) {
-    cleaned += '.';
-  }
-  
-  return cleaned;
+  return text
+    // Remove filler words
+    .replace(/\b(um|uh|er|ah|like,?\s*you know|you know,?\s*like)\b/gi, '')
+    // Fix spacing
+    .replace(/\s+/g, ' ')
+    // Capitalize first letter
+    .replace(/^\s*\w/, c => c.toUpperCase())
+    // Add period if missing
+    .replace(/([a-zA-Z])$/, '$1.')
+    .trim();
 }

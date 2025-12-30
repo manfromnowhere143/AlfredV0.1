@@ -598,6 +598,20 @@ export default function ChatInput({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  
+  // Smart Enhancement State
+  const [showEnhancer, setShowEnhancer] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [originalText, setOriginalText] = useState('');
+  const [enhancedText, setEnhancedText] = useState('');
+  const [detectedIntent, setDetectedIntent] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [customInstruction, setCustomInstruction] = useState('');
+
+  // Debug enhancer state
+  useEffect(() => {
+    console.log('[Enhancer State]', { showEnhancer, isEnhancing, originalText: originalText.slice(0, 20), enhancedText: enhancedText.slice(0, 20) });
+  }, [showEnhancer, isEnhancing, originalText, enhancedText]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Refs
@@ -998,10 +1012,12 @@ export default function ChatInput({
       const data = await response.json();
 
       if (data.text) {
-        setMessage(prev => {
-          const separator = prev.trim() ? ' ' : '';
-          return prev + separator + data.text;
-        });
+        const newText = data.text;
+        setOriginalText(newText);
+        setMessage(newText);
+        
+        // Auto-enhance the transcription
+        await enhancePrompt(newText);
       }
     } catch (error) {
       console.error('Transcription failed:', error);
@@ -1009,6 +1025,138 @@ export default function ChatInput({
       setIsTranscribing(false);
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SMART PROMPT ENHANCEMENT
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const enhancePrompt = async (text: string) => {
+    console.log('[Enhancer] Starting enhancement for:', text);
+    
+    // Always show enhancer immediately
+    setShowEnhancer(true);
+    setIsEnhancing(true);
+    setOriginalText(text);
+    setEnhancedText(''); // Clear previous
+    setDetectedIntent('');
+    setSuggestions([]);
+    
+    console.log('[Enhancer] State set, showEnhancer should be true');
+    
+    try {
+      console.log('[Enhancer] Fetching /api/optimize...');
+      const response = await fetch('/api/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, mode: 'enhance' }),
+      });
+
+      console.log('[Enhancer] Response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Enhancer] Response data:', data);
+      
+      if (data.skipped) {
+        // Simple message - show it anyway with a note
+        setEnhancedText(text);
+        setDetectedIntent('Simple message - already clear');
+      } else if (data.enhanced) {
+        setEnhancedText(data.enhanced);
+        setDetectedIntent(data.intent || '');
+        setSuggestions(data.suggestions || []);
+      } else {
+        // Fallback
+        setEnhancedText(text);
+        setDetectedIntent('Enhancement complete');
+      }
+    } catch (error) {
+      console.error('[Enhancer] Error:', error);
+      // Fallback: show original in both places
+      setEnhancedText(text);
+      setDetectedIntent('Enhancement unavailable - using original');
+    } finally {
+      setIsEnhancing(false);
+      console.log('[Enhancer] Done, isEnhancing set to false');
+    }
+  };
+
+  // Custom refinement with instruction
+  const refineWithInstruction = async () => {
+    if (!customInstruction.trim() || !message.trim()) return;
+    
+    setIsEnhancing(true);
+    
+    try {
+      const response = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: message,
+          instruction: customInstruction,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Refine API error');
+      }
+
+      const data = await response.json();
+      
+      if (data.refined) {
+        setEnhancedText(data.refined);
+        setOriginalText(message);
+      }
+    } catch (error) {
+      console.error('Refinement failed:', error);
+      // Keep showing current state
+    } finally {
+      setIsEnhancing(false);
+      setCustomInstruction('');
+    }
+  };
+
+  // Use the original text
+  const useOriginal = () => {
+    setMessage(originalText);
+    setShowEnhancer(false);
+    resetEnhancer();
+    textareaRef.current?.focus();
+  };
+
+  // Use the enhanced text
+  const useEnhanced = () => {
+    setMessage(enhancedText || originalText);
+    setShowEnhancer(false);
+    resetEnhancer();
+    textareaRef.current?.focus();
+  };
+
+  // Apply a quick suggestion
+  const applySuggestion = (suggestion: string) => {
+    const newText = message + ' ' + suggestion;
+    setMessage(newText);
+    setOriginalText(newText);
+    enhancePrompt(newText);
+  };
+
+  // Reset enhancer state
+  const resetEnhancer = () => {
+    setOriginalText('');
+    setEnhancedText('');
+    setDetectedIntent('');
+    setSuggestions([]);
+    setCustomInstruction('');
+  };
+
+  // Cancel enhancement
+  const cancelEnhancer = () => {
+    setShowEnhancer(false);
+    resetEnhancer();
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1162,6 +1310,49 @@ export default function ChatInput({
         {/* Main Input Container */}
         <div className={`chat-input__container ${isRecording ? 'chat-input__container--recording' : ''} ${isTranscribing ? 'chat-input__container--transcribing' : ''}`}>
           
+          {/* Minimal Elegant Enhancer - Floating Above */}
+          {showEnhancer && (
+            <div className="prompt-enhance">
+              <div className="prompt-enhance__card">
+                {/* Loading */}
+                {isEnhancing ? (
+                  <div className="prompt-enhance__loading">
+                    <span className="prompt-enhance__dot" />
+                    <span className="prompt-enhance__dot" />
+                    <span className="prompt-enhance__dot" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Enhanced Text */}
+                    <p className="prompt-enhance__text">{enhancedText || originalText}</p>
+                    
+                    {/* Subtle divider */}
+                    <div className="prompt-enhance__divider" />
+                    
+                    {/* Actions Row */}
+                    <div className="prompt-enhance__row">
+                      <span className="prompt-enhance__hint">Enhanced from your input</span>
+                      <div className="prompt-enhance__actions">
+                        <button 
+                          className="prompt-enhance__btn prompt-enhance__btn--dismiss"
+                          onClick={useOriginal}
+                        >
+                          Dismiss
+                        </button>
+                        <button 
+                          className="prompt-enhance__btn prompt-enhance__btn--apply"
+                          onClick={useEnhanced}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          
           {/* Recording UI */}
           {isRecording ? (
             <div className="chat-input__recording">
@@ -1252,6 +1443,27 @@ export default function ChatInput({
                   rows={1}
                   aria-label="Message input"
                 />
+
+                {/* Enhance Button - Show when there's text */}
+                {message.trim() && !showEnhancer && (
+                  <button
+                    className="chat-input__btn chat-input__btn--refine"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[Enhancer] Button clicked, message:', message);
+                      enhancePrompt(message);
+                    }}
+                    disabled={disabled || isEnhancing}
+                    aria-label="Enhance with Alfred"
+                    title="Enhance with Alfred"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+                    </svg>
+                  </button>
+                )}
 
                 {/* Voice/Send Button */}
                 {showVoiceButton ? (
@@ -1399,23 +1611,26 @@ export default function ChatInput({
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__container {
+          position: relative;
           width: 100%;
           max-width: 720px;
-          background: rgba(255, 255, 255, 0.04);
+          background: rgba(28, 28, 30, 0.95);
           backdrop-filter: blur(40px);
           -webkit-backdrop-filter: blur(40px);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 26px;
           transition: all 0.25s ease;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
         }
 
         .chat-input__container:focus-within {
-          border-color: rgba(255, 255, 255, 0.12);
+          border-color: rgba(255, 255, 255, 0.15);
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
         }
 
         .chat-input__container--recording {
-          background: rgba(255, 255, 255, 0.02);
-          border-color: rgba(255, 255, 255, 0.1);
+          background: rgba(28, 28, 30, 0.98);
+          border-color: rgba(255, 255, 255, 0.12);
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1453,9 +1668,25 @@ export default function ChatInput({
           color: rgba(255, 255, 255, 0.92);
           resize: none;
           min-height: 24px;
-          max-height: 200px;
+          max-height: 150px;
           line-height: 1.5;
           padding: 0;
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.2) transparent;
+        }
+
+        .chat-input__textarea::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .chat-input__textarea::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .chat-input__textarea::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 2px;
         }
 
         .chat-input__textarea::placeholder {
@@ -1503,6 +1734,23 @@ export default function ChatInput({
 
         .chat-input__btn--attach:hover:not(:disabled) {
           color: rgba(255, 255, 255, 0.7);
+        }
+
+        .chat-input__btn--refine {
+          background: rgba(255, 255, 255, 0.06);
+          color: rgba(255, 255, 255, 0.5);
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+        }
+
+        .chat-input__btn--refine:hover:not(:disabled) {
+          color: white;
+          background: rgba(255, 255, 255, 0.12);
+        }
+
+        .chat-input__btn--refine:active:not(:disabled) {
+          transform: scale(0.95);
         }
 
         .chat-input__btn--voice {
@@ -1627,6 +1875,159 @@ export default function ChatInput({
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
+           PROMPT ENHANCE - Floating Above Input
+           ═══════════════════════════════════════════════════════════════════════ */
+        
+        .prompt-enhance {
+          position: absolute;
+          bottom: 100%;
+          left: 0;
+          right: 0;
+          padding: 0 0 10px 0;
+          z-index: 10;
+        }
+
+        .prompt-enhance__card {
+          background: rgba(32, 32, 35, 0.98);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 16px;
+          padding: 16px 20px;
+          animation: enhanceSlide 0.2s ease-out;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes enhanceSlide {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* Loading */
+        .prompt-enhance__loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 8px 0;
+        }
+
+        .prompt-enhance__dot {
+          width: 5px;
+          height: 5px;
+          background: rgba(255, 255, 255, 0.4);
+          border-radius: 50%;
+          animation: enhanceDot 1.2s ease-in-out infinite;
+        }
+
+        .prompt-enhance__dot:nth-child(2) {
+          animation-delay: 0.15s;
+        }
+
+        .prompt-enhance__dot:nth-child(3) {
+          animation-delay: 0.3s;
+        }
+
+        @keyframes enhanceDot {
+          0%, 80%, 100% {
+            transform: scale(0.8);
+            opacity: 0.3;
+          }
+          40% {
+            transform: scale(1);
+            opacity: 0.8;
+          }
+        }
+
+        /* Text */
+        .prompt-enhance__text {
+          margin: 0;
+          font-size: 14px;
+          line-height: 1.55;
+          color: rgba(255, 255, 255, 0.92);
+          max-height: 100px;
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+
+        .prompt-enhance__text::-webkit-scrollbar {
+          width: 3px;
+        }
+
+        .prompt-enhance__text::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .prompt-enhance__text::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.12);
+          border-radius: 3px;
+        }
+
+        /* Divider */
+        .prompt-enhance__divider {
+          height: 1px;
+          background: rgba(255, 255, 255, 0.08);
+          margin: 12px 0;
+        }
+
+        /* Bottom Row */
+        .prompt-enhance__row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .prompt-enhance__hint {
+          font-size: 11px;
+          color: rgba(255, 255, 255, 0.35);
+          letter-spacing: 0.01em;
+        }
+
+        .prompt-enhance__actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        .prompt-enhance__btn {
+          padding: 7px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 500;
+          font-family: inherit;
+          cursor: pointer;
+          transition: all 0.12s ease;
+        }
+
+        .prompt-enhance__btn--dismiss {
+          background: transparent;
+          border: none;
+          color: rgba(255, 255, 255, 0.4);
+        }
+
+        .prompt-enhance__btn--dismiss:hover {
+          color: rgba(255, 255, 255, 0.7);
+        }
+
+        .prompt-enhance__btn--apply {
+          background: rgba(255, 255, 255, 0.9);
+          border: none;
+          color: rgba(0, 0, 0, 0.85);
+        }
+
+        .prompt-enhance__btn--apply:hover {
+          background: white;
+        }
+
+
+        /* ═══════════════════════════════════════════════════════════════════════
            RESPONSIVE
            ═══════════════════════════════════════════════════════════════════════ */
         
@@ -1655,6 +2056,36 @@ export default function ChatInput({
 
           .chat-input__attachments {
             padding: 12px 14px;
+          }
+
+          /* Prompt Enhance Mobile */
+          .prompt-enhance__card {
+            padding: 14px 16px;
+            border-radius: 14px;
+          }
+
+          .prompt-enhance__text {
+            font-size: 14px;
+            max-height: 100px;
+          }
+
+          .prompt-enhance__row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+
+          .prompt-enhance__hint {
+            text-align: center;
+          }
+
+          .prompt-enhance__actions {
+            justify-content: stretch;
+          }
+
+          .prompt-enhance__btn {
+            flex: 1;
+            justify-content: center;
           }
         }
 
