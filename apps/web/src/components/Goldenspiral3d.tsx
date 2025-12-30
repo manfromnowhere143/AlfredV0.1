@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GOLDEN SPIRAL — Sacred Geometry with Magnetic Particle Explosion
-// SVG elegance + Canvas particles, theme-aware, interactive
+// GOLDEN SPIRAL — Audio-Reactive Sacred Geometry
+// Responds to voice recording, click interaction, theme-aware
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PHI = 1.618033988749;
@@ -20,15 +20,33 @@ interface Particle {
   opacity: number;
 }
 
+// Global audio level setter (set by useVoiceRecorder)
+let globalAudioLevel = 0;
+let audioLevelCallbacks: ((level: number) => void)[] = [];
+
+export const setGlobalAudioLevel = (level: number) => {
+  globalAudioLevel = level;
+  audioLevelCallbacks.forEach(cb => cb(level));
+};
+
+export const subscribeToAudioLevel = (callback: (level: number) => void) => {
+  audioLevelCallbacks.push(callback);
+  return () => {
+    audioLevelCallbacks = audioLevelCallbacks.filter(cb => cb !== callback);
+  };
+};
+
 export default function GoldenSpiral3D() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isExploded, setIsExploded] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const isExplodedRef = useRef(false);
   const mouseRef = useRef({ x: 0, y: 0, isOver: false });
   const animationRef = useRef<number>(0);
+  const audioLevelRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 100);
@@ -46,9 +64,16 @@ export default function GoldenSpiral3D() {
       attributeFilter: ['data-theme']
     });
 
+    // Subscribe to audio level updates
+    const unsubscribe = subscribeToAudioLevel((level) => {
+      audioLevelRef.current = level;
+      setAudioLevel(level);
+    });
+
     return () => {
       clearTimeout(timer);
       observer.disconnect();
+      unsubscribe();
     };
   }, []);
 
@@ -99,7 +124,6 @@ export default function GoldenSpiral3D() {
         else if (side === 2) { x = center + rectSize/2 - pos * rectSize; y = center + h/2; }
         else { x = center - rectSize/2; y = center + h/2 - pos * h; }
         
-        // Rotate based on rectangle index
         const angle = ri * Math.PI / 2;
         const dx = x - center;
         const dy = y - center;
@@ -138,22 +162,25 @@ export default function GoldenSpiral3D() {
     particlesRef.current = particles;
 
     // Animation loop
+    let time = 0;
     const animate = () => {
+      time += 0.016;
       ctx.clearRect(0, 0, size, size);
       
       const color = theme === 'light' ? '26, 26, 26' : '250, 250, 248';
+      const accentColor = theme === 'light' ? '139, 115, 85' : '201, 185, 154';
+      const currentAudioLevel = audioLevelRef.current;
+      const isAudioActive = currentAudioLevel > 0.05;
       
-      particlesRef.current.forEach(p => {
+      particlesRef.current.forEach((p, i) => {
         if (isExplodedRef.current) {
-          // Apply velocity
+          // EXPLODED STATE - Click triggered
           p.x += p.vx;
           p.y += p.vy;
-          
-          // Friction
           p.vx *= 0.98;
           p.vy *= 0.98;
           
-          // Slight gravity toward center for orbital feel
+          // Slight gravity toward center
           const dx = center - p.x;
           const dy = center - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -162,7 +189,7 @@ export default function GoldenSpiral3D() {
             p.vy += dy * 0.0001;
           }
           
-          // Mouse magnetic repulsion
+          // Mouse repulsion
           if (mouseRef.current.isOver) {
             const mx = mouseRef.current.x;
             const my = mouseRef.current.y;
@@ -176,13 +203,35 @@ export default function GoldenSpiral3D() {
             }
           }
           
-          // Keep in bounds with bounce
+          // Boundaries
           if (p.x < 5 || p.x > size - 5) p.vx *= -0.5;
           if (p.y < 5 || p.y > size - 5) p.vy *= -0.5;
           p.x = Math.max(5, Math.min(size - 5, p.x));
           p.y = Math.max(5, Math.min(size - 5, p.y));
+          
+        } else if (isAudioActive) {
+          // AUDIO REACTIVE STATE - Pulse with voice
+          const dx = p.originX - center;
+          const dy = p.originY - center;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+          
+          // Expand outward based on audio level
+          const expansion = 1 + currentAudioLevel * 0.5;
+          const targetX = center + dx * expansion;
+          const targetY = center + dy * expansion;
+          
+          // Add pulsing motion
+          const pulse = Math.sin(time * 8 + i * 0.3) * currentAudioLevel * 5;
+          const pulseX = Math.cos(angle) * pulse;
+          const pulseY = Math.sin(angle) * pulse;
+          
+          // Smooth movement
+          p.x += (targetX + pulseX - p.x) * 0.15;
+          p.y += (targetY + pulseY - p.y) * 0.15;
+          
         } else {
-          // Magnetic attraction back to origin
+          // IDLE STATE - Return to origin
           const dx = p.originX - p.x;
           const dy = p.originY - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -202,16 +251,26 @@ export default function GoldenSpiral3D() {
           }
         }
         
+        // Calculate dynamic size based on audio
+        const audioSizeBoost = isAudioActive ? (1 + currentAudioLevel * 0.5) : 1;
+        const drawSize = p.size * audioSizeBoost;
+        
+        // Use accent color for some particles when audio is active
+        const useAccent = isAudioActive && i % 5 === 0;
+        const particleColor = useAccent ? accentColor : color;
+        
         // Draw particle with glow
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${color}, ${p.opacity})`;
+        ctx.arc(p.x, p.y, drawSize, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${particleColor}, ${p.opacity})`;
         ctx.fill();
         
-        // Subtle glow
+        // Enhanced glow when audio active
+        const glowSize = isAudioActive ? drawSize * 3 : drawSize * 2;
+        const glowOpacity = isAudioActive ? p.opacity * 0.25 : p.opacity * 0.15;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${color}, ${p.opacity * 0.15})`;
+        ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${particleColor}, ${glowOpacity})`;
         ctx.fill();
       });
       
@@ -226,12 +285,14 @@ export default function GoldenSpiral3D() {
   }, [theme]);
 
   const handleClick = useCallback(() => {
+    // Don't allow click explosion during audio
+    if (audioLevelRef.current > 0.05) return;
+    
     const newState = !isExplodedRef.current;
     isExplodedRef.current = newState;
     setIsExploded(newState);
     
     if (newState) {
-      // Explode particles
       const center = 90;
       particlesRef.current.forEach(p => {
         const angle = Math.atan2(p.y - center, p.x - center) + (Math.random() - 0.5) * 2;
@@ -248,14 +309,21 @@ export default function GoldenSpiral3D() {
     mouseRef.current.y = (e.clientY - rect.top) * (180 / rect.height);
   }, []);
 
+  // Touch handlers for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (audioLevelRef.current > 0.05) return;
+    handleClick();
+  }, [handleClick]);
+
   const strokeColor = theme === 'light' ? '#1a1a1a' : '#fafaf8';
   const glowColor = theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
 
   return (
     <>
       <div 
-        className={`golden-spiral ${isLoaded ? 'loaded' : ''} ${isExploded ? 'exploded' : ''}`}
+        className={`golden-spiral ${isLoaded ? 'loaded' : ''} ${isExploded ? 'exploded' : ''} ${audioLevel > 0.05 ? 'audio-active' : ''}`}
         onClick={handleClick}
+        onTouchStart={handleTouchStart}
         onMouseMove={handleMouseMove}
         onMouseEnter={() => { mouseRef.current.isOver = true; }}
         onMouseLeave={() => { mouseRef.current.isOver = false; }}
@@ -400,6 +468,8 @@ export default function GoldenSpiral3D() {
           transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
           z-index: 1;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
         }
         
         .golden-spiral.loaded {
@@ -410,11 +480,16 @@ export default function GoldenSpiral3D() {
           position: absolute;
           width: 180px;
           height: 180px;
-          transition: opacity 0.5s ease;
+          transition: opacity 0.5s ease, transform 0.5s ease;
         }
         
         .golden-spiral.exploded .spiral-svg {
           opacity: 0.15;
+        }
+        
+        .golden-spiral.audio-active .spiral-svg {
+          opacity: 0.3;
+          transform: scale(1.05);
         }
         
         .spiral-group {
@@ -426,6 +501,10 @@ export default function GoldenSpiral3D() {
           animation: rotate 20s linear infinite;
         }
         
+        .golden-spiral.audio-active .spiral-group {
+          animation: rotate 10s linear infinite;
+        }
+        
         .center-glow {
           animation: pulse 4s ease-in-out infinite;
         }
@@ -434,8 +513,16 @@ export default function GoldenSpiral3D() {
           animation: pulse-fast 1s ease-in-out infinite;
         }
         
+        .golden-spiral.audio-active .center-glow {
+          animation: pulse-audio 0.3s ease-in-out infinite;
+        }
+        
         .outer-ring {
           animation: breathe 8s ease-in-out infinite;
+        }
+        
+        .golden-spiral.audio-active .outer-ring {
+          animation: breathe-audio 0.5s ease-in-out infinite;
         }
         
         .particle-canvas {
@@ -460,9 +547,19 @@ export default function GoldenSpiral3D() {
           50% { opacity: 0.8; transform: scale(1.5); }
         }
         
+        @keyframes pulse-audio {
+          0%, 100% { opacity: 0.4; transform: scale(1); }
+          50% { opacity: 0.9; transform: scale(1.8); }
+        }
+        
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 0.2; }
           50% { transform: scale(1.02); opacity: 0.3; }
+        }
+        
+        @keyframes breathe-audio {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.08); opacity: 0.5; }
         }
         
         @media (max-width: 768px) {
