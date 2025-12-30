@@ -447,18 +447,20 @@ function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
 interface WaveformVisualizerProps {
   levels: number[];
   isActive: boolean;
+  isInitializing?: boolean;
 }
 
-function WaveformVisualizer({ levels, isActive }: WaveformVisualizerProps) {
+function WaveformVisualizer({ levels, isActive, isInitializing = false }: WaveformVisualizerProps) {
   return (
-    <div className="waveform">
+    <div className={`waveform ${isInitializing ? 'waveform--initializing' : ''}`}>
       {levels.map((level, index) => (
         <div
           key={index}
           className="waveform__bar"
           style={{
-            height: `${Math.max(4, level * 100)}%`,
-            opacity: isActive ? 0.4 + level * 0.6 : 0.2,
+            height: isInitializing ? '20%' : `${Math.max(4, level * 100)}%`,
+            opacity: isActive ? 0.4 + level * 0.6 : 0.3,
+            animationDelay: isInitializing ? `${index * 30}ms` : '0ms',
           }}
         />
       ))}
@@ -478,6 +480,21 @@ function WaveformVisualizer({ levels, isActive }: WaveformVisualizerProps) {
           background: white;
           border-radius: 1.5px;
           transition: height 0.06s ease-out, opacity 0.15s ease;
+        }
+
+        .waveform--initializing .waveform__bar {
+          animation: initWave 1s ease-in-out infinite;
+        }
+
+        @keyframes initWave {
+          0%, 100% { 
+            height: 15%;
+            opacity: 0.3;
+          }
+          50% { 
+            height: 40%;
+            opacity: 0.6;
+          }
         }
       `}</style>
     </div>
@@ -580,6 +597,7 @@ export default function ChatInput({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Refs
@@ -817,6 +835,11 @@ export default function ChatInput({
 
   const startRecording = async () => {
     setVoiceError(null);
+    
+    // Show UI immediately (optimistic)
+    setIsInitializing(true);
+    setIsRecording(true);
+    isRecordingRef.current = true;
 
     try {
       // Get microphone access
@@ -858,10 +881,9 @@ export default function ChatInput({
         }
       };
 
-      // Start recording
+      // Start recording - mic is ready!
       mediaRecorder.start(500);
-      isRecordingRef.current = true;
-      setIsRecording(true);
+      setIsInitializing(false);
       setRecordingTime(0);
       onVoiceStart?.();
 
@@ -875,6 +897,11 @@ export default function ChatInput({
 
     } catch (error: any) {
       console.error('Recording failed:', error);
+      
+      // Revert optimistic UI
+      setIsInitializing(false);
+      setIsRecording(false);
+      isRecordingRef.current = false;
       
       if (error.name === 'NotAllowedError') {
         setVoiceError('Microphone access denied. Please allow microphone access.');
@@ -933,6 +960,7 @@ export default function ChatInput({
   const cancelRecording = () => {
     isRecordingRef.current = false;
     setIsRecording(false);
+    setIsInitializing(false);
     audioChunksRef.current = [];
 
     if (timerRef.current) {
@@ -1148,9 +1176,13 @@ export default function ChatInput({
               </button>
 
               <div className="chat-input__recording-center">
-                <WaveformVisualizer levels={audioLevels} isActive={isRecording} />
+                <WaveformVisualizer 
+                  levels={audioLevels} 
+                  isActive={isRecording} 
+                  isInitializing={isInitializing}
+                />
                 <span className="chat-input__recording-time">
-                  {formatDuration(recordingTime)}
+                  {isInitializing ? 'Connecting...' : formatDuration(recordingTime)}
                 </span>
               </div>
 
@@ -1482,6 +1514,11 @@ export default function ChatInput({
           color: white;
         }
 
+        .chat-input__btn--voice:active:not(:disabled) {
+          transform: scale(0.9);
+          background: rgba(255, 255, 255, 0.1);
+        }
+
         .chat-input__btn--send {
           background: white;
           color: black;
@@ -1518,6 +1555,18 @@ export default function ChatInput({
           align-items: center;
           padding: 14px 16px;
           gap: 12px;
+          animation: recordingFadeIn 0.2s ease-out;
+        }
+
+        @keyframes recordingFadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
         }
 
         .chat-input__recording-btn {
