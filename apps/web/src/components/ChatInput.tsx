@@ -504,15 +504,15 @@ function WaveformVisualizer({ levels, isActive, isInitializing = false }: Wavefo
           align-items: center;
           justify-content: center;
           gap: 2px;
-          height: 48px;
+          height: 32px;
           width: 100%;
         }
 
         .waveform__bar {
           width: 3px;
-          background: black;
+          background: rgba(0, 0, 0, 0.3);
           border-radius: 1.5px;
-          transition: height 0.06s ease-out, opacity 0.15s ease;
+          transition: height 0.05s ease-out;
         }
 
         .waveform--initializing .waveform__bar {
@@ -521,18 +521,18 @@ function WaveformVisualizer({ levels, isActive, isInitializing = false }: Wavefo
 
         @keyframes initWave {
           0%, 100% { 
-            height: 15%;
+            height: 20%;
             opacity: 0.3;
           }
           50% { 
-            height: 40%;
+            height: 50%;
             opacity: 0.6;
           }
         }
 
         @media (prefers-color-scheme: dark) {
           .waveform__bar {
-            background: white;
+            background: rgba(255, 255, 255, 0.4);
           }
         }
       `}</style>
@@ -546,33 +546,34 @@ function WaveformVisualizer({ levels, isActive, isInitializing = false }: Wavefo
 function ProcessingIndicator() {
   return (
     <div className="processing">
+      <span className="processing__text">Processing</span>
       <div className="processing__dots">
         <span />
         <span />
         <span />
       </div>
-      <span className="processing__text">Processing</span>
 
       <style jsx>{`
         .processing {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 12px;
-          padding: 26px;
+          gap: 4px;
+          padding: 24px 16px;
           color: rgba(0, 0, 0, 0.45);
-          font-size: 13px;
-          font-weight: 500;
+          font-size: 17px;
+          font-weight: 400;
         }
 
         .processing__dots {
           display: flex;
-          gap: 5px;
+          gap: 3px;
+          margin-left: 2px;
         }
 
         .processing__dots span {
-          width: 5px;
-          height: 5px;
+          width: 4px;
+          height: 4px;
           background: currentColor;
           border-radius: 50%;
           animation: pulse 1.3s ease-in-out infinite;
@@ -588,12 +589,10 @@ function ProcessingIndicator() {
 
         @keyframes pulse {
           0%, 80%, 100% {
-            opacity: 0.25;
-            transform: scale(0.8);
+            opacity: 0.3;
           }
           40% {
             opacity: 1;
-            transform: scale(1);
           }
         }
 
@@ -603,7 +602,7 @@ function ProcessingIndicator() {
 
         @media (prefers-color-scheme: dark) {
           .processing {
-            color: rgba(255, 255, 255, 0.45);
+            color: rgba(255, 255, 255, 0.5);
           }
         }
       `}</style>
@@ -1398,37 +1397,41 @@ export default function ChatInput({
             </div>
           )}
           
-          {/* Recording UI */}
+          {/* Recording UI - Perplexity-level Elegant */}
           {isRecording ? (
             <div className="chat-input__recording">
+              {/* Cancel button - minimal */}
               <button
-                className="chat-input__recording-btn chat-input__recording-btn--cancel"
+                className="chat-input__recording-cancel"
                 onClick={cancelRecording}
-                aria-label="Cancel recording"
+                aria-label="Cancel"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
                 </svg>
               </button>
 
+              {/* Center - Listening text with subtle pulse */}
               <div className="chat-input__recording-center">
-                <WaveformVisualizer 
-                  levels={audioLevels} 
-                  isActive={isRecording} 
-                  isInitializing={isInitializing}
-                />
-                <span className="chat-input__recording-time">
-                  {isInitializing ? 'Connecting...' : formatDuration(recordingTime)}
+                <span className="chat-input__recording-status">
+                  {isInitializing ? 'Starting...' : 'Listening'}
+                </span>
+                {/* Subtle animated dots */}
+                <span className="chat-input__recording-dots">
+                  <span />
+                  <span />
+                  <span />
                 </span>
               </div>
 
+              {/* Send button - elegant teal */}
               <button
-                className="chat-input__recording-btn chat-input__recording-btn--send"
+                className="chat-input__recording-send"
                 onClick={stopRecording}
-                aria-label="Stop and send"
+                aria-label="Done"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
                 </svg>
               </button>
             </div>
@@ -1961,111 +1964,152 @@ export default function ChatInput({
            RECORDING UI
            ═══════════════════════════════════════════════════════════════════════ */
         
+        /* ═══════════════════════════════════════════════════════════════════════
+           RECORDING UI - Perplexity-level Elegant
+           ═══════════════════════════════════════════════════════════════════════ */
+        
         .chat-input__recording {
           display: flex;
           align-items: center;
-          padding: 14px 16px;
-          gap: 12px;
-          animation: recordingFadeIn 0.2s ease-out;
+          justify-content: space-between;
+          padding: 16px 16px;
+          gap: 16px;
+          animation: recordingFadeIn 0.3s ease-out;
         }
 
         @keyframes recordingFadeIn {
           from {
             opacity: 0;
-            transform: scale(0.98);
           }
           to {
             opacity: 1;
-            transform: scale(1);
           }
         }
 
-        .chat-input__recording-btn {
-          width: 46px;
-          height: 46px;
+        /* Cancel Button - Minimal square stop */
+        .chat-input__recording-cancel {
+          width: 44px;
+          height: 44px;
           border-radius: 50%;
           border: none;
+          background: rgba(0, 0, 0, 0.06);
+          color: rgba(0, 0, 0, 0.4);
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          transition: all 0.15s ease;
+          transition: all 0.2s ease;
           -webkit-tap-highlight-color: transparent;
         }
 
-        .chat-input__recording-btn:active {
-          transform: scale(0.92);
+        .chat-input__recording-cancel:hover {
+          background: rgba(0, 0, 0, 0.1);
+          color: rgba(0, 0, 0, 0.6);
         }
 
-        .chat-input__recording-btn:focus-visible {
-          outline: 2px solid rgba(0, 0, 0, 0.2);
-          outline-offset: 2px;
+        .chat-input__recording-cancel:active {
+          transform: scale(0.94);
         }
 
-        .chat-input__recording-btn--cancel {
-          background: rgba(0, 0, 0, 0.05);
-          color: rgba(0, 0, 0, 0.5);
-        }
-
-        .chat-input__recording-btn--cancel:hover {
-          background: rgba(0, 0, 0, 0.08);
-          color: rgba(0, 0, 0, 0.7);
-        }
-
-        .chat-input__recording-btn--send {
-          background: black;
-          color: white;
-        }
-
-        .chat-input__recording-btn--send:hover {
-          background: rgba(0, 0, 0, 0.85);
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-        }
-
+        /* Center - Status text */
         .chat-input__recording-center {
           flex: 1;
           display: flex;
-          flex-direction: column;
           align-items: center;
-          gap: 6px;
+          justify-content: center;
+          gap: 4px;
         }
 
-        .chat-input__recording-time {
-          font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
-          font-size: 12px;
+        .chat-input__recording-status {
+          font-size: 17px;
+          font-weight: 400;
           color: rgba(0, 0, 0, 0.45);
-          letter-spacing: 0.03em;
+          letter-spacing: -0.01em;
+        }
+
+        /* Animated dots */
+        .chat-input__recording-dots {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          margin-left: 2px;
+        }
+
+        .chat-input__recording-dots span {
+          width: 4px;
+          height: 4px;
+          background: rgba(0, 0, 0, 0.35);
+          border-radius: 50%;
+          animation: dotFade 1.4s ease-in-out infinite;
+        }
+
+        .chat-input__recording-dots span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+
+        .chat-input__recording-dots span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes dotFade {
+          0%, 80%, 100% {
+            opacity: 0.3;
+          }
+          40% {
+            opacity: 1;
+          }
+        }
+
+        /* Send Button - Elegant teal checkmark */
+        .chat-input__recording-send {
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          border: none;
+          background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+          box-shadow: 
+            0 2px 8px rgba(13, 148, 136, 0.25),
+            0 4px 16px rgba(13, 148, 136, 0.15);
+        }
+
+        .chat-input__recording-send:hover {
+          transform: scale(1.04);
+          box-shadow: 
+            0 4px 12px rgba(13, 148, 136, 0.3),
+            0 6px 20px rgba(13, 148, 136, 0.2);
+        }
+
+        .chat-input__recording-send:active {
+          transform: scale(0.96);
         }
 
         /* Dark mode recording UI */
         @media (prefers-color-scheme: dark) {
-          .chat-input__recording-btn:focus-visible {
-            outline-color: rgba(255, 255, 255, 0.3);
+          .chat-input__recording-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.4);
           }
 
-          .chat-input__recording-btn--cancel {
-            background: rgba(255, 255, 255, 0.06);
+          .chat-input__recording-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.6);
+          }
+
+          .chat-input__recording-status {
             color: rgba(255, 255, 255, 0.5);
           }
 
-          .chat-input__recording-btn--cancel:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.8);
-          }
-
-          .chat-input__recording-btn--send {
-            background: white;
-            color: black;
-          }
-
-          .chat-input__recording-btn--send:hover {
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12);
-          }
-
-          .chat-input__recording-time {
-            color: rgba(255, 255, 255, 0.4);
+          .chat-input__recording-dots span {
+            background: rgba(255, 255, 255, 0.4);
           }
         }
 
@@ -2299,9 +2343,18 @@ export default function ChatInput({
             height: 38px;
           }
 
-          .chat-input__recording-btn {
+          .chat-input__recording-cancel {
             width: 40px;
             height: 40px;
+          }
+
+          .chat-input__recording-send {
+            width: 48px;
+            height: 48px;
+          }
+
+          .chat-input__recording-status {
+            font-size: 16px;
           }
 
           .chat-input__attachments {
@@ -2353,12 +2406,14 @@ export default function ChatInput({
           .chat-input,
           .chat-input__container,
           .chat-input__btn,
-          .chat-input__recording-btn {
+          .chat-input__recording-cancel,
+          .chat-input__recording-send {
             transition: none;
           }
 
           .chat-input__spinner,
-          .attachment-preview__spinner {
+          .attachment-preview__spinner,
+          .chat-input__recording-dots span {
             animation-duration: 1.5s;
           }
         }

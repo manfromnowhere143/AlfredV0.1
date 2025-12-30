@@ -135,6 +135,27 @@ export default function AlfredChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
 
+  // Prevent iOS viewport resize on keyboard open - lock visual viewport
+  useEffect(() => {
+    const setViewportHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    setViewportHeight();
+    
+    // Only update on orientation change, not on resize (keyboard)
+    const handleOrientationChange = () => {
+      setTimeout(setViewportHeight, 100);
+    };
+    
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    return () => {
+      window.removeEventListener('orientationchange', handleOrientationChange);
+    };
+  }, []);
+
   useEffect(() => {
     const initializeApp = async () => {
       setLoadingProgress(10);
@@ -388,11 +409,13 @@ export default function AlfredChat() {
             <ConversationLoader />
           ) : !hasMessages ? (
             <div className="chat-empty">
-              {isSignedIn && <GoldenSpiral3D />}
-              {!isSignedIn && (
-                <div className="brand-container">
-                  <h1 className="chat-empty-brand">Alfred</h1>
-                  <p className="chat-empty-tagline">A product architect with taste</p>
+              {/* Title - Always visible, stable position at top */}
+              <h1 className="chat-empty-brand">Alfred</h1>
+              
+              {/* Golden Spiral - Only when signed in, below title */}
+              {isSignedIn && (
+                <div className="spiral-container">
+                  <GoldenSpiral3D />
                 </div>
               )}
             </div>
@@ -505,14 +528,43 @@ export default function AlfredChat() {
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* BRAND CONTAINER - For non-signed-in state                                       */
+        /* CHAT EMPTY - Stable Layout (Perplexity-style)                                   */
+        /* Title stays at fixed position from top, never moves                             */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
-        .brand-container {
+        .chat-empty {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
+          padding-top: 22vh;
+          pointer-events: none;
+          /* Prevent keyboard from affecting this container */
+          overflow: hidden;
+        }
+        
+        .chat-empty-brand {
+          font-family: var(--font-display, 'SF Pro Display', -apple-system, sans-serif);
+          font-size: clamp(40px, 8vw, 56px);
+          font-weight: 200;
+          letter-spacing: -0.03em;
+          color: var(--text-primary, #fff);
+          margin: 0;
+          opacity: 0.95;
+          user-select: none;
+          /* Ensure text stays crisp */
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .spiral-container {
+          margin-top: 24px;
+          pointer-events: auto;
         }
         
         @media (max-width: 768px) {
@@ -534,6 +586,27 @@ export default function AlfredChat() {
           .line-2 { width: 16px; }
           .line-3 { width: 10px; }
           .line-3.open { width: 20px; }
+          
+          .chat-empty {
+            padding-top: 18vh;
+          }
+          
+          .chat-empty-brand {
+            font-size: clamp(36px, 10vw, 44px);
+          }
+          
+          .spiral-container {
+            margin-top: 20px;
+          }
+        }
+        
+        /* iOS keyboard fix - use visual viewport */
+        @supports (-webkit-touch-callout: none) {
+          .chat-empty {
+            /* Lock to initial viewport height */
+            height: 100%;
+            height: -webkit-fill-available;
+          }
         }
       `}</style>
     </>
