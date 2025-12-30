@@ -433,10 +433,12 @@ export default function AlfredChat() {
             <ConversationLoader />
           ) : !hasMessages ? (
             <div className="chat-empty">
-              {/* Title - Always visible, stable position at top */}
-              <h1 className="chat-empty-brand">Alfred</h1>
+              {/* Title - Only when NOT signed in */}
+              {!isSignedIn && (
+                <h1 className="chat-empty-brand">Alfred</h1>
+              )}
               
-              {/* Golden Spiral - Only when signed in, below title */}
+              {/* Golden Spiral - Only when signed in */}
               {isSignedIn && (
                 <div className="spiral-container">
                   <GoldenSpiral3D />
@@ -590,7 +592,6 @@ export default function AlfredChat() {
         }
         
         .spiral-container {
-          margin-top: 24px;
           pointer-events: auto;
         }
         
@@ -623,7 +624,6 @@ export default function AlfredChat() {
           }
           
           .spiral-container {
-            margin-top: 20px;
             transform: scale(0.85);
           }
         }
