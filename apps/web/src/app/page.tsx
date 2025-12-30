@@ -137,14 +137,38 @@ export default function AlfredChat() {
 
   // Prevent iOS viewport resize on keyboard open - lock visual viewport
   useEffect(() => {
+    // Set initial viewport height
     const setViewportHeight = () => {
       const vh = window.innerHeight * 0.01;
       document.documentElement.style.setProperty('--vh', `${vh}px`);
+      document.documentElement.style.setProperty('--initial-vh', `${vh}px`);
     };
     
     setViewportHeight();
     
-    // Only update on orientation change, not on resize (keyboard)
+    // Handle Visual Viewport for keyboard detection (iOS Safari)
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      const viewport = window.visualViewport;
+      
+      const handleViewportChange = () => {
+        // Calculate keyboard height
+        const keyboardHeight = window.innerHeight - viewport.height;
+        document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+        
+        // Update viewport offset for smooth positioning
+        document.documentElement.style.setProperty('--viewport-offset', `${viewport.offsetTop}px`);
+      };
+      
+      viewport.addEventListener('resize', handleViewportChange);
+      viewport.addEventListener('scroll', handleViewportChange);
+      
+      return () => {
+        viewport.removeEventListener('resize', handleViewportChange);
+        viewport.removeEventListener('scroll', handleViewportChange);
+      };
+    }
+    
+    // Fallback: only update on orientation change
     const handleOrientationChange = () => {
       setTimeout(setViewportHeight, 100);
     };
@@ -528,8 +552,7 @@ export default function AlfredChat() {
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* CHAT EMPTY - Stable Layout (Perplexity-style)                                   */
-        /* Title stays at fixed position from top, never moves                             */
+        /* CHAT EMPTY - Rock solid, never moves                                            */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .chat-empty {
@@ -537,15 +560,18 @@ export default function AlfredChat() {
           top: 0;
           left: 0;
           right: 0;
-          bottom: 0;
+          /* Use initial viewport height - keyboard doesn't affect this */
+          height: calc(var(--initial-vh, 1vh) * 100);
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
           padding-top: 22vh;
           pointer-events: none;
-          /* Prevent keyboard from affecting this container */
           overflow: hidden;
+          /* GPU acceleration for smooth rendering */
+          -webkit-transform: translate3d(0, 0, 0);
+          transform: translate3d(0, 0, 0);
         }
         
         .chat-empty-brand {
@@ -557,9 +583,10 @@ export default function AlfredChat() {
           margin: 0;
           opacity: 0.95;
           user-select: none;
-          /* Ensure text stays crisp */
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
+          /* Absolutely positioned relative to container, not affected by keyboard */
+          position: relative;
         }
         
         .spiral-container {
@@ -588,23 +615,24 @@ export default function AlfredChat() {
           .line-3.open { width: 20px; }
           
           .chat-empty {
-            padding-top: 18vh;
+            padding-top: 15vh;
           }
           
           .chat-empty-brand {
-            font-size: clamp(36px, 10vw, 44px);
+            font-size: clamp(36px, 12vw, 48px);
           }
           
           .spiral-container {
             margin-top: 20px;
+            transform: scale(0.85);
           }
         }
         
-        /* iOS keyboard fix - use visual viewport */
+        /* iOS specific - prevent ALL keyboard layout shift */
         @supports (-webkit-touch-callout: none) {
           .chat-empty {
-            /* Lock to initial viewport height */
-            height: 100%;
+            /* Lock to window height at load time */
+            height: 100vh;
             height: -webkit-fill-available;
           }
         }
