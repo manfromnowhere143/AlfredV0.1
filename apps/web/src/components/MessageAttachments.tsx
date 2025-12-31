@@ -31,7 +31,7 @@ function formatDuration(seconds: number): string {
 
 function getMediaUrl(attachment: Attachment): string {
   // Videos need serve API for proper streaming headers
-  if (attachment.type === 'video' && attachment.id) return '/api/files/serve?id=' + attachment.id;
+  if (attachment.type === 'video') { if (attachment.url?.startsWith('http')) return attachment.url; if (attachment.id) return '/api/files/serve?id=' + attachment.id; }
   if (attachment.url?.startsWith('http')) return attachment.url;
   if (attachment.preview) return attachment.preview;
   if (attachment.url?.startsWith('/uploads')) return attachment.url;
