@@ -856,8 +856,6 @@
   
   /* Messages area */
   .chat-messages {
-    contain: layout style;
-    will-change: scroll-position;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -1158,8 +1156,6 @@
     }
     
     .chat-messages {
-    contain: layout style;
-    will-change: scroll-position;
       /* PUSHED DOWN - 2 inches clearance from top */
       padding-top: 200px;
       padding-bottom: 160px;
@@ -1203,8 +1199,6 @@
     }
     
     .chat-messages {
-    contain: layout style;
-    will-change: scroll-position;
       /* PUSHED DOWN - 2 inches clearance from top */
       padding-top: 180px;
       padding-bottom: 150px;
