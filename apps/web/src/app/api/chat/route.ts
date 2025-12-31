@@ -407,7 +407,7 @@ export async function POST(request: NextRequest) {
       // Image instructions
       if (imageFiles.length > 0) {
         const imgList = imageFiles.map((f: FileAttachment) => 
-          `  - ${f.name}: /api/files/serve?id=${f.id}`
+          `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
         ).join('\n');
         
         mediaContext += `
@@ -423,7 +423,7 @@ To DISPLAY images in React preview:
       // Video instructions - Claude can't see these but can use the URL
       if (videoFiles.length > 0) {
         const vidList = videoFiles.map((f: FileAttachment) => 
-          `  - ${f.name}: /api/files/serve?id=${f.id}`
+          `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
         ).join('\n');
         
         mediaContext += `
