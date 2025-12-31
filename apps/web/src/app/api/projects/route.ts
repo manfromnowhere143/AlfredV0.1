@@ -16,7 +16,7 @@ export async function GET() {
       .where(eq(projects.userId, session.user.id))
       .orderBy(desc(projects.updatedAt));
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data }, { headers: { "Cache-Control": "private, max-age=5, stale-while-revalidate=30" } });
   } catch (error) {
     console.error('[API] GET /projects error:', error);
     return NextResponse.json({ data: [] });
