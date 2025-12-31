@@ -845,25 +845,27 @@ export default function ChatInput({
         continue;
       }
 
-      // Generate preview
-      try {
-        if (type === 'image') {
-          attachment.preview = await fileToDataURL(file);
-        } else if (type === 'video') {
-          const metadata = await extractVideoMetadata(file);
-          attachment.preview = metadata.preview;
-          attachment.duration = metadata.duration;
+      // Add attachment immediately (non-blocking UI)
+      setAttachments(prev => [...prev, { ...attachment, status: 'uploading', progress: 10 }]);
+
+      // Generate preview in background (non-blocking)
+      if (type === 'image') {
+        fileToDataURL(file).then(preview => {
+          setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview } : a));
+        }).catch(() => {});
+      } else if (type === 'video') {
+        // Skip slow metadata extraction on mobile, just use placeholder
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        if (!isMobile) {
+          extractVideoMetadata(file).then(metadata => {
+            setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: metadata.preview, duration: metadata.duration } : a));
+          }).catch(() => {});
         }
-      } catch (error) {
-        console.warn('Failed to generate preview:', error);
       }
 
-      // Add attachment
-      setAttachments(prev => [...prev, attachment]);
-
-      // Start upload
+      // Start upload immediately (parallel with preview)
       setAttachments(prev =>
-        prev.map(a => a.id === id ? { ...a, status: 'uploading', progress: 30 } : a)
+        prev.map(a => a.id === id ? { ...a, progress: 30 } : a)
       );
 
       try {
