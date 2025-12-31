@@ -359,16 +359,45 @@ export async function POST(request: NextRequest) {
     const baseSystemPrompt = buildSystemPrompt({ skillLevel });
     let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
     
-    if (hasFiles) {
-      const fileList = incomingFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
+    // Load history files if continuing a conversation
+    let historyFiles: FileAttachment[] = [];
+    if (existingConvId) {
+      try {
+        const dbHistoryFiles = await db
+          .select()
+          .from(files)
+          .where(eq(files.conversationId, existingConvId));
+        
+        historyFiles = dbHistoryFiles
+          .filter(f => !incomingFiles.some(inc => inc.id === f.id))
+          .map(f => ({
+            id: f.id,
+            name: f.originalName,
+            type: f.mimeType,
+            size: f.size,
+            url: f.url,
+          }));
+        
+        if (historyFiles.length > 0) {
+          console.log(`[Alfred] Found ${historyFiles.length} files from conversation history`);
+        }
+      } catch (e) {
+        console.error('[Alfred] Error loading history files:', e);
+      }
+    }
+    
+    const allFiles = [...incomingFiles, ...historyFiles];
+    
+    if (hasFiles || historyFiles.length > 0) {
+      const fileList = allFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
       
       // Separate images and videos
-      const imageFiles = incomingFiles.filter((f: FileAttachment) => {
+      const imageFiles = allFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isImage(mime);
       });
       
-      const videoFiles = incomingFiles.filter((f: FileAttachment) => {
+      const videoFiles = allFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isVideo(mime);
       });
