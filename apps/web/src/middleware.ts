@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
       }
       
-      return NextResponsjson(
+      return NextResponse.json(
         { error: 'Unauthorized', message: 'Please sign in' },
         { status: 401 }
       );
