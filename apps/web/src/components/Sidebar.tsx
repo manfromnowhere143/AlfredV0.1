@@ -391,7 +391,7 @@ const Sidebar = React.memo(function Sidebar({
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
         .user-panel {
-          contain: layout style paint;
+          contain: layout style;
           will-change: transform;
           position: fixed;
           top: 24px;
@@ -978,7 +978,7 @@ const Sidebar = React.memo(function Sidebar({
         
         @media (max-width: 768px) {
           .user-panel {
-          contain: layout style paint;
+          contain: layout style;
           will-change: transform; top: 16px; left: 16px; }
           .control-panel.left { left: 16px; }
           .control-panel.right { right: 16px; }
