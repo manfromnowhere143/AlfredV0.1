@@ -2,7 +2,7 @@
 
 /**
  * PRICING PAGE — State of the Art
- * Mobile: Beautiful compact cards, ALL features, fits perfectly
+ * Mobile: All 3 cards fit perfectly on one screen
  */
 
 import { useState, useEffect, Suspense } from 'react';
@@ -37,7 +37,7 @@ const plans = [
     name: 'Enterprise',
     price: 50,
     period: 'month',
-    description: 'Deployo production',
+    description: 'Deploy to production',
     features: ['Unlimited tokens', 'Production deploy', 'API access', 'White-glove support'],
     cta: 'Coming Soon',
     highlight: false,
@@ -137,7 +137,7 @@ function PricingContent() {
       </main>
 
       <style jsx>{`
-        /* ═══════════════════════════════?beautiful 3-column layout
+        /* ════════════════════════════════════?lumn layout
            ═══════════════════════════════════════════════════════════════ */
         .pricing-page {
           min-height: 100vh;
@@ -168,7 +168,7 @@ function PricingContent() {
           font-size: 13px;
           font-weight: 400;
           cursor: pointer;
- 5,255,255,0.25));
+          trans));
           color: var(--text-primary, #fff);
         }
 
@@ -407,22 +407,19 @@ function PricingContent() {
           margin: 0;
         }
 
-        /* ═══════════════════════════════════════════════════════════════
-           MOBILE — State of the art, ALL features, fits one screen
+        /* ══???═══════════════════════════════════════════════════════
+           MOBILE — All 3 cards fit perfectly, no scroll
            ═══════════════════════════════════════════════════════════════ */
         @media (max-width: 800px) {
           .pricing-page {
             position: fixed;
             inset: 0;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
           }
           
           .nav {
-            position: relative;
-            padding: 16px 20px;
-            flex-shrink: 0;
+            position: absolute;
+            padding: 12px 16px;
           }
           
           .back-text { display: none; }
@@ -432,168 +429,101 @@ function PricingContent() {
             width: 36px;
             height: 36px;
             justify-content: center;
-      margin-bottom: 24px;
-            flex-shrink: 0;
-          }
-          
-          .tagline {
-            font-size: 14px;
+            border-radius: 10px;
           }
 
-          .plans {
-            grid-template-columns: 1fr;
-            gap: 12px;
-          }
+          .main {
+            height: 100%;
+            max-width: none;
+            pa  }
 
-          /* ─────────────────────────────────────────────────────────────
-             CARD — Elegant vertical layout with 2-column features
-             ───────────────────────────────────────────────────────────── */
           .plan {
-            padding: 18px 20px;
-            border-radius: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
           }
 
           .plan-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 14px;
+            margin-bottom: 8px;
           }
 
           .plan-info {
-            margin-bottomtext-align: right;
+            margin-bottom: 0;
           }
 
-          .currency {
-            font-size: 14px;
+          .plan-name {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 2px;
           }
 
-          .amount {
-            font-size: 28px;
-          }
-
-          .period {
+          .plan-desc {
             font-size: 10px;
-            display: block;
-            margin-left: 0;
-            margin-top: 2px;
+          }
+
+          .plan-price {
             text-align: right;
           }
 
-          /* Features as elegant 2-column grid */
+          .currency {
+            font-size: 12px;
+          }
+
+          .amount {
+            font-size: 24px;
+          }
+
+          .period {
+            font-size: 9px;
+            display: block;
+            margin-left: 0;
+            text-align: right;
+          }
+
           .features {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 6px 16px;
-            margin-bottom: 14px;
-            padding-top: 14px;
+            gap: 2px 12px;
+            margin-bottom: 10px;
+            padding-top: 8px;
             border-top: 1px solid rgba(255,255,255,0.06);
           }
 
           .features li {
             padding: 0;
-            font-size: 11px;
-            gap: 6px;
+            font-size: 10px;
+            gap: 5px;
           }
 
           .features li svg {
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
           }
 
           .cta {
-            padding: 10px 16px;
-            font-size: 12px;
+            padding: 9px 14px;
+            font-size: 11px;
             border-radius: 8px;
           }
 
           .coming-soon-badge {
-            top: 10px;
-            right: 10px;
-            padding: 3px 8px;
-            font-size: 9px;
+            top: 8px;
+            right: 8px;
+            padding: 2px 6px;
+            font-size: 8px;
           }
 
-          .highlight-border {
-            display: none;
-          }
+          .highlight-border { display: none; }
 
           .footer {
-            margin-top: 20px;
-            flex-shrink: 0;
+            margin-top: 14px;
           }
 
           .footer p {
-            font-size: 10px;
+            font-size: 9px;
           }
-        }
-
-        /* Small phones & short screens */
-        @media (max-width: 380px), (max-height: 680px) {
-          .nav { padding: 12px 16px; }
-          
-          .main { padding: 0 16px 16px; }
-          
-          .header { margin-bottom: 16px; }
-          
-          .tagline { font-size: 13px; }
-
-          .plans { gap: 10px; }
-
-          .plan { padding: 14px 16px; }
-
-          .plan-header { margin-bottom: 10px; }
-
-          .plan-name { font-size: 15px; }
-
-          .plan-desc { font-size: 10px; }
-
-          .amount { font-size: 24px; }
-
-          .features {
-            gap: 4px 12px;
-            margin-bottom: 12px;
-            padding-top: 10px;
-          }
-
-          .features li { font-size: 10px; }
-
-          .cta { padding: 8px 14px; font-size: 11px; }
-
-          .footer { margin-top: 14px; }
-        }
-
-        /* Extra small (iPhone SE) */
-        @media (max-height: 600px) {
-          .main { padding: 0 14px 12px; }
-          
-          .header { margin-bottom: 12px; }
-
-          .plans { gap: 8px; }
-
-          .plan { padding: 12px 14px; }
-
-          .plan-header { margin-bottom: 8px; }
-
-          .plan-name { font-size: 14px; }
-
-          .amount { font-size: 22px; }
-
-          .features {
-            gap: 3px 10px;
-            margin-bottom: 10px;
-            padding-top: 8px;
-          }
-
-          .features li { font-size: 9px; gap: 4px; }
-
-          .features li svg { width: 8px; height: 8px; }
-
-          .cta { padding: 7px 12px; font-size: 10px; }
-
-          .footer { margin-top: 10px; }
-          
-          .footer p { font-size: 9px; }
         }
       `}</style>
     </div>
