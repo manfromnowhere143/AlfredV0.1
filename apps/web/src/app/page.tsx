@@ -358,7 +358,7 @@ export default function AlfredChat() {
                   fullContent += parsed.content;
                   streamingContentRef.current = fullContent;
                   const now = Date.now();
-                  if (now - lastTickRef.current > 50) {
+                  if (now - lastTickRef.current > 200) {
                     lastTickRef.current = now;
                     setStreamingTick(t => t + 1);
                   }
