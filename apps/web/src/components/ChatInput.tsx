@@ -850,9 +850,18 @@ export default function ChatInput({
       // Add attachment immediately (non-blocking UI)
       setAttachments(prev => [...prev, { ...attachment, status: 'uploading', progress: 10 }]);
 
-      // Instant preview using createObjectURL (no file reading needed)
-      const instantPreview = URL.createObjectURL(file);
-      setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: instantPreview } : a));
+      // Instant preview - images use blob URL, videos extract thumbnail
+      if (attachment.type === 'video') {
+        extractVideoMetadata(file).then(({ preview, duration }) => {
+          setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview, duration } : a));
+        }).catch(() => {
+          // Fallback to blob URL if extraction fails
+          setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: URL.createObjectURL(file) } : a));
+        });
+      } else {
+        const instantPreview = URL.createObjectURL(file);
+        setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: instantPreview } : a));
+      }
 
       // Start upload immediately (parallel with preview)
       setAttachments(prev =>
