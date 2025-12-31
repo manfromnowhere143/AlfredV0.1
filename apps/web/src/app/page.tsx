@@ -268,8 +268,8 @@ export default function AlfredChat() {
     if (el.scrollTop < lastScrollTopRef.current - 10) {
       userHasScrolledRef.current = true;
     }
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-    if (isAtBottom) userHasScrolledRef.current = false;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+    
     lastScrollTopRef.current = el.scrollTop;
   }, []);
   useEffect(() => { if (isLoading) userHasScrolledRef.current = false; }, [isLoading]);
