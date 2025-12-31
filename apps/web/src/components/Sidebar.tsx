@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -35,7 +36,7 @@ interface SidebarProps {
 // FLOATING CONTROL PANEL - State of the Art
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export default function Sidebar({
+const Sidebar = React.memo(function Sidebar({
   isOpen,
   onClose,
   projects = [],
@@ -995,4 +996,5 @@ export default function Sidebar({
       `}</style>
     </>
   );
-}
+});
+export default Sidebar;

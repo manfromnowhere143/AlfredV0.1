@@ -128,7 +128,9 @@ export default function AlfredChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
-  const [streamingContent, setStreamingContent] = useState('');
+  const streamingContentRef = useRef('');
+  const [streamingTick, setStreamingTick] = useState(0);
+  const lastTickRef = useRef(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
 
@@ -273,7 +275,7 @@ export default function AlfredChat() {
     lastScrollTopRef.current = el.scrollTop;
   }, []);
   useEffect(() => { if (isLoading) userHasScrolledRef.current = false; }, [isLoading]);
-  useEffect(() => { scrollToBottom(); }, [messages, streamingContent, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [messages, streamingTick, scrollToBottom]);
 
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
     if (method === 'google') {
@@ -309,7 +311,7 @@ export default function AlfredChat() {
     
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
-    setStreamingContent('');
+    streamingContentRef.current = '';
 
     try {
       const response = await fetch('/api/chat', {
@@ -349,7 +351,12 @@ export default function AlfredChat() {
                 const parsed = JSON.parse(data);
                 if (parsed.content) {
                   fullContent += parsed.content;
-                  setStreamingContent(fullContent);
+                  streamingContentRef.current = fullContent;
+                  const now = Date.now();
+                  if (now - lastTickRef.current > 50) {
+                    lastTickRef.current = now;
+                    setStreamingTick(t => t + 1);
+                  }
                 }
                 if (parsed.conversationId && !conversationId.current) {
                   conversationId.current = parsed.conversationId;
@@ -377,7 +384,7 @@ export default function AlfredChat() {
       }]);
     } finally {
       setIsLoading(false);
-      setStreamingContent('');
+      streamingContentRef.current = '';
     }
   };
 
@@ -481,17 +488,17 @@ export default function AlfredChat() {
                       files={message.files}
                     />
                   ))}
-                  {isLoading && streamingContent && (
+                  {isLoading && streamingContentRef.current && (
                     <Message
                       id="streaming"
                       role="alfred"
-                      content={streamingContent}
+                      content={streamingContentRef.current}
                       timestamp={new Date()}
                       isStreaming
                     />
                   )}
                 </ArtifactProvider>
-                {isLoading && !streamingContent && <AlfredThinking />}
+                {isLoading && !streamingContentRef.current && <AlfredThinking />}
                 <div ref={messagesEndRef} />
               </div>
             </div>
