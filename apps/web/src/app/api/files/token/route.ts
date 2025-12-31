@@ -10,15 +10,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
+  
   const body = (await request.json()) as HandleUploadBody;
-
+  
   try {
     const jsonResponse = await handleUpload({
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        // Authenticate user before generating token
         return {
           allowedContentTypes: [
             'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -29,12 +28,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           tokenPayload: JSON.stringify({ userId }),
         };
       },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // This runs after upload completes
-        console.log('[Blob] Upload completed:', blob.url);
-      },
+      // Removed onUploadCompleted - we register files in /api/files/register instead
     });
-
+    
     return NextResponse.json(jsonResponse);
   } catch (error) {
     console.error('[Blob Token] Error:', error);
