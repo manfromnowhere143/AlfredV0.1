@@ -77,7 +77,7 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
 
   useEffect(() => {
     if (isVideo) {
-      const timeout = setTimeout(() => setIsLoaded(true), 300);
+      const timeout = setTimeout(() => setIsLoaded(true), typeof window !== "undefined" && window.innerWidth < 768 ? 500 : 300);
       return () => clearTimeout(timeout);
     }
   }, [isVideo, attachment.id]);
@@ -175,14 +175,14 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
         .lightbox-image, .lightbox-video { 
           max-width: min(90vw, 900px); max-height: min(85vh, 700px); 
           object-fit: contain; border-radius: 8px; 
-          opacity: 0; transform: scale(0.97); 
+          opacity: 0; transform: scale(0.98); 
           transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
         }
         .lightbox-image.loaded, .lightbox-video.loaded { opacity: 1; transform: scale(1); }
         @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
         @keyframes fadeOut { 0% { opacity: 1; } 100% { opacity: 0; } }
         @keyframes scaleIn { 0% { opacity: 0; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1); } }
-        @keyframes scaleOut { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.97); } }
+        @keyframes scaleOut { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.98); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 768px) {
           .lightbox-media { padding: 60px 16px 24px; }
