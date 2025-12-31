@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { db } from '@alfred/database';
 import { users } from '@alfred/database';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const TIER_LIMITS = {
   free: { dailyTokens: 17_000, monthlyTokens: 500_000 },
@@ -31,12 +32,12 @@ function getSecondsUntilMidnight(): number {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    const userId = session.user.id;
     
     const [user] = await db
       .select({ tier: users.tier })
@@ -60,7 +61,6 @@ export async function GET(req: NextRequest) {
     const today = getTodayString();
     const monthStart = getMonthStart();
     
-    // Raw SQL for usage table
     const dailyResult = await db.execute(
       sql`SELECT COALESCE(SUM(output_tokens), 0) as tokens, COALESCE(SUM(request_count), 0) as requests, COALESCE(SUM(artifact_count), 0) as artifacts FROM usage WHERE user_id = ${userId} AND date = ${today}`
     );
@@ -72,8 +72,8 @@ export async function GET(req: NextRequest) {
     const dailyUsage = dailyResult.rows[0] || { tokens: 0, requests: 0, artifacts: 0 };
     const monthlyUsage = monthlyResult.rows[0] || { tokens: 0, requests: 0, artifacts: 0 };
     
-    const dailyUsed = Number(dailyUsage.tokens || 0);
-    const monthlyUsed = Number(monthlyUsage.tokens || 0);
+    const dailyUsed = Number((dailyUsage as any).tokens || 0);
+    const monthlyUsed = Number((monthlyUsage as any).tokens || 0);
     
     return NextResponse.json({
       tier,
@@ -83,16 +83,16 @@ export async function GET(req: NextRequest) {
         limit: limits.dailyTokens,
         remaining: Math.max(0, limits.dailyTokens - dailyUsed),
         percent: Math.round((dailyUsed / limits.dailyTokens) * 100),
-        requests: Number(dailyUsage.requests || 0),
-        artifacts: Number(dailyUsage.artifacts || 0),
+        requests: Number((dailyUsage as any).requests || 0),
+        artifacts: Number((dailyUsage as any).artifacts || 0),
       },
       monthly: {
         used: monthlyUsed,
         limit: limits.monthlyTokens,
         remaining: Math.max(0, limits.monthlyTokens - monthlyUsed),
         percent: Math.round((monthlyUsed / limits.monthlyTokens) * 100),
-        requests: Number(monthlyUsage.requests || 0),
-        artifacts: Number(monthlyUsage.artifacts || 0),
+        requests: Number((monthlyUsage as any).requests || 0),
+        artifacts: Number((monthlyUsage as any).artifacts || 0),
       },
       resetInSeconds: getSecondsUntilMidnight(),
     });
