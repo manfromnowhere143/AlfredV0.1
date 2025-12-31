@@ -116,7 +116,7 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
         )}
 
         <div className="lightbox-media">
-          {!isLoaded && <div className="lightbox-loader"><div className="lightbox-spinner" /></div>}
+          {!isLoaded && !isVideo && <div className="lightbox-loader"><div className="lightbox-spinner" /></div>}
           {isVideo ? (
             <video src={mediaUrl} controls autoPlay playsInline onLoadedData={() => setIsLoaded(true)} className={'lightbox-video ' + (isLoaded ? 'loaded' : '')} />
           ) : (
