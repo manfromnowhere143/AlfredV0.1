@@ -57,7 +57,7 @@ interface ParsedContent { type: 'text' | 'code' | 'code-streaming'; content: str
 // MESSAGE ACTIONS - State of the art like Claude
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function MessageActions({ content, isAlfred }: { content: string; isAlfred: boolean }) {
+const MessageActions = React.memo(function MessageActions({ content, isAlfred }: { content: string; isAlfred: boolean }) {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState<boolean | null>(null);
 
@@ -106,7 +106,7 @@ function MessageActions({ content, isAlfred }: { content: string; isAlfred: bool
       `}</style>
     </div>
   );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PARSING
@@ -443,7 +443,7 @@ function processInline(text: string, key: number): React.ReactNode[] {
 // MESSAGE COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export default function Message({ id, role, content, timestamp, isStreaming = false, files }: MessageProps) {
+const Message = React.memo(function Message({ id, role, content, timestamp, isStreaming = false, files }: MessageProps) {
   const parsedContent = useMemo(() => parseContent(content, isStreaming), [content, isStreaming]);
 
   let artifactCtx: ArtifactContextType | null = null;
@@ -484,7 +484,8 @@ export default function Message({ id, role, content, timestamp, isStreaming = fa
       `}</style>
     </div>
   );
-}
+});
+export default Message;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ALFRED THINKING
