@@ -72,8 +72,17 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
 
   useEffect(() => { setIsLoaded(false); }, [attachment.id]);
 
-  const mediaUrl = getMediaUrl(attachment);
+  // Auto-show video after timeout (cross-origin videos dont fire onLoadedData reliably)
   const isVideo = attachment.type === 'video';
+
+  useEffect(() => {
+    if (isVideo) {
+      const timeout = setTimeout(() => setIsLoaded(true), 300);
+      return () => clearTimeout(timeout);
+    }
+  }, [isVideo, attachment.id]);
+
+  const mediaUrl = getMediaUrl(attachment);
 
   return (
     <div className="lightbox-root">
@@ -192,6 +201,14 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
   const [isHovered, setIsHovered] = useState(false);
   const mediaUrl = getMediaUrl(attachment);
   const isVideo = attachment.type === 'video';
+
+  // Auto-show video thumbnail (cross-origin videos dont fire onLoadedData)
+  useEffect(() => {
+    if (isVideo && !isLoaded && !hasError) {
+      const timeout = setTimeout(() => setIsLoaded(true), 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [isVideo, isLoaded, hasError]);
 
   return (
     <button className="thumb-container" onClick={onClick} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} style={{ animationDelay: index * 40 + 'ms' }}>
