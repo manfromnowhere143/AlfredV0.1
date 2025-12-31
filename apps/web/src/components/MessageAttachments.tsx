@@ -30,6 +30,8 @@ function formatDuration(seconds: number): string {
 }
 
 function getMediaUrl(attachment: Attachment): string {
+  // Videos need serve API for proper streaming headers
+  if (attachment.type === 'video' && attachment.id) return '/api/files/serve?id=' + attachment.id;
   if (attachment.url?.startsWith('http')) return attachment.url;
   if (attachment.preview) return attachment.preview;
   if (attachment.url?.startsWith('/uploads')) return attachment.url;
@@ -203,6 +205,7 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
           </div>
         ) : isVideo ? (
           <>
+            <div className="thumb-video-bg" />
             <video src={mediaUrl} onLoadedData={() => setIsLoaded(true)} onError={() => setHasError(true)} muted playsInline className={'thumb-video ' + (isLoaded ? 'loaded' : '')} />
             <div className="thumb-play"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg></div>
             {attachment.duration && <span className="thumb-duration">{formatDuration(attachment.duration)}</span>}
@@ -241,7 +244,8 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
         .thumb-skeleton { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.05) 100%); overflow: hidden; }
         .thumb-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent); animation: shimmer 1.5s infinite; }
         .thumb-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.25); }
-        .thumb-image, .thumb-video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.35s ease; }
+        .thumb-video-bg { position: absolute; inset: 0; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); }
+        .thumb-image, .thumb-video { position: relative; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.35s ease; }
         .thumb-image.loaded, .thumb-video.loaded { opacity: 1; }
         .thumb-play { 
           position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 

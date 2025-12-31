@@ -302,7 +302,7 @@ export default function AlfredChat() {
             type: a.type === 'image' ? 'image/' + (a.name.split('.').pop()?.toLowerCase() || 'jpeg') : a.type,
             size: a.size,
             url: a.url,
-            base64: a.base64,
+            base64: a.type === 'video' ? undefined : a.base64,
           })),
         }),
       });
