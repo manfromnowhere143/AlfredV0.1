@@ -434,8 +434,8 @@ function PricingContent() {
 
           .main {
             height: 100%;
-            max-width: none;
-            pa  }
+            max-width: none; padding: 50px 16px 16px; justify-content: center;
+            padding: 50px 16px 16px; justify-content: center; } .header { display: none; } .plans { grid-template-columns: 1fr 1fr; gap: 10px;
 
           .plan {
             padding: 12px 14px;
