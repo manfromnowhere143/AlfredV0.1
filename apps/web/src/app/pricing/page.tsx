@@ -266,7 +266,7 @@ function PricingContent() {
           padding: 4px 10px;
           background: var(--bg-elevated, rgba(255,255,255,0.1));
           border-radius: 6px;
-          font-size: 10px;
+          font-size: 10px; color: rgba(255,255,255,0.75);
           font-weight: 500;
           color: var(--text-muted, rgba(255,255,255,0.6));
           text-transform: uppercase;
@@ -286,7 +286,7 @@ function PricingContent() {
           margin: 0 0 6px;
         }
 
-        .plan-desc {
+        .plan-desc { color: rgba(255,255,255,0.7);
           font-size: 13px;
           color: var(--text-muted, rgba(255,255,255,0.4));
           margin: 0;
@@ -323,7 +323,7 @@ function PricingContent() {
           flex: 1;
         }
 
-        .features li {
+        .features li { color: rgba(255,255,255,0.85);
           display: flex;
           align-items: center;
           gap: 10px;
@@ -459,8 +459,8 @@ function PricingContent() {
             margin-bottom: 2px;
           }
 
-          .plan-desc {
-            font-size: 10px;
+          .plan-desc { color: rgba(255,255,255,0.7);
+            font-size: 10px; color: rgba(255,255,255,0.75);
           }
 
           .plan-price {
@@ -491,9 +491,9 @@ function PricingContent() {
             border-top: 1px solid rgba(255,255,255,0.06);
           }
 
-          .features li {
+          .features li { color: rgba(255,255,255,0.85);
             padding: 0;
-            font-size: 10px;
+            font-size: 10px; color: rgba(255,255,255,0.75);
             gap: 5px;
           }
 
