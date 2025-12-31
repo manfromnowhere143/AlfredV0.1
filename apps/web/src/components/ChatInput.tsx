@@ -867,8 +867,10 @@ export default function ChatInput({
         if (IS_LARGE_FILE) {
           // Client-side direct upload to Vercel Blob (bypasses API body limit)
           try {
-            const blob = await upload(file.name, file, {
-              access: 'public', addRandomSuffix: true,
+            // Add timestamp to prevent duplicate filename errors
+            const uniqueName = Date.now() + '-' + file.name;
+            const blob = await upload(uniqueName, file, {
+              access: 'public',
               handleUploadUrl: '/api/files/token',
             });
             
