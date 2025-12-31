@@ -868,9 +868,11 @@ export default function ChatInput({
           // Client-side direct upload to Vercel Blob (bypasses API body limit)
           try {
             const blob = await upload(file.name, file, {
-              access: 'public',
+              access: 'public', addRandomSuffix: true,
               handleUploadUrl: '/api/files/token',
             });
+            
+            console.log('[Upload] Blob success:', blob.url);
             
             // Register file in database
             const registerRes = await fetch('/api/files/register', {
@@ -885,11 +887,20 @@ export default function ChatInput({
               }),
             });
             
+            console.log('[Upload] Register response:', registerRes.status);
             if (registerRes.ok) {
               uploadResult = await registerRes.json();
+              console.log('[Upload] Register success:', uploadResult);
+            } else {
+              console.error('[Upload] Register failed:', await registerRes.text());
             }
           } catch (blobErr) {
             console.error('[Upload] Blob failed:', blobErr);
+            // Mark attachment as failed
+            setAttachments(prev =>
+              prev.map(a => a.id === id ? { ...a, status: 'error', progress: 0 } : a)
+            );
+            return; // Don't continue with broken upload
           }
         } else {
           // Small files go through API (faster, includes optimization)
