@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * PRICING PAGE — Uses Alfred Design System
- * Mobile: Compact elegant cards that fit ONE screen perfectly
+ * PRICING PAGE — State of the Art
+ * Mobile: Beautiful compact cards, ALL features, fits perfectly
  */
 
 import { useState, useEffect, Suspense } from 'react';
@@ -17,7 +17,6 @@ const plans = [
     period: 'forever',
     description: 'Explore Alfred',
     features: ['17K tokens/day', 'Basic chat', 'File uploads', 'Artifacts'],
-    shortFeature: '17K tokens/day',
     cta: 'Current Plan',
     highlight: false,
     comingSoon: false,
@@ -29,19 +28,17 @@ const plans = [
     period: 'month',
     description: 'Build with power',
     features: ['67K tokens/day', 'Architecture mode', 'Priority support', '4x more usage'],
-    shortFeature: '67K tokens/day',
     cta: 'Upgrade',
     highlight: true,
     comingSoon: false,
   },
   {
     id: 'enterprise',
-    na: 'Enterprise',
+    name: 'Enterprise',
     price: 50,
     period: 'month',
-    description: 'Deploy to production',
+    description: 'Deployo production',
     features: ['Unlimited tokens', 'Production deploy', 'API access', 'White-glove support'],
-    shortFeature: 'Unlimited',
     cta: 'Coming Soon',
     highlight: false,
     comingSoon: true,
@@ -104,26 +101,28 @@ function PricingContent() {
               <article key={plan.id} className={`plan ${plan.highlight ? 'highlight' : ''} ${plan.comingSoon ? 'coming-soon' : ''}`} style={{ animationDelay: `${index * 100}ms` }}>
                 {plan.highlight && <div className="highlight-border" />}
                 {plan.comingSoon && <div className="coming-soon-badge">Soon</div>}
-                <div className="plan-top">
-                  <h2 className="plan-name">{plan.name}</h2>
-                  <p className="plan-desc">{plan.description}</p>
+                
+                <div className="plan-header">
+                  <div className="plan-info">
+                    <h2 className="plan-name">{plan.name}</h2>
+                    <p className="plan-desc">{plan.description}</p>
+                  </div>
+                  <div className="plan-price">
+                    <span className="currency">$</span>
+                    <span className="amount">{plan.price}</span>
+                    <span className="period">/{plan.period}</span>
+                  </div>
                 </div>
-                <div className="plan-price">
-                  <span className="currency">$</span>
-                  <span className="amount">{plan.price}</span>
-                  <span className="period">/{plan.period}</span>
-                </div>
-                {/* Desktop features */}
-                <ul className="features desktop-features">
+
+                <ul className="features">
                   {plan.features.map((feature, idx) => (
                     <li key={idx}>
-                      <svg className="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                      <span>{feature}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                      {feature}
                     </li>
                   ))}
                 </ul>
-                {/* Mobile: single key feature */}
-                <div className="mobile-feature">{plan.shortFeature}</div>
+
                 <button className={`cta ${plan.highlight ? 'primary' : ''} ${isDisabled ? 'disabled' : ''}`} onClick={() => !plan.comingSoon && handleSubscribe(plan.id)} disabled={isDisabled}>
                   {isLoading ? <span className="spinner" /> : isCurrentPlan ? 'Current' : plan.cta}
                 </button>
@@ -138,8 +137,7 @@ function PricingContent() {
       </main>
 
       <style jsx>{`
-        /* ═══════════════════════════════════════════════════════════════
-           DESKTOP — Unchanged
+        /* ═══════════════════════════════?beautiful 3-column layout
            ═══════════════════════════════════════════════════════════════ */
         .pricing-page {
           min-height: 100vh;
@@ -161,15 +159,16 @@ function PricingContent() {
         .back-btn {
           display: inline-flex;
           align-items: center;
-     t-size: 13px;
+          gap: 8px;
+          padding: 8px 14px;
+          background: transparent;
+          border: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
+          border-radius: 8px;
+          color: var(--text-muted, rgba(255,255,255,0.6));
+          font-size: 13px;
           font-weight: 400;
           cursor: pointer;
-          transition: all 0.2s ease;
-          letter-spacing: 0.01em;
-        }
-
-        .back-btn:hover {
-          border-color: var(--border-default, rgba(255,255,255,0.25));
+ 5,255,255,0.25));
           color: var(--text-primary, #fff);
         }
 
@@ -251,10 +250,6 @@ function PricingContent() {
           opacity: 0.6;
         }
 
-        .plan.coming-soon:hover {
-          opacity: 0.7;
-        }
-
         .highlight-border {
           position: absolute;
           top: -1px;
@@ -277,8 +272,12 @@ function PricingContent() {
           text-transform: uppercase;
         }
 
-        .plan-top {
+        .plan-header {
           margin-bottom: 20px;
+        }
+
+        .plan-info {
+          margin-bottom: 16px;
         }
 
         .plan-name {
@@ -296,7 +295,6 @@ function PricingContent() {
         .plan-price {
           display: flex;
           align-items: baseline;
-          margin-bottom: 24px;
         }
 
         .currency {
@@ -334,13 +332,9 @@ function PricingContent() {
           color: var(--text-secondary, rgba(255,255,255,0.7));
         }
 
-        .features :global(.check-icon) {
+        .features li svg {
           color: var(--accent-gold, rgba(201, 185, 154, 0.5));
           flex-shrink: 0;
-        }
-
-        .mobile-feature {
-          display: none;
         }
 
         .cta {
@@ -414,168 +408,192 @@ function PricingContent() {
         }
 
         /* ═══════════════════════════════════════════════════════════════
-           MOBILE — Fits perfectly on one screen, no scroll
+           MOBILE — State of the art, ALL features, fits one screen
            ═══════════════════════════════════════════════════════════════ */
         @media (max-width: 800px) {
           .pricing-page {
             position: fixed;
             inset: 0;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
           }
           
           .nav {
-            position: absolute;
-    
+            position: relative;
+            padding: 16px 20px;
+            flex-shrink: 0;
           }
-
-          .main {
-            position: absolute;
-            inset: 0;
-            max-width: none;
-            padding: 60px 16px 16px;
+          
+          .back-text { display: none; }
+          
+          .back-btn {
+            padding: 8px;
+            width: 36px;
+            height: 36px;
             justify-content: center;
-            box-sizing: border-box;
-          }
-
-          .header {
-            margin-bottom: 20px;
+      margin-bottom: 24px;
+            flex-shrink: 0;
           }
           
           .tagline {
-            font-size: 13px;
-            opacity: 0.8;
+            font-size: 14px;
           }
 
           .plans {
             grid-template-columns: 1fr;
-            gap: 8px;
-            width: 100%;
+            gap: 12px;
           }
 
+          /* ─────────────────────────────────────────────────────────────
+             CARD — Elegant vertical layout with 2-column features
+             ───────────────────────────────────────────────────────────── */
           .plan {
-            padding: 12px 14px;
-            border-radius: 12px;
-            flex-direction: row;
-            align-items: center;
+            padding: 18px 20px;
+            border-radius: 14px;
+          }
+
+          .plan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 14px;
+          }
+
+          .plan-info {
+            margin-bottomtext-align: right;
+          }
+
+          .currency {
+            font-size: 14px;
+          }
+
+          .amount {
+            font-size: 28px;
+          }
+
+          .period {
+            font-size: 10px;
+            display: block;
+            margin-left: 0;
+            margin-top: 2px;
+            text-align: right;
+          }
+
+          /* Features as elegant 2-column grid */
+          .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 16px;
+            margin-bottom: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+          }
+
+          .features li {
+            padding: 0;
+            font-size: 11px;
+            gap: 6px;
+          }
+
+          .features li svg {
+            width: 10px;
+            height: 10px;
+          }
+
+          .cta {
+            padding: 10px 16px;
+            font-size: 12px;
+            border-radius: 8px;
+          }
+
+          .coming-soon-badge {
+            top: 10px;
+            right: 10px;
+            padding: 3px 8px;
+            font-size: 9px;
           }
 
           .highlight-border {
             display: none;
           }
 
-          .coming-soon-badge {
-            position: static;
-            padding: 2px 6px;
-            font-size: 8px;
-            margin-left: auto;
-            margin-right: 8px;
-          }
-
-          .plan-top {
-            margin-bottom: 0;
-            flex-shrink: 0;
-          }
-
-          .plan-name {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 0;
-          }
-
-          .plan-desc {
-            display: none;
-          }
-
-          .plan-price {
-            margin: 0 0 0 auto;
-            padding-right: 12px;
-          }
-
-          .currency {
-            font-size: 12px;
-          }
-
-          .amount {
-            font-size: 20px;
-          }
-
-          .period {
-            font-size: 9px;
-          }
-
-          .desktop-features {
-            display: none;
-          }
-
-          .mobile-feature {
-            display: block;
-            font-size: 11px;
-            color: var(--text-muted, rgba(255,255,255,0.5));
-            padding: 0 12px;
-            white-space: nowrap;
-          }
-
-          .cta {
-            width: auto;
-            padding: 8px 14px;
-            font-size: 11px;
-            border-radius: 8px;
-            flex-shrink: 0;
-          }
-
           .footer {
-            margin-top: 16px;
+            margin-top: 20px;
+            flex-shrink: 0;
           }
 
           .footer p {
             font-size: 10px;
-            opacity: 0.6;
           }
         }
 
-        /* iPhone SE and small phones */
-        @media (max-width: 380px), (max-height: 670px) {
-          .main {
-            padding: 50px 12px 12px;
-          }
+        /* Small phones & short screens */
+        @media (max-width: 380px), (max-height: 680px) {
+          .nav { padding: 12px 16px; }
           
-          .header {
-            margin-bottom: 14px;
-          }
+          .main { padding: 0 16px 16px; }
           
-          .tagline {
-            font-size: 12px;
+          .header { margin-bottom: 16px; }
+          
+          .tagline { font-size: 13px; }
+
+          .plans { gap: 10px; }
+
+          .plan { padding: 14px 16px; }
+
+          .plan-header { margin-bottom: 10px; }
+
+          .plan-name { font-size: 15px; }
+
+          .plan-desc { font-size: 10px; }
+
+          .amount { font-size: 24px; }
+
+          .features {
+            gap: 4px 12px;
+            margin-bottom: 12px;
+            padding-top: 10px;
           }
 
-          .plans {
-            gap: 6px;
+          .features li { font-size: 10px; }
+
+          .cta { padding: 8px 14px; font-size: 11px; }
+
+          .footer { margin-top: 14px; }
+        }
+
+        /* Extra small (iPhone SE) */
+        @media (max-height: 600px) {
+          .main { padding: 0 14px 12px; }
+          
+          .header { margin-bottom: 12px; }
+
+          .plans { gap: 8px; }
+
+          .plan { padding: 12px 14px; }
+
+          .plan-header { margin-bottom: 8px; }
+
+          .plan-name { font-size: 14px; }
+
+          .amount { font-size: 22px; }
+
+          .features {
+            gap: 3px 10px;
+            margin-bottom: 10px;
+            padding-top: 8px;
           }
 
-          .plan {
-            padding: 10px 12px;
-          }
+          .features li { font-size: 9px; gap: 4px; }
 
-          .plan-name {
-            font-size: 13px;
-          }
+          .features li svg { width: 8px; height: 8px; }
 
-          .amount {
-            font-size: 18px;
-          }
+          .cta { padding: 7px 12px; font-size: 10px; }
 
-          .mobile-feature {
-            font-size: 10px;
-            padding: 0 8px;
-          }
-
-          .cta {
-            padding: 7px 10px;
-            font-size: 10px;
-          }
-
-          .footer {
-            margin-top: 12px;
-          }
+          .footer { margin-top: 10px; }
+          
+          .footer p { font-size: 9px; }
         }
       `}</style>
     </div>
