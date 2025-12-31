@@ -855,7 +855,7 @@ export default function ChatInput({
         }).catch(() => {});
       } else if (type === 'video') {
         // Skip slow metadata extraction on mobile, just use placeholder
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const isMobile = false; // Skip metadata for all - faster uploads
         if (!isMobile) {
           extractVideoMetadata(file).then(metadata => {
             setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: metadata.preview, duration: metadata.duration } : a));

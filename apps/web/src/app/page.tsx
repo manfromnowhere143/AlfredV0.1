@@ -282,7 +282,7 @@ export default function AlfredChat() {
       role: 'user',
       content,
       timestamp: new Date(),
-      files: attachments?.map(a => ({ ...a, url: a.preview || a.url })),
+      files: attachments?.map(a => ({ ...a })),
     };
     
     setMessages(prev => [...prev, userMessage]);
