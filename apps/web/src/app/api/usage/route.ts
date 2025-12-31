@@ -61,19 +61,21 @@ export async function GET(req: NextRequest) {
     const today = getTodayString();
     const monthStart = getMonthStart();
     
-    const dailyResult = await db.execute(
+    // Type as any to avoid .rows TypeScript error
+    const dailyResult: any = await db.execute(
       sql`SELECT COALESCE(SUM(output_tokens), 0) as tokens, COALESCE(SUM(request_count), 0) as requests, COALESCE(SUM(artifact_count), 0) as artifacts FROM usage WHERE user_id = ${userId} AND date = ${today}`
     );
     
-    const monthlyResult = await db.execute(
+    const monthlyResult: any = await db.execute(
       sql`SELECT COALESCE(SUM(output_tokens), 0) as tokens, COALESCE(SUM(request_count), 0) as requests, COALESCE(SUM(artifact_count), 0) as artifacts FROM usage WHERE user_id = ${userId} AND date >= ${monthStart}`
     );
     
-    const dailyUsage = dailyResult.rows[0] || { tokens: 0, requests: 0, artifacts: 0 };
-    const monthlyUsage = monthlyResult.rows[0] || { tokens: 0, requests: 0, artifacts: 0 };
+    // Handle both .rows and direct array formats
+    const dailyUsage = dailyResult.rows?.[0] || dailyResult[0] || { tokens: 0, requests: 0, artifacts: 0 };
+    const monthlyUsage = monthlyResult.rows?.[0] || monthlyResult[0] || { tokens: 0, requests: 0, artifacts: 0 };
     
-    const dailyUsed = Number((dailyUsage as any).tokens || 0);
-    const monthlyUsed = Number((monthlyUsage as any).tokens || 0);
+    const dailyUsed = Number(dailyUsage.tokens || 0);
+    const monthlyUsed = Number(monthlyUsage.tokens || 0);
     
     return NextResponse.json({
       tier,
@@ -83,16 +85,16 @@ export async function GET(req: NextRequest) {
         limit: limits.dailyTokens,
         remaining: Math.max(0, limits.dailyTokens - dailyUsed),
         percent: Math.round((dailyUsed / limits.dailyTokens) * 100),
-        requests: Number((dailyUsage as any).requests || 0),
-        artifacts: Number((dailyUsage as any).artifacts || 0),
+        requests: Number(dailyUsage.requests || 0),
+        artifacts: Number(dailyUsage.artifacts || 0),
       },
       monthly: {
         used: monthlyUsed,
         limit: limits.monthlyTokens,
         remaining: Math.max(0, limits.monthlyTokens - monthlyUsed),
         percent: Math.round((monthlyUsed / limits.monthlyTokens) * 100),
-        requests: Number((monthlyUsage as any).requests || 0),
-        artifacts: Number((monthlyUsage as any).artifacts || 0),
+        requests: Number(monthlyUsage.requests || 0),
+        artifacts: Number(monthlyUsage.artifacts || 0),
       },
       resetInSeconds: getSecondsUntilMidnight(),
     });
