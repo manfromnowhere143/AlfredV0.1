@@ -416,7 +416,7 @@ IMAGE FILES (you can SEE these):
 ${imgList}
 
 To DISPLAY images in React preview:
-<img src="/api/files/serve?id=${imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
+<img src="${imageFiles[0]?.url?.startsWith('http') ? imageFiles[0].url : '/api/files/serve?id=' + imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
 `;
       }
       
@@ -433,7 +433,7 @@ ${vidList}
 
 To DISPLAY videos in React preview (hero video, background, etc.):
 <video 
-  src="/api/files/serve?id=${videoFiles[0]?.id}" 
+  src="${videoFiles[0]?.url?.startsWith('http') ? videoFiles[0].url : '/api/files/serve?id=' + videoFiles[0]?.id}" 
   autoPlay 
   muted 
   loop 
@@ -445,7 +445,7 @@ For hero sections with video backgrounds:
 \`\`\`jsx
 <div className="relative h-screen overflow-hidden">
   <video 
-    src="/api/files/serve?id=${videoFiles[0]?.id}"
+    src="${videoFiles[0]?.url?.startsWith('http') ? videoFiles[0].url : '/api/files/serve?id=' + videoFiles[0]?.id}"
     autoPlay muted loop playsInline
     className="absolute inset-0 w-full h-full object-cover"
   />
@@ -462,7 +462,7 @@ For hero sections with video backgrounds:
         systemPrompt += `\n\nThe user has attached files:\n${fileList}${mediaContext}
 
 RULES:
-1. Use /api/files/serve?id={FILE_ID} for all media
+1. Use the EXACT URLs listed above for all media
 2. NEVER use external URLs (unsplash, placeholder, etc.)
 3. NEVER say you cannot access files
 4. For videos: use <video> tag with the serve URL
