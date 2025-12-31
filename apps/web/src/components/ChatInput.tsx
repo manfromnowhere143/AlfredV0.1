@@ -866,26 +866,30 @@ export default function ChatInput({
         
         if (IS_LARGE_FILE) {
           // Client-side direct upload to Vercel Blob (bypasses API body limit)
-          const blob = await upload(file.name, file, {
-            access: 'public',
-            handleUploadUrl: '/api/files/token',
-          });
-          
-          // Register file in database
-          const registerRes = await fetch('/api/files/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url: blob.url,
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              conversationId,
-            }),
-          });
-          
-          if (registerRes.ok) {
-            uploadResult = await registerRes.json();
+          try {
+            const blob = await upload(file.name, file, {
+              access: 'public',
+              handleUploadUrl: '/api/files/token',
+            });
+            
+            // Register file in database
+            const registerRes = await fetch('/api/files/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: blob.url,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                conversationId,
+              }),
+            });
+            
+            if (registerRes.ok) {
+              uploadResult = await registerRes.json();
+            }
+          } catch (blobErr) {
+            console.error('[Upload] Blob failed:', blobErr);
           }
         } else {
           // Small files go through API (faster, includes optimization)
