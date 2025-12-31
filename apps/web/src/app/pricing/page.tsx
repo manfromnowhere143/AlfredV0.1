@@ -37,7 +37,7 @@ const plans = [
     price: 50,
     period: 'month',
     description: 'Deploy to production',
-    features: ['Unlimited tokens', 'Production deploy', 'API access', 'White-glove support'],
+    features: ['Unlimited tokens', 'Proction deploy', 'API access', 'White-glove support'],
     cta: 'Coming Soon',
     highlight: false,
     comingSoon: true,
@@ -81,7 +81,7 @@ function PricingContent() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          <span>Back</span>
+          <span className="back-text">Back</span>
         </button>
       </nav>
 
@@ -99,7 +99,7 @@ function PricingContent() {
             return (
               <article key={plan.id} className={`plan ${plan.highlight ? 'highlight' : ''} ${plan.comingSoon ? 'coming-soon' : ''}`} style={{ animationDelay: `${index * 100}ms` }}>
                 {plan.highlight && <div className="highlight-border" />}
-                {plan.comingSoon && <div className="coming-soon-badge">Coming Soon</div>}
+                {plan.comingSoon && <div className="coming-soon-badge">Soon</div>}
                 <div className="plan-top">
                   <h2 className="plan-name">{plan.name}</h2>
                   <p className="plan-desc">{plan.description}</p>
@@ -112,8 +112,8 @@ function PricingContent() {
                 <ul className="features">
                   {plan.features.map((feature, idx) => (
                     <li key={idx}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                      {feature}
+                      <svg className="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                      <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -216,13 +216,6 @@ function PricingContent() {
         .plans.visible {
           opacity: 1;
           transform: translateY(0);
-        }
-
-        @media (max-width: 800px) {
-          .plans {
-            grid-template-columns: 1fr;
-            max-width: 340px;
-          }
         }
 
         .plan {
@@ -337,7 +330,7 @@ function PricingContent() {
           color: var(--text-secondary, rgba(255,255,255,0.7));
         }
 
-        .features svg {
+        .features :global(.check-icon) {
           color: var(--accent-gold, rgba(201, 185, 154, 0.5));
           flex-shrink: 0;
         }
@@ -412,21 +405,175 @@ function PricingContent() {
           margin: 0;
         }
 
-        @media (max-width: 640px) {
-          .main {
-            padding: 120px 20px 60px;
+        /* ═══════════════════════════════════════════════════════════════
+           MOBILE — Steve Jobs would be proud
+                @media (max-width: 800px) {
+          .pricing-page {
+            overflow: hidden;
+          }
+          
+          .nav {
+            padding: 16px 20px;
+          }
+          
+          .back-text {
+            display: none;
+          }
+          
+          .back-btn {
+            padding: 8px 10px;
           }
 
-          .nav {
-            padding: 20px;
+          .main {
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 70px 20px 24px;
+            justify-content: center;
+            box-sizing: border-box;
+          }
+
+          .header {
+            margin-bottom: 24px;
+          }
+          
+          .tagline {
+            font-size: 14px;
+          }
+
+          .plans {
+            grid-template-columns: 1fr;
+            gap: 12px;
+            width: 100%;
+            max-width: 100%;
           }
 
           .plan {
-            padding: 24px 20px;
+            padding: 16px;
+            border-radius: 14px;
+            flex-direction: row;
+            align-items: center;
+            gap: 16px;
+          }
+
+          .highlight-border {
+            display: none;
+          }
+
+          .coming-soon-badge {
+            top: 8px;
+            right: 8px;
+            padding: 3px 8px;
+            font-size: 9px;
+          }
+
+          .plan-top {
+            margin-bottom: 0;
+            flex-shrink: 0;
+            width: 72px;
+          }
+
+          .plan-name {
+            font-size: 15px;
+            margin-bottom: 4px;
+          }
+
+          .plan-desc {
+            display: none;
+          }
+
+          .plan-price {
+            margin-bottom: 0;
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .currency {
+            display: none;
           }
 
           .amount {
-            font-size: 36px;
+            font-size: 22px;
+          }
+          
+          .amount::before {
+            content: '$';
+            font-size: 14px;
+            font-weight: 400;
+            opacity: 0.5;
+          }
+
+          .period {
+            font-size: 11px;
+            margin-left: 0;
+            margin-top: 2px;
+          }
+
+          .features {
+            flex: 1;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
+
+          .features li {
+            padding: 0;
+            font-size: 11px;
+            gap: 6px;
+          }
+
+          .features :global(.check-icon) {
+            width: 12px;
+            height: 12px;
+          }
+
+          .cta {
+            width: auto;
+            padding: 10px 16px;
+            font-size: 12px;
+            border-radius: 8px;
+            flex-shrink: 0;
+          }
+
+          .footer {
+            margin-top: 24px;
+          }
+
+          .footer p {
+            font-size: 11px;
+          }
+        }
+
+        /* Extra small phones */
+        @media (max-width: 380px) {
+          .main {
+            padding: 60px 16px 20px;
+          }
+
+          .plan {
+            padding: 14px;
+            gap: 12px;
+          }
+
+          .plan-top {
+            width: 64px;
+          }
+
+          .plan-name {
+            font-size: 14px;
+          }
+
+          .amount {
+            font-size: 20px;
+          }
+
+          .features li {
+            font-size: 10px;
+          }
+
+          .cta {
+            padding: 8px 12px;
+            font-size: 11px;
           }
         }
       `}</style>
