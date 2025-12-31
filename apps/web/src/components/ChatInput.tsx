@@ -1847,18 +1847,40 @@ export default function ChatInput({
            ═══════════════════════════════════════════════════════════════════════ */
         
         .chat-input__attachments {
+          position: absolute;
+          bottom: calc(100% + 8px);
+          left: 0;
+          right: 0;
           display: flex;
           gap: 8px;
-          padding: 14px 16px;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+          padding: 16px 12px 12px 12px;
           flex-wrap: wrap;
-          max-height: 200px;
+          max-height: 240px;
           overflow-y: auto;
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border-radius: 20px;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: 
+            0 4px 24px -4px rgba(0, 0, 0, 0.12),
+            0 8px 48px -8px rgba(0, 0, 0, 0.08);
+          animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          transform-origin: bottom center;
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(8px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         @media (prefers-color-scheme: dark) {
           .chat-input__attachments {
-            border-bottom-color: rgba(255, 255, 255, 0.06);
+            background: rgba(28, 28, 30, 0.98);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 
+              0 4px 24px -4px rgba(0, 0, 0, 0.4),
+              0 8px 48px -8px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
           }
         }
 
