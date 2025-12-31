@@ -254,6 +254,14 @@ export default function AlfredChat() {
     if (!userHasScrolledRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  const touchStartY = useRef(0);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const deltaY = e.touches[0].clientY - touchStartY.current;
+    if (deltaY > 20) userHasScrolledRef.current = true;
+  }, []);
   const handleChatScroll = useCallback(() => {
     const el = chatContainerRef.current;
     if (!el) return;
@@ -460,7 +468,7 @@ export default function AlfredChat() {
               )}
             </div>
           ) : (
-            <div className="chat-messages" ref={chatContainerRef} onScroll={handleChatScroll}>
+            <div className="chat-messages" ref={chatContainerRef} onScroll={handleChatScroll} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
               <div className="chat-messages-inner">
                 <ArtifactProvider conversationId={conversationId.current}>
                   {messages.map((message) => (
