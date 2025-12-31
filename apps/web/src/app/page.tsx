@@ -134,6 +134,9 @@ export default function AlfredChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationId = useRef<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userHasScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
 
   // Prevent iOS viewport resize on keyboard open - lock visual viewport
   useEffect(() => {
@@ -248,9 +251,20 @@ export default function AlfredChat() {
   useEffect(() => { if (status !== "loading") loadUserData(); }, [loadUserData, status]);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userHasScrolledRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  const handleChatScroll = useCallback(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    if (el.scrollTop < lastScrollTopRef.current - 10) {
+      userHasScrolledRef.current = true;
+    }
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    if (isAtBottom) userHasScrolledRef.current = false;
+    lastScrollTopRef.current = el.scrollTop;
+  }, []);
+  useEffect(() => { if (isLoading) userHasScrolledRef.current = false; }, [isLoading]);
   useEffect(() => { scrollToBottom(); }, [messages, streamingContent, scrollToBottom]);
 
   const handleSignIn = async (method: 'apple' | 'google' | 'email' | 'sso', email?: string) => {
@@ -446,7 +460,7 @@ export default function AlfredChat() {
               )}
             </div>
           ) : (
-            <div className="chat-messages">
+            <div className="chat-messages" ref={chatContainerRef} onScroll={handleChatScroll}>
               <div className="chat-messages-inner">
                 <ArtifactProvider conversationId={conversationId.current}>
                   {messages.map((message) => (
