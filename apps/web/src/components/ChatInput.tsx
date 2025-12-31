@@ -850,20 +850,9 @@ export default function ChatInput({
       // Add attachment immediately (non-blocking UI)
       setAttachments(prev => [...prev, { ...attachment, status: 'uploading', progress: 10 }]);
 
-      // Generate preview in background (non-blocking)
-      if (type === 'image') {
-        fileToDataURL(file).then(preview => {
-          setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview } : a));
-        }).catch(() => {});
-      } else if (type === 'video') {
-        // Skip slow metadata extraction on mobile, just use placeholder
-        const isMobile = false; // Skip metadata for all - faster uploads
-        if (!isMobile) {
-          extractVideoMetadata(file).then(metadata => {
-            setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: metadata.preview, duration: metadata.duration } : a));
-          }).catch(() => {});
-        }
-      }
+      // Instant preview using createObjectURL (no file reading needed)
+      const instantPreview = URL.createObjectURL(file);
+      setAttachments(prev => prev.map(a => a.id === id ? { ...a, preview: instantPreview } : a));
 
       // Start upload immediately (parallel with preview)
       setAttachments(prev =>
