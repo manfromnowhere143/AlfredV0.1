@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
           .where(eq(files.conversationId, existingConvId));
         
         historyFiles = dbHistoryFiles
-          .filter(f => !incomingFiles.some(inc => inc.id === f.id))
+          .filter(f => !incomingFiles.some((inc: FileAttachment) => inc.id === f.id))
           .map(f => ({
             id: f.id,
             name: f.originalName,
