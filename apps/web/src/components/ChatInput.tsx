@@ -1,5 +1,7 @@
 'use client';
 
+import { upload } from '@vercel/blob/client';
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  * CHAT INPUT COMPONENT
@@ -869,25 +871,60 @@ export default function ChatInput({
       );
 
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (conversationId) {
-          formData.append('conversationId', conversationId);
+        const IS_LARGE_FILE = file.size > 4 * 1024 * 1024; // 4MB threshold
+        
+        let uploadResult: { id: string; url: string; base64?: string } | null = null;
+        
+        if (IS_LARGE_FILE) {
+          // Client-side direct upload to Vercel Blob (bypasses API body limit)
+          const blob = await upload(file.name, file, {
+            access: 'public',
+            handleUploadUrl: '/api/files/token',
+          });
+          
+          // Register file in database
+          const registerRes = await fetch('/api/files/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: blob.url,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              conversationId,
+            }),
+          });
+          
+          if (registerRes.ok) {
+            uploadResult = await registerRes.json();
+          }
+        } else {
+          // Small files go through API (faster, includes optimization)
+          const formData = new FormData();
+          formData.append('file', file);
+          if (conversationId) {
+            formData.append('conversationId', conversationId);
+          }
+
+          const response = await fetch('/api/files/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (response.ok) {
+            uploadResult = await response.json();
+          }
         }
+        
+        const response = { ok: !!uploadResult };
 
-        const response = await fetch('/api/files/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
+        if (response.ok && uploadResult) {
           setAttachments(prev =>
             prev.map(a => a.id === id ? {
               ...a,
-              id: data.id,
-              url: data.url,
-              base64: data.base64,
+              id: uploadResult!.id,
+              url: uploadResult!.url,
+              base64: uploadResult!.base64,
               status: 'ready',
               progress: 100,
             } : a)
