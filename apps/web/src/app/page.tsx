@@ -218,6 +218,11 @@ export default function AlfredChat() {
     };
   }, []);
 
+  
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
+  const handleOpenAuth = useCallback(() => setAuthModalOpen(true), []);
+  const handleCloseAuth = useCallback(() => setAuthModalOpen(false), []);
+
   const loadUserData = useCallback(async () => {
     if (!isSignedIn) {
       setIsLoadingConversations(false);
@@ -432,7 +437,7 @@ export default function AlfredChat() {
         {/* SIDEBAR - Full control panel with user, projects, chats */}
         <Sidebar
           isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          onClose={handleCloseSidebar}
           projects={projects}
           conversations={conversations}
           onNewConversation={handleNewConversation}
@@ -440,7 +445,7 @@ export default function AlfredChat() {
           onSelectConversation={handleSelectConversation}
           isLoadingConversations={isLoadingConversations}
           user={session?.user}
-          onSignIn={() => setAuthModalOpen(true)}
+          onSignIn={handleOpenAuth}
           onSignOut={handleLogout}
         />
 
@@ -510,7 +515,7 @@ export default function AlfredChat() {
             placeholder={hasMessages ? "Continue the conversation..." : "What are we building?"}
             isSignedIn={isSignedIn}
             isAuthChecked={isAuthChecked}
-            onSignIn={() => setAuthModalOpen(true)}
+            onSignIn={handleOpenAuth}
             conversationId={conversationId.current}
           />
         </main>
@@ -518,7 +523,7 @@ export default function AlfredChat() {
 
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={handleCloseAuth}
         onSignIn={handleSignIn}
       />
 
