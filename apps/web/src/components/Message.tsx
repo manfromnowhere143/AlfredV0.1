@@ -398,17 +398,197 @@ function ArtifactGallery() {
   const [splitPosition, setSplitPosition] = useState(50);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatAttachments, setChatAttachments] = useState<Array<{ id: string; file: File; preview?: string; type: string }>>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SMART MODIFICATION INTENT DETECTION
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const isModificationIntent = useCallback((message: string): boolean => {
+    const msg = message.toLowerCase().trim();
+    
+    // Too short - likely not a modification command
+    if (msg.length < 5) return false;
+    
+    // Greetings and social phrases - NOT modifications
+    const greetings = /^(hi|hello|hey|yo|sup|good\s*(morning|afternoon|evening|night)|howdy|greetings)/;
+    if (greetings.test(msg)) return false;
+    
+    // Pure emotional expressions - NOT modifications
+    const emotions = /^(i\s*love|love\s*you|thank|thanks|awesome|amazing|great|cool|nice|perfect|wow|lol|haha|omg)/;
+    if (emotions.test(msg) && msg.length < 30) return false;
+    
+    // Questions about the artifact without modification intent
+    const pureQuestions = /^(what\s*(is|does)|how\s*does|can\s*you\s*explain|tell\s*me\s*about|describe)/;
+    if (pureQuestions.test(msg) && !msg.includes('change') && !msg.includes('make') && !msg.includes('add')) return false;
+    
+    // MODIFICATION KEYWORDS - Strong indicators
+    const modificationKeywords = [
+      'change', 'modify', 'update', 'edit', 'fix', 'replace', 'remove', 'delete',
+      'add', 'insert', 'move', 'adjust', 'improve', 'enhance', 'refactor', 'rename',
+      'resize', 'restyle', 'recolor', 'rewrite', 'redo', 'undo', 'swap', 'switch',
+      'increase', 'decrease', 'bigger', 'smaller', 'larger', 'hide', 'show',
+      'center', 'align', 'position', 'animate', 'style', 'format', 'wrap',
+    ];
+    
+    if (modificationKeywords.some(kw => msg.includes(kw))) return true;
+    
+    // IMPERATIVE PHRASES - Strong indicators
+    const imperatives = [
+      'make it', 'make the', 'make this', 'can you make',
+      'please make', 'i want', 'i need', 'could you',
+      'would you', 'set the', 'put the', 'give it',
+      'turn it', 'turn the', 'let\'s', 'try',
+    ];
+    
+    if (imperatives.some(imp => msg.includes(imp))) return true;
+    
+    // CODE/UI TERMS combined with action words
+    const uiTerms = ['button', 'header', 'footer', 'title', 'text', 'color', 'background', 
+      'border', 'margin', 'padding', 'font', 'size', 'width', 'height', 'image',
+      'icon', 'link', 'input', 'form', 'card', 'container', 'div', 'component',
+      'function', 'variable', 'style', 'css', 'class', 'element'];
+    
+    const actionWords = ['to', 'into', 'with', 'should', 'needs', 'want', 'like'];
+    
+    const hasUiTerm = uiTerms.some(term => msg.includes(term));
+    const hasAction = actionWords.some(word => msg.includes(word));
+    
+    if (hasUiTerm && hasAction) return true;
+    
+    // Color mentions with context
+    const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'black', 'white', 'gray', 'grey'];
+    if (colors.some(c => msg.includes(c)) && msg.length > 10) return true;
+    
+    // Default: if message is substantial and contains technical terms, assume modification
+    if (msg.length > 20 && hasUiTerm) return true;
+    
+    return false;
+  }, []);
+
+  // File handling for mini-chat
+  const handleFileSelect = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files).slice(0, 5); // Max 5 files
+    
+    fileArray.forEach(file => {
+      const isImage = file.type.startsWith('image/');
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      
+      if (isImage) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setChatAttachments(prev => [...prev, { 
+            id, 
+            file, 
+            preview: reader.result as string,
+            type: 'image'
+          }]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setChatAttachments(prev => [...prev, { 
+          id, 
+          file, 
+          type: file.type.includes('pdf') ? 'pdf' : 'file'
+        }]);
+      }
+    });
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setChatAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  // Voice recording functions
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(t => t + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      setIsRecording(false);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    }
+  }, [isRecording]);
+
+  const cancelRecording = useCallback(() => {
+    stopRecording();
+    audioChunksRef.current = [];
+    setRecordingTime(0);
+  }, [stopRecording]);
+
+  const sendRecording = useCallback(async () => {
+    stopRecording();
+    
+    // Wait for final data
+    await new Promise(r => setTimeout(r, 100));
+    
+    if (audioChunksRef.current.length === 0) return;
+    
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    setIsTranscribing(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const { text } = await response.json();
+        if (text) setChatInput(text);
+      }
+    } catch (err) {
+      console.error('Transcription failed:', err);
+    } finally {
+      setIsTranscribing(false);
+      audioChunksRef.current = [];
+      setRecordingTime(0);
+    }
+  }, [stopRecording]);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingCode, setStreamingCode] = useState('');
   const [isDark, setIsDark] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const prevIndexRef = useRef(0);
-  const isDragging = useRef(false);
+  const isSplitterDragging = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const codeDisplayRef = useRef<HTMLDivElement>(null);
 
   // Watch for theme changes
   useEffect(() => {
@@ -472,7 +652,7 @@ function ArtifactGallery() {
   // Code panel: min 25%, max 50% (so preview: min 50%, max 75%)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    isDragging.current = true;
+    isSplitterDragging.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }, []);
@@ -480,7 +660,7 @@ function ArtifactGallery() {
   useEffect(() => {
     let rafId: number;
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return;
+      if (!isSplitterDragging.current || !containerRef.current) return;
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
         const rect = containerRef.current!.getBoundingClientRect();
@@ -491,7 +671,7 @@ function ArtifactGallery() {
       });
     };
     const handleMouseUp = () => {
-      isDragging.current = false;
+      isSplitterDragging.current = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
@@ -510,6 +690,16 @@ function ArtifactGallery() {
     }
   }, [chatMessages]);
 
+  // Auto-scroll code display during streaming
+  useEffect(() => {
+    if (streamingCode && codeDisplayRef.current) {
+      codeDisplayRef.current.scrollTo({
+        top: codeDisplayRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [streamingCode]);
+
   // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
@@ -519,22 +709,62 @@ function ArtifactGallery() {
   }, [chatInput]);
 
   const handleSendEdit = useCallback(async () => {
-    if (!chatInput.trim() || !current || isTyping) return;
+    if ((!chatInput.trim() && chatAttachments.length === 0) || !current || isTyping) return;
     
     const userMsg = chatInput.trim();
+    const hasAttachments = chatAttachments.length > 0;
     setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    
+    // Display message with attachment indicator
+    const displayMsg = hasAttachments 
+      ? `${userMsg || ''} [${chatAttachments.length} file${chatAttachments.length > 1 ? 's' : ''} attached]`.trim()
+      : userMsg;
+    setChatMessages(prev => [...prev, { role: 'user', content: displayMsg }]);
+    
+    // Check if this is a modification intent
+    const shouldModify = isModificationIntent(userMsg) || hasAttachments;
+    
+    if (!shouldModify) {
+      // Just a conversational message - respond without modifying
+      setChatMessages(prev => [...prev, { 
+        role: 'alfred', 
+        content: getConversationalResponse(userMsg)
+      }]);
+      return;
+    }
+    
+    // It's a modification request - proceed with API call
     setIsTyping(true);
     setStreamingCode('');
+    
+    // Prepare attachments for API
+    const attachmentData = await Promise.all(
+      chatAttachments.map(async (att) => {
+        const reader = new FileReader();
+        return new Promise<{ name: string; type: string; data: string }>((resolve) => {
+          reader.onload = () => {
+            resolve({
+              name: att.file.name,
+              type: att.file.type,
+              data: (reader.result as string).split(',')[1] // base64
+            });
+          };
+          reader.readAsDataURL(att.file);
+        });
+      })
+    );
+    
+    setChatAttachments([]); // Clear attachments after sending
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: userMsg,
+          message: userMsg || 'Please analyze the attached file(s) and update the artifact accordingly.',
           artifactCode: current.code,
           artifactTitle: extractComponentName(current.code),
+          ...(attachmentData.length > 0 && { attachments: attachmentData }),
         }),
       });
 
@@ -610,7 +840,27 @@ function ArtifactGallery() {
     } finally {
       setIsTyping(false);
     }
-  }, [chatInput, current, isTyping, updateArtifact, saveArtifactToDb]);
+  }, [chatInput, chatAttachments, current, isTyping, updateArtifact, saveArtifactToDb, isModificationIntent]);
+
+  // Conversational responses for non-modification messages
+  const getConversationalResponse = (msg: string): string => {
+    const m = msg.toLowerCase();
+    
+    if (/^(hi|hello|hey|yo|sup)/.test(m)) {
+      return "Hey there! I'm here to help you modify this artifact. Just tell me what changes you'd like to make!";
+    }
+    if (/love|thank|thanks|awesome|amazing|great|cool|nice|perfect/.test(m)) {
+      return "Thank you! 😊 If you want any changes to this artifact, just let me know what you'd like to modify.";
+    }
+    if (/\?$/.test(m)) {
+      return "Good question! I'm focused on helping you modify this artifact. If you'd like to make any changes, just describe what you want and I'll update the code.";
+    }
+    if (/who|what|how|why|when|where/.test(m)) {
+      return "I'm Alfred, your artifact modification assistant. Tell me what changes you'd like to make - colors, layout, functionality, anything!";
+    }
+    
+    return "I'm here to help modify this artifact. Try something like 'make the button blue' or 'add a dark mode toggle'. What would you like to change?";
+  };
 
   if (!current) return null;
   const currentName = extractComponentName(current.code);
@@ -659,22 +909,33 @@ function ArtifactGallery() {
         {((showCode && !isMobile) || (isMobile && mobileTab === 'code')) && (
           <div className="code-panel" style={{ width: isMobile ? '100%' : `${splitPosition}%` }}>
             {/* Code Display */}
-            <div className={`code-display ${streamingCode ? 'streaming' : ''}`}>
+            <div className={`code-display ${streamingCode ? 'streaming' : ''}`} ref={codeDisplayRef}>
               {streamingCode && (
                 <div className="streaming-indicator">
                   <span className="pulse"></span> Alfred is writing...
                 </div>
               )}
               {displayCode.split('\n').map((line, i) => (
-                <div key={i} className="code-line">
+                <div key={i} className={`code-line ${streamingCode && i === displayCode.split('\n').length - 1 ? 'active-line' : ''}`}>
                   <span className="ln">{i + 1}</span>
-                  <span className="lc">{line}</span>
+                  <span className="lc">{line}{streamingCode && i === displayCode.split('\n').length - 1 && <span className="cursor" />}</span>
                 </div>
               ))}
             </div>
 
             {/* Chat Section - Fixed at bottom of code panel */}
-            <div className="chat-section">
+            <div 
+              className={`chat-section ${isDragging ? 'dragging' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files.length > 0) {
+                  handleFileSelect(e.dataTransfer.files);
+                }
+              }}
+            >
               {/* Messages */}
               {chatMessages.length > 0 && (
                 <div className="chat-messages" ref={chatScrollRef}>
@@ -693,32 +954,141 @@ function ArtifactGallery() {
                 </div>
               )}
 
-              {/* Input Box - Styled exactly like ChatInput.tsx */}
-              <div className="input-wrapper">
-                <div className="input-container">
-                  <textarea
-                    ref={inputRef}
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendEdit();
-                      }
-                    }}
-                    placeholder="Ask Alfred to modify..."
-                    disabled={isTyping}
-                    rows={1}
-                  />
-                  <button 
-                    className={`send-btn ${chatInput.trim() ? 'active' : ''}`}
-                    onClick={handleSendEdit}
-                    disabled={!chatInput.trim() || isTyping}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 4L12 20M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              {/* Attachments Preview */}
+              {chatAttachments.length > 0 && (
+                <div className="chat-attachments">
+                  {chatAttachments.map((att) => (
+                    <div key={att.id} className="chat-attachment">
+                      {att.preview ? (
+                        <img src={att.preview} alt={att.file.name} className="chat-attachment-img" />
+                      ) : (
+                        <div className="chat-attachment-file">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                            <path d="M14 2v6h6" />
+                          </svg>
+                          <span>{att.file.name.slice(0, 12)}{att.file.name.length > 12 ? '...' : ''}</span>
+                        </div>
+                      )}
+                      <button className="chat-attachment-remove" onClick={() => removeAttachment(att.id)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Drag overlay */}
+              {isDragging && (
+                <div className="drag-overlay">
+                  <div className="drag-content">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
                     </svg>
-                  </button>
+                    <span>Drop files here</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Input Box - Enhanced with file upload and voice */}
+              <div className="input-wrapper">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.jsx,.tsx,.css,.html"
+                  style={{ display: 'none' }}
+                  onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
+                />
+                <div className={`input-container ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}>
+                  {isRecording ? (
+                    /* Recording UI - Pulsing Orb (same as main page) */
+                    <div className="recording-ui">
+                      <button className="recording-cancel" onClick={cancelRecording} aria-label="Cancel">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="6" y="6" width="12" height="12" rx="2" />
+                        </svg>
+                      </button>
+                      <div className="recording-center">
+                        <div className="orb-container">
+                          <div className="orb" />
+                          <div className="orb-ring orb-ring-1" />
+                          <div className="orb-ring orb-ring-2" />
+                        </div>
+                      </div>
+                      <button className="recording-send" onClick={sendRecording} aria-label="Done">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : isTranscribing ? (
+                    /* Transcribing UI */
+                    <div className="transcribing-ui">
+                      <div className="transcribing-spinner" />
+                      <span>Transcribing...</span>
+                    </div>
+                  ) : (
+                    /* Normal input UI */
+                    <>
+                      <button 
+                        className="attach-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Attach files"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                        </svg>
+                      </button>
+                      <textarea
+                        ref={inputRef}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendEdit();
+                          }
+                        }}
+                        onPaste={(e) => {
+                          const files = Array.from(e.clipboardData.files);
+                          if (files.length > 0) {
+                            e.preventDefault();
+                            handleFileSelect(files);
+                          }
+                        }}
+                        placeholder="Describe changes or drop files..."
+                        disabled={isTyping}
+                        rows={1}
+                      />
+                      {(chatInput.trim() || chatAttachments.length > 0) ? (
+                        <button 
+                          className="send-btn active"
+                          onClick={handleSendEdit}
+                          disabled={isTyping}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 4L12 20M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      ) : (
+                        <button 
+                          className="voice-btn"
+                          onClick={startRecording}
+                          disabled={isTyping}
+                          title="Voice input"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                            <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                            <path d="M12 19v4M8 23h8" />
+                          </svg>
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -874,6 +1244,33 @@ function ArtifactGallery() {
           --preview-bg: #111;
           --input-bg: rgba(0, 0, 0, 0.7);
           --input-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Dark mode recording styles */
+        .gallery-overlay.dark .recording-cancel {
+          background: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.35);
+        }
+        .gallery-overlay.dark .recording-cancel:hover {
+          background: rgba(255, 255, 255, 0.12);
+          color: rgba(255, 255, 255, 0.5);
+        }
+        .gallery-overlay.dark .orb {
+          background: white;
+        }
+        .gallery-overlay.dark .orb-ring {
+          border-color: white;
+        }
+        .gallery-overlay.dark .recording-send {
+          background: white;
+          color: black;
+        }
+        .gallery-overlay.dark .recording-send:hover {
+          box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+        }
+        .gallery-overlay.dark .transcribing-spinner {
+          border-color: rgba(255, 255, 255, 0.1);
+          border-top-color: white;
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
@@ -1089,6 +1486,24 @@ function ArtifactGallery() {
           flex-shrink: 0;
         }
         .lc { color: var(--text); white-space: pre; opacity: 0.8; }
+        
+        /* Active line during streaming */
+        .code-line.active-line {
+          background: rgba(59, 130, 246, 0.08);
+        }
+        .cursor {
+          display: inline-block;
+          width: 2px;
+          height: 14px;
+          background: #3b82f6;
+          margin-left: 1px;
+          animation: cursorBlink 1s step-end infinite;
+          vertical-align: middle;
+        }
+        @keyframes cursorBlink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
 
         /* ═══════════════════════════════════════════════════════════════════════
            CHAT SECTION - Fixed at bottom of code panel
@@ -1100,6 +1515,117 @@ function ArtifactGallery() {
           display: flex;
           flex-direction: column;
           max-height: 40%;
+          position: relative;
+        }
+        .chat-section.dragging {
+          background: rgba(59, 130, 246, 0.05);
+        }
+
+        /* Drag overlay */
+        .drag-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(59, 130, 246, 0.1);
+          border: 2px dashed rgba(59, 130, 246, 0.5);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+        }
+        .drag-content {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          color: rgba(59, 130, 246, 0.8);
+        }
+        .drag-content span {
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        /* Chat attachments preview */
+        .chat-attachments {
+          display: flex;
+          gap: 8px;
+          padding: 8px 16px;
+          overflow-x: auto;
+          scrollbar-width: thin;
+        }
+        .chat-attachment {
+          position: relative;
+          flex-shrink: 0;
+          width: 56px;
+          height: 56px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: var(--bubble);
+          border: 1px solid var(--border);
+        }
+        .chat-attachment-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .chat-attachment-file {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          padding: 4px;
+        }
+        .chat-attachment-file svg {
+          opacity: 0.6;
+        }
+        .chat-attachment-file span {
+          font-size: 8px;
+          color: var(--text-secondary);
+          text-align: center;
+          word-break: break-all;
+        }
+        .chat-attachment-remove {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--text);
+          color: var(--bg);
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+        .chat-attachment:hover .chat-attachment-remove {
+          opacity: 1;
+        }
+
+        /* Attach button */
+        .attach-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+          flex-shrink: 0;
+        }
+        .attach-btn:hover {
+          background: var(--btn-bg);
+          color: var(--text);
         }
 
         .chat-messages {
@@ -1221,6 +1747,172 @@ function ArtifactGallery() {
           opacity: 0.9;
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Voice button */
+        .voice-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 12px;
+          border: none;
+          background: var(--btn-bg);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted);
+          transition: all 0.15s ease;
+          flex-shrink: 0;
+        }
+        .voice-btn:hover:not(:disabled) {
+          background: var(--btn-bg-hover);
+          color: var(--text);
+        }
+        .voice-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Recording state - matching main ChatInput exactly */
+        .input-container.recording {
+          background: var(--input-bg);
+        }
+        .input-container.transcribing {
+          background: var(--input-bg);
+        }
+
+        .recording-ui {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          gap: 12px;
+          animation: recordingFadeIn 0.3s ease-out;
+        }
+        @keyframes recordingFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        /* Cancel Button - subtle gray with square icon */
+        .recording-cancel {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(0, 0, 0, 0.06);
+          color: rgba(0, 0, 0, 0.35);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+        .recording-cancel:hover {
+          background: rgba(0, 0, 0, 0.1);
+          color: rgba(0, 0, 0, 0.5);
+        }
+        .recording-cancel:active {
+          transform: scale(0.94);
+        }
+
+        /* Center - Orb Container */
+        .recording-center {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 48px;
+        }
+        .orb-container {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        /* The Core Orb - Breathes */
+        .orb {
+          width: 20px;
+          height: 20px;
+          background: black;
+          border-radius: 50%;
+          animation: orbPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes orbPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.3); }
+        }
+
+        /* Ripple Rings */
+        .orb-ring {
+          position: absolute;
+          inset: 0;
+          border: 1.5px solid black;
+          border-radius: 50%;
+          pointer-events: none;
+          animation: ringPulse 1.5s ease-in-out infinite;
+        }
+        .orb-ring-1 {
+          inset: 4px;
+          animation-delay: 0.1s;
+        }
+        .orb-ring-2 {
+          inset: -2px;
+          animation-delay: 0.2s;
+        }
+        @keyframes ringPulse {
+          0%, 100% { transform: scale(1); opacity: 0.15; }
+          50% { transform: scale(1.2); opacity: 0.3; }
+        }
+
+        /* Send Button - black circle with white checkmark */
+        .recording-send {
+          width: 46px;
+          height: 46px;
+          border-radius: 50%;
+          border: none;
+          background: black;
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+        .recording-send:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        .recording-send:active {
+          transform: scale(0.95);
+        }
+
+        /* Transcribing state */
+        .transcribing-ui {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          width: 100%;
+          padding: 8px 0;
+        }
+        .transcribing-spinner {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(0, 0, 0, 0.1);
+          border-top-color: black;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .transcribing-ui span {
+          font-size: 14px;
+          color: var(--text-secondary);
+          font-weight: 500;
         }
 
         /* ═══════════════════════════════════════════════════════════════════════
