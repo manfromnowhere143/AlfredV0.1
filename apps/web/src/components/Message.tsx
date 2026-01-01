@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, ReactNode, createContext, useContext, useCallback } from 'react';
 import MessageAttachments from './MessageAttachments';
+import { DeployButton } from './DeployButton';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ARTIFACT CONTEXT - with updateArtifact for live modifications
@@ -951,6 +952,14 @@ function ArtifactGallery() {
             <button className={`toggle-btn ${showCode ? 'active' : ''}`} onClick={() => setShowCode(!showCode)}>
               {showCode ? 'Hide Code' : 'Show Code'}
             </button>
+          )}
+          {current && (
+            <DeployButton
+              artifactId={current.id}
+              artifactTitle={currentName}
+              artifactCode={displayCode}
+              onDeployed={(url) => console.log('Deployed:', url)}
+            />
           )}
           <button className="icon-btn" onClick={() => { setIsLoaded(false); if(iframeRef.current) iframeRef.current.src = iframeRef.current.src; }} title="Refresh">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>

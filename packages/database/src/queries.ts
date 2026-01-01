@@ -222,7 +222,7 @@ export async function createMessage(
       inputTokens: input.inputTokens,
       outputTokens: input.outputTokens,
       attachments: input.attachments,
-      artifacts: input.artifacts,
+      artifactsJson: input.artifacts,
       metadata: input.metadata,
     })
     .returning();

@@ -1,3 +1,5 @@
+type AlfredMode = 'default' | 'reviewer' | 'mentor' | 'coder' | 'builder';
+
 // Paste into prompts.ts - replace renderTemplate function
 
 export function renderTemplate(
