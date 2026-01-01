@@ -10,6 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const userId = getUserId(req);
     const [artifact] = await db.select().from(artifacts).where(eq(artifacts.id, params.id)).limit(1);
     if (!artifact) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    if (!artifact.projectId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     const [project] = await db.select().from(projects).where(eq(projects.id, artifact.projectId)).limit(1);
     if (!project || project.userId !== userId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true, data: artifact });
@@ -24,6 +25,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const userId = getUserId(req);
     const [artifact] = await db.select().from(artifacts).where(eq(artifacts.id, params.id)).limit(1);
     if (!artifact) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    if (!artifact.projectId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     const [project] = await db.select().from(projects).where(eq(projects.id, artifact.projectId)).limit(1);
     if (!project || project.userId !== userId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     const { code, title } = await req.json();
@@ -40,6 +42,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const userId = getUserId(req);
     const [artifact] = await db.select().from(artifacts).where(eq(artifacts.id, params.id)).limit(1);
     if (!artifact) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    if (!artifact.projectId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     const [project] = await db.select().from(projects).where(eq(projects.id, artifact.projectId)).limit(1);
     if (!project || project.userId !== userId) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     await db.delete(artifacts).where(eq(artifacts.id, params.id));

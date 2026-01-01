@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHAT API ROUTE - /api/chat
-// Production-grade with persistent file context + video support
+// Production-grade with persistent file context + video support + artifact editing
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -12,6 +12,7 @@ import { db, conversations, messages, files, eq, asc, desc } from '@alfred/datab
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { extractCodeFromResponse, saveArtifact, loadLatestArtifact } from '@/lib/artifacts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -64,10 +65,9 @@ const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/we
 const SUPPORTED_DOCUMENT_TYPES = ['application/pdf'];
 const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/mov'];
 
-// Limits to prevent 413 errors
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB per image
-const MAX_IMAGES_PER_REQUEST = 5; // Max images to send to Claude
-const MAX_HISTORY_MESSAGES = 20; // Limit conversation history
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_IMAGES_PER_REQUEST = 5;
+const MAX_HISTORY_MESSAGES = 20;
 
 const CODE_FORMATTING_RULES = `
 ██████████████████████████████████████████████████████████████████████████████
@@ -91,6 +91,45 @@ Rules:
 
 ██████████████████████████████████████████████████████████████████████████████
 `;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARTIFACT MODIFICATION PROMPT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildArtifactModificationPrompt(code: string, title: string): string {
+  return `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ARTIFACT MODIFICATION MODE                                                  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Component: ${title.padEnd(63)}║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+CURRENT CODE:
+\`\`\`jsx
+${code}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+INSTRUCTIONS:
+═══════════════════════════════════════════════════════════════════════════════
+
+The user wants to MODIFY the code above. You must:
+
+1. UNDERSTAND the existing code structure completely
+2. APPLY the user's requested changes
+3. OUTPUT the COMPLETE updated code (never partial snippets or diffs)
+4. PRESERVE all existing functionality unless explicitly asked to remove it
+5. MAINTAIN the same component name and export structure
+6. WRAP output in \`\`\`jsx code blocks
+
+RESPONSE FORMAT:
+- Start with a brief (1-2 sentence) explanation of what you changed
+- Then output the complete modified code in a jsx code block
+- Keep explanation concise - the user will see the code diff
+
+═══════════════════════════════════════════════════════════════════════════════
+`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LLM CLIENT
@@ -145,7 +184,6 @@ function normalizeMimeType(type: string, filename: string): string {
 
 async function readFileFromUrl(url: string): Promise<string | null> {
   try {
-    // Handle remote URLs (Vercel Blob, S3, etc)
     if (url.startsWith('http')) {
       console.log('[Chat] Fetching remote file:', url);
       const response = await fetch(url);
@@ -154,7 +192,7 @@ async function readFileFromUrl(url: string): Promise<string | null> {
       return buffer.toString('base64');
     }
   } catch (e) { console.error('[Chat] Remote fetch error:', e); }
-  // Original local file logic below
+  
   try {
     const filepath = path.join(process.cwd(), 'public', url);
     if (!existsSync(filepath)) {
@@ -185,21 +223,18 @@ async function buildMessageContent(
   for (const file of fileAttachments) {
     const mimeType = normalizeMimeType(file.type, file.name);
     
-    // Skip videos - they can't be sent to Claude Vision
     if (isVideo(mimeType)) {
       console.log(`[Chat] ⏭️ Skipping video (not supported): ${file.name}`);
       skippedFiles++;
       continue;
     }
 
-    // Skip if too large
     if (file.size > MAX_IMAGE_SIZE) {
       console.log(`[Chat] ⏭️ Skipping large file (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
       skippedFiles++;
       continue;
     }
 
-    // Skip if we've hit the limit
     if (processedFiles >= MAX_IMAGES_PER_REQUEST) {
       console.log(`[Chat] ⏭️ Max images reached, skipping: ${file.name}`);
       skippedFiles++;
@@ -259,14 +294,13 @@ async function buildMessageContent(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY LOADING - With limits to prevent 413 errors
+// HISTORY LOADING
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadConversationHistory(conversationId: string): Promise<LLMMessage[]> {
   const llmMessages: LLMMessage[] = [];
   
   try {
-    // Get recent messages only
     const dbMessages = await db
       .select()
       .from(messages)
@@ -285,7 +319,6 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
           .from(files)
           .where(eq(files.messageId, msg.id));
 
-        // Filter to only include images (not videos) and limit count
         const imageFiles = msgFiles.filter(f => isImage(f.mimeType) && !isVideo(f.mimeType));
         
         if (imageFiles.length > 0 && imagesInHistory < MAX_IMAGES_PER_REQUEST) {
@@ -302,9 +335,7 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
           const content = await buildMessageContent(msg.content, attachments);
           llmMessages.push({ role, content });
           imagesInHistory += attachments.length;
-          console.log(`[Alfred] ✅ Reconstructed message with ${attachments.length} image(s)`);
         } else if (msg.content?.trim()) {
-          // Include text-only version if we've hit image limit
           llmMessages.push({ role, content: msg.content });
         }
       } else {
@@ -338,10 +369,16 @@ export async function POST(request: NextRequest) {
       message = '', 
       files: incomingFiles = [], 
       conversationId: existingConvId,
+      // ═══════════════════════════════════════════════════════════════════════
+      // NEW: Artifact modification params from preview modal
+      // ═══════════════════════════════════════════════════════════════════════
+      artifactCode,
+      artifactTitle,
     } = body;
 
     const hasMessage = message?.trim()?.length > 0;
     const hasFiles = incomingFiles?.length > 0;
+    const isArtifactEdit = !!artifactCode;
 
     if (!hasMessage && !hasFiles) {
       return new Response(
@@ -350,18 +387,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Log artifact edit mode
+    if (isArtifactEdit) {
+      console.log(`[Alfred] 🎨 ARTIFACT EDIT MODE: ${artifactTitle || 'Component'}`);
+      console.log(`[Alfred] 📝 Modification request: "${message?.slice(0, 50)}..."`);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Context Detection & System Prompt
     // ─────────────────────────────────────────────────────────────────────────
-    const detectedFacet = detectFacet(message || 'analyze');
+    const detectedFacet = isArtifactEdit ? 'code' : detectFacet(message || 'analyze');
     const skillLevel = coreInferSkillLevel([message || 'analyze image']);
     
     const baseSystemPrompt = buildSystemPrompt({ skillLevel });
     let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ARTIFACT MODIFICATION: Inject current code into system prompt
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (isArtifactEdit) {
+      systemPrompt += '\n\n' + buildArtifactModificationPrompt(
+        artifactCode, 
+        artifactTitle || 'Component'
+      );
+    }
+
     // Load history files if continuing a conversation
     let historyFiles: FileAttachment[] = [];
-    if (existingConvId) {
+    if (existingConvId && !isArtifactEdit) {
       try {
         const dbHistoryFiles = await db
           .select()
@@ -388,10 +441,10 @@ export async function POST(request: NextRequest) {
     
     const allFiles = [...incomingFiles, ...historyFiles];
     
-    if (hasFiles || historyFiles.length > 0) {
+    // Add file context to prompt (skip for artifact edits to keep prompt focused)
+    if ((hasFiles || historyFiles.length > 0) && !isArtifactEdit) {
       const fileList = allFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
       
-      // Separate images and videos
       const imageFiles = allFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isImage(mime);
@@ -404,7 +457,6 @@ export async function POST(request: NextRequest) {
       
       let mediaContext = '';
       
-      // Image instructions
       if (imageFiles.length > 0) {
         const imgList = imageFiles.map((f: FileAttachment) => 
           `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
@@ -420,7 +472,6 @@ To DISPLAY images in React preview:
 `;
       }
       
-      // Video instructions - Claude can't see these but can use the URL
       if (videoFiles.length > 0) {
         const vidList = videoFiles.map((f: FileAttachment) => 
           `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
@@ -472,19 +523,20 @@ RULES:
       }
     }
 
-    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | User: ${userId || 'anon'}`);
+    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | Artifact: ${isArtifactEdit} | User: ${userId || 'anon'}`);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Database: Create/Get Conversation
+    // Database: Create/Get Conversation (skip for artifact edits from preview)
     // ─────────────────────────────────────────────────────────────────────────
     let convId = existingConvId;
 
-    if (userId && !convId) {
+    // For artifact edits from preview modal, we don't create new conversations
+    if (userId && !convId && !isArtifactEdit) {
       try {
         const title = message?.slice(0, 50) || (hasFiles ? `File: ${incomingFiles[0].name}` : 'New chat');
         const [newConv] = await db
           .insert(conversations)
-          .values({ userId, title, mode: detectedFacet })
+          .values({ userId, title })
           .returning();
         
         if (newConv) {
@@ -497,17 +549,17 @@ RULES:
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Save User Message & Link Files
+    // Save User Message & Link Files (skip for artifact edits)
     // ─────────────────────────────────────────────────────────────────────────
     let userMessageId: string | undefined;
 
-    if (userId && convId) {
+    if (userId && convId && !isArtifactEdit) {
       try {
         const [savedMessage] = await db.insert(messages).values({
           conversationId: convId,
           role: 'user',
           content: message || '[File attachment]',
-          mode: detectedFacet,
+          mode: detectedFacet === "code" ? "build" : detectedFacet as any,
         }).returning();
 
         userMessageId = savedMessage?.id;
@@ -529,24 +581,31 @@ RULES:
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BUILD LLM MESSAGES - Load history with limits
+    // BUILD LLM MESSAGES
     // ─────────────────────────────────────────────────────────────────────────
     let llmMessages: LLMMessage[] = [];
 
-    if (convId && existingConvId) {
+    // For artifact edits, don't load conversation history (keep it focused)
+    if (convId && existingConvId && !isArtifactEdit) {
       console.log(`[Alfred] Loading history for conversation: ${convId}`);
       llmMessages = await loadConversationHistory(convId);
       console.log(`[Alfred] Loaded ${llmMessages.length} messages from history`);
     }
 
-    // Build current message - only include images, not videos
-    const imageOnlyFiles = incomingFiles.filter((f: FileAttachment) => {
-      const mime = normalizeMimeType(f.type, f.name);
-      return isImage(mime);
-    });
-    
-    const currentContent = await buildMessageContent(message, imageOnlyFiles);
-    llmMessages.push({ role: 'user', content: currentContent });
+    // Build current message
+    if (isArtifactEdit) {
+      // For artifact edits, just send the modification request
+      llmMessages.push({ role: 'user', content: message });
+    } else {
+      // Normal flow with potential images
+      const imageOnlyFiles = incomingFiles.filter((f: FileAttachment) => {
+        const mime = normalizeMimeType(f.type, f.name);
+        return isImage(mime);
+      });
+      
+      const currentContent = await buildMessageContent(message, imageOnlyFiles);
+      llmMessages.push({ role: 'user', content: currentContent });
+    }
 
     console.log(`[Alfred] Sending ${llmMessages.length} messages to Claude`);
 
@@ -562,7 +621,11 @@ RULES:
           const streamOptions: StreamOptions = {
             onToken: (token: string) => {
               fullResponse += token;
-              const payload = JSON.stringify({ content: token, conversationId: convId });
+              const payload = JSON.stringify({ 
+                content: token, 
+                conversationId: convId,
+                isArtifactEdit, // Let frontend know this is an artifact edit response
+              });
               controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
             },
             onError: (error: Error) => {
@@ -576,13 +639,14 @@ RULES:
             streamOptions
           );
 
-          if (userId && convId && fullResponse) {
+          // Save response to DB (skip for artifact edits from preview modal)
+          if (userId && convId && fullResponse && !isArtifactEdit) {
             try {
               await db.insert(messages).values({
                 conversationId: convId,
                 role: 'alfred',
                 content: fullResponse,
-                mode: detectedFacet,
+                mode: detectedFacet === "code" ? "build" : detectedFacet as any,
               });
               
               await db.update(conversations)
@@ -595,11 +659,16 @@ RULES:
             }
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId: convId, done: true, duration: Date.now() - startTime })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+            conversationId: convId, 
+            done: true, 
+            duration: Date.now() - startTime,
+            isArtifactEdit,
+          })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           
-          console.log(`[Alfred] ✅ Completed in ${Date.now() - startTime}ms`);
+          console.log(`[Alfred] ✅ Completed in ${Date.now() - startTime}ms ${isArtifactEdit ? '(artifact edit)' : ''}`);
           
         } catch (error) {
           console.error('[Alfred] Stream failed:', error);
@@ -617,6 +686,7 @@ RULES:
         'X-Alfred-Facet': detectedFacet,
         'X-Alfred-Skill': skillLevel,
         'X-Alfred-Conversation': convId || '',
+        'X-Alfred-Artifact-Edit': isArtifactEdit ? 'true' : 'false',
       },
     });
     

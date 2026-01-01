@@ -185,6 +185,7 @@ export const conversations = pgTable('conversations', {
 export const messages = pgTable('messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  messageId: uuid('message_id'),
   
   // Content
   role: messageRoleEnum('role').notNull(),
@@ -283,8 +284,9 @@ export const artifacts = pgTable('artifacts', {
   id: uuid('id').primaryKey().defaultRandom(),
   
   // Ownership
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  messageId: uuid('message_id'),
   
   // Content
   title: varchar('title', { length: 255 }).notNull(),
@@ -344,7 +346,7 @@ export const files = pgTable('files', {
   // Ownership & Relations
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }),
-  messageId: uuid('message_id').references(() => messages.id, { onDelete: 'set null' }),
+  messageId: uuid('message_id'),
   
   // Metadata
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
@@ -368,7 +370,7 @@ export const files = pgTable('files', {
 
 export const projectDecisions = pgTable('project_decisions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
   
   // Decision content
@@ -401,7 +403,7 @@ export const projectDecisions = pgTable('project_decisions', {
 export const memoryEntries = pgTable('memory_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   
   // Memory content
   type: memoryTypeEnum('type').notNull(),

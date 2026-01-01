@@ -4,18 +4,21 @@ import React, { useState, useMemo, useRef, useEffect, ReactNode, createContext, 
 import MessageAttachments from './MessageAttachments';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ARTIFACT CONTEXT
+// ARTIFACT CONTEXT - with updateArtifact for live modifications
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface Artifact { id: string; code: string; language: string; title?: string; }
 interface ArtifactContextType {
   artifacts: Artifact[];
   addArtifact: (artifact: Artifact) => void;
+  updateArtifact: (id: string, code: string, title?: string) => void;
+  saveArtifactToDb: (artifactId: string, code: string, language: string, title: string) => Promise<void>;
   openGallery: (startIndex?: number) => void;
   isGalleryOpen: boolean;
   closeGallery: () => void;
   currentIndex: number;
   setCurrentIndex: (index: number) => void;
+  conversationId: string | null;
 }
 
 const ArtifactContext = createContext<ArtifactContextType | null>(null);
@@ -24,15 +27,145 @@ export function ArtifactProvider({ children, conversationId }: { children: React
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // Simple: just store the saved artifact with its ID
+  const [savedData, setSavedData] = useState<{ artifactId: string | null; code: string; title?: string } | null>(null);
 
-  useEffect(() => { setArtifacts([]); setIsGalleryOpen(false); setCurrentIndex(0); }, [conversationId]);
+  // Fetch saved artifact on mount
+  useEffect(() => {
+    console.log('🔄 [Provider] Reset for conversation:', conversationId);
+    setArtifacts([]);
+    setSavedData(null);
+    
+    if (!conversationId) return;
+    
+    fetch(`/api/artifacts/save?conversationId=${conversationId}`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('📡 [Fetch] Response:', data);
+        if (data.artifact?.code) {
+          // Corruption check
+          if (data.artifact.code.includes('ReactDOM.createRoot(document.getElementById')) {
+            console.error('❌ CORRUPTED - ignoring');
+            return;
+          }
+          const artifactId = data.artifact.metadata?.artifactId || null;
+          console.log('✅ [Fetch] Loaded artifact:');
+          console.log('   artifactId:', artifactId);
+          console.log('   code length:', data.artifact.code.length);
+          setSavedData({
+            artifactId,
+            code: data.artifact.code,
+            title: data.artifact.title,
+          });
+        }
+      })
+      .catch(err => console.error('❌ Fetch error:', err));
+  }, [conversationId]);
 
+  // Add artifact - check if it matches saved data
   const addArtifact = useCallback((artifact: Artifact) => {
-    setArtifacts(prev => prev.some(a => a.id === artifact.id) ? prev : [...prev, artifact]);
+    console.log('➕ [Add] artifact.id:', artifact.id);
+    console.log('   savedData.artifactId:', savedData?.artifactId);
+    console.log('   match?', savedData?.artifactId === artifact.id);
+    
+    setArtifacts(prev => {
+      // Skip if exists
+      if (prev.some(a => a.id === artifact.id)) {
+        return prev;
+      }
+      
+      // Check for EXACT ID match
+      if (savedData && savedData.artifactId && savedData.artifactId === artifact.id) {
+        console.log('   ✅ MATCH! Using saved code');
+        return [...prev, { ...artifact, code: savedData.code, title: savedData.title || artifact.title }];
+      }
+      
+      // No match - use original
+      console.log('   📝 No match, using original code');
+      return [...prev, artifact];
+    });
+  }, [savedData]);
+
+  // Late update - if savedData loads after artifacts
+  useEffect(() => {
+    if (!savedData || !savedData.artifactId || artifacts.length === 0) return;
+    
+    const target = artifacts.find(a => a.id === savedData.artifactId);
+    if (target && target.code !== savedData.code) {
+      console.log('🔄 [Late] Updating artifact:', savedData.artifactId);
+      setArtifacts(prev => prev.map(a => 
+        a.id === savedData.artifactId 
+          ? { ...a, code: savedData.code, title: savedData.title || a.title }
+          : a
+      ));
+    }
+  }, [savedData, artifacts]);
+
+  const updateArtifact = useCallback((id: string, code: string, title?: string) => {
+    setArtifacts(prev => prev.map(a => 
+      a.id === id ? { ...a, code, title: title || a.title } : a
+    ));
   }, []);
 
+  // Save artifact to database - now includes artifactId to track WHICH artifact was modified
+  const saveArtifactToDb = useCallback(async (artifactId: string, code: string, language: string, title: string) => {
+    if (!conversationId) {
+      console.warn('[Artifact] No conversationId, skipping save');
+      return;
+    }
+    
+    // CORRUPTION GUARD: Never save code with render wrapper
+    if (code.includes('ReactDOM.createRoot(document.getElementById')) {
+      console.error('[Artifact] ❌ BLOCKED: Attempted to save corrupted code with render wrapper!');
+      return;
+    }
+    
+    try {
+      console.log('[Artifact] Saving artifact:', artifactId, 'code length:', code.length);
+      const response = await fetch('/api/artifacts/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          artifactId, // Track which artifact was modified!
+          code,
+          language,
+          title,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save artifact');
+      }
+      
+      const data = await response.json();
+      console.log('[Artifact] ✅ Saved to DB:', data);
+      
+      // Update local savedData so subsequent renders use this
+      setSavedData({
+        artifactId,
+        code,
+        title,
+      });
+    } catch (error) {
+      console.error('[Artifact] Save to DB error:', error);
+    }
+  }, [conversationId]);
+
   return (
-    <ArtifactContext.Provider value={{ artifacts, addArtifact, openGallery: (idx = 0) => { setCurrentIndex(idx); setIsGalleryOpen(true); }, isGalleryOpen, closeGallery: () => setIsGalleryOpen(false), currentIndex, setCurrentIndex }}>
+    <ArtifactContext.Provider value={{ 
+      artifacts, 
+      addArtifact, 
+      updateArtifact,
+      saveArtifactToDb,
+      openGallery: (idx = 0) => { setCurrentIndex(idx); setIsGalleryOpen(true); }, 
+      isGalleryOpen, 
+      closeGallery: () => setIsGalleryOpen(false), 
+      currentIndex, 
+      setCurrentIndex,
+      conversationId: conversationId || null,
+    }}>
       {children}
       {isGalleryOpen && <ArtifactGallery />}
     </ArtifactContext.Provider>
@@ -54,7 +187,7 @@ interface MessageProps { id: string; role: 'user' | 'alfred'; content: string; t
 interface ParsedContent { type: 'text' | 'code' | 'code-streaming'; content: string; language?: string; }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MESSAGE ACTIONS - State of the art like Claude
+// MESSAGE ACTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const MessageActions = React.memo(function MessageActions({ content, isAlfred }: { content: string; isAlfred: boolean }) {
@@ -90,26 +223,21 @@ const MessageActions = React.memo(function MessageActions({ content, isAlfred }:
           <button className="action-btn" onClick={() => {}} title="Regenerate">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           </button>
-          <button className="action-btn" onClick={() => {}} title="Share">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
         </>
       )}
       <style jsx>{`
-.message-actions { display: flex; align-items: center; gap: 2px; padding-top: 8px; }
-        .action-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.7); }
-        .action-btn:hover { background: rgba(156,163,175,0.12); color: rgba(156,163,175,1); transform: scale(1.05); }
-        .action-btn:active { transform: scale(0.95); }
-        .action-btn.active { color: #C9B99A; }
+        .message-actions { display: flex; align-items: center; gap: 2px; padding-top: 8px; }
+        .action-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; color: rgba(156,163,175,0.7); }
+        .action-btn:hover { background: rgba(156,163,175,0.12); color: rgba(156,163,175,1); }
+        .action-btn.active { color: var(--text-primary, rgba(0,0,0,0.7)); }
         .action-btn.success { color: #4ade80; }
-        @media (max-width: 768px) { .action-btn { width: 36px; height: 36px; } }
       `}</style>
     </div>
   );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PARSING
+// PARSING UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function parseContent(content: string, isStreaming: boolean = false): ParsedContent[] {
@@ -155,6 +283,14 @@ function extractComponentName(code: string): string {
   return m?.[1] || m?.[2] || m?.[3] || 'Component';
 }
 
+function extractCodeFromText(text: string): { code: string; language: string; } | null {
+  const match = text.match(/```(\w+)?\n([\s\S]*?)```/);
+  if (match) {
+    return { code: match[2].trim(), language: match[1] || 'jsx' };
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PREVIEW HTML GENERATOR
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -169,23 +305,12 @@ function generatePreviewHTML(code: string, language: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FLOATING CODE BLOCK - State of the Art
+// CODE BLOCK (for main chat)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CodeBlock({ language, code, isStreaming = false, onPreview }: { language: string; code: string; isStreaming?: boolean; onPreview?: () => void; }) {
   const [copied, setCopied] = useState(false);
-  const [fadeColor, setFadeColor] = useState('#0a0a0b');
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Hide fades during theme transition to prevent flash
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setFadeColor(document.documentElement.getAttribute('data-theme') === 'light' ? '#FFFFFF' : '#0a0a0b');
-      
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => observer.disconnect();
-  }, []);
   const isRenderable = !isStreaming && isRenderableCode(language, code);
 
   useEffect(() => { if (isStreaming && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [code, isStreaming]);
@@ -221,57 +346,81 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
         </div>
       </div>
       <div className="code-container">
-        <div className="code-fade-top" style={{ background: `linear-gradient(to bottom, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
         <div className="code-content" ref={scrollRef}>
           {lines.map((line, i) => (<div key={i} className="code-line"><span className="line-num">{i + 1}</span><span className="line-code" dangerouslySetInnerHTML={{ __html: highlightLine(line) || ' ' }} /></div>))}
           {isStreaming && <span className="cursor" />}
         </div>
-        <div className="code-fade-bottom" style={{ background: `linear-gradient(to top, ${fadeColor} 0%, ${fadeColor} 30%, transparent 100%)` }} />
       </div>
       <style jsx>{`
         .code-block { position: relative; margin: 16px 0; background: transparent; overflow: visible; }
         .code-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 8px 0; }
         .code-header-left { display: flex; align-items: center; gap: 10px; }
-        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6);  }
-        .code-icon-btn { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: rgba(156,163,175,0.5); }
+        .code-lang { font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.08em; color: rgba(156,163,175,0.6); }
+        .code-icon-btn { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; color: rgba(156,163,175,0.5); }
         .code-icon-btn:hover { color: rgba(156,163,175,0.9); background: rgba(156,163,175,0.1); }
         .code-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-        .code-icon-btn.preview { color: rgba(201,185,154,0.6); }
-        .code-icon-btn.preview:hover { color: #C9B99A; background: rgba(201,185,154,0.12); }
+        .code-icon-btn.preview { color: var(--text-secondary, rgba(100,100,100,0.6)); }
+        .code-icon-btn.preview:hover { color: var(--text-primary, rgba(50,50,50,0.9)); background: var(--bg-hover, rgba(100,100,100,0.12)); }
         .code-container { position: relative; max-height: 320px; overflow: hidden; }
-        .code-fade-top { position: absolute; top: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; }
-        .code-fade-bottom { position: absolute; bottom: 0; left: -16px; right: -16px; height: 28px; pointer-events: none; z-index: 15; }
-        .code-content { overflow-y: auto; padding: 32px 0; max-height: 320px; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
+        .code-content { overflow-y: auto; padding: 16px 0; max-height: 320px; scrollbar-width: none; }
         .code-content::-webkit-scrollbar { display: none; }
-        .code-line { display: block; padding: 1px 8px; min-height: 20px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; line-height: 20px; letter-spacing: 0.02em; font-weight: 300; }
-        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none;  }
-        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;  }
+        .code-line { display: block; padding: 1px 8px; min-height: 20px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; line-height: 20px; }
+        .line-num { display: inline-block; width: 28px; color: rgba(156,163,175,0.3); text-align: right; padding-right: 16px; user-select: none; }
+        .line-code { color: var(--text-primary, rgba(255,255,255,0.85)); white-space: pre; }
         .line-code :global(.kw) { color: #C586C0; }
         .line-code :global(.str) { color: #CE9178; }
         .line-code :global(.num) { color: #B5CEA8; }
         .line-code :global(.bool) { color: #569CD6; }
         .line-code :global(.cmt) { color: rgba(156,163,175,0.5); font-style: italic; }
-        .cursor { display: inline-block; width: 2px; height: 14px; background: var(--text-primary, #C9B99A); margin-left: 2px; animation: cursorBlink 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite; box-shadow: 0 0 12px currentColor; border-radius: 1px; }
+        .cursor { display: inline-block; width: 2px; height: 14px; background: var(--text-primary, rgba(100,100,100,0.8)); margin-left: 2px; animation: cursorBlink 1.2s infinite; }
         @keyframes cursorBlink { 0%, 40% { opacity: 1; } 50%, 90% { opacity: 0; } 100% { opacity: 1; } }
-        @media (max-width: 768px) { .code-line { font-size: 10px; padding: 1px 4px; min-height: 18px; line-height: 18px; } .line-num { width: 24px; padding-right: 12px; } .code-container, .code-content { max-height: 260px; } .code-content { padding: 28px 0; } .code-fade-top { height: 50px; top: -4px; left: -16px; right: -16px; } .code-fade-bottom { height: 60px; bottom: -8px; left: -16px; right: -16px; } }
       `}</style>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ARTIFACT GALLERY - State of the art split screen
+// ARTIFACT GALLERY - State of the Art
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface ChatMessage {
+  role: 'user' | 'alfred';
+  content: string;
+}
+
 function ArtifactGallery() {
-  const { artifacts, currentIndex, setCurrentIndex, closeGallery } = useArtifacts();
+  const { artifacts, currentIndex, setCurrentIndex, closeGallery, updateArtifact, saveArtifactToDb } = useArtifacts();
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'code' | 'preview'>('preview');
   const [isLoaded, setIsLoaded] = useState(false);
-  const [showCode, setShowCode] = useState(false);
+  const [showCode, setShowCode] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   const [splitPosition, setSplitPosition] = useState(50);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [streamingCode, setStreamingCode] = useState('');
+  const [isDark, setIsDark] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const prevIndexRef = useRef(0);
   const isDragging = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Watch for theme changes
+  useEffect(() => {
+    const checkTheme = () => {
+      const theme = document.documentElement.getAttribute('data-theme');
+      setIsDark(theme !== 'light');
+    };
+    checkTheme();
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   const displayArtifacts = useMemo(() => {
     if (artifacts.length === 0) return [];
@@ -281,114 +430,1196 @@ function ArtifactGallery() {
 
   const safeIndex = displayArtifacts.length > 0 ? Math.max(0, Math.min(currentIndex, displayArtifacts.length - 1)) : 0;
   const current = displayArtifacts[safeIndex];
-  const previewHTML = useMemo(() => current ? generatePreviewHTML(current.code, current.language) : '', [current]);
+  
+  const displayCode = streamingCode || (current?.code || '');
+  const previewHTML = useMemo(() => current ? generatePreviewHTML(displayCode, current.language) : '', [displayCode, current?.language]);
 
-  useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
+  useEffect(() => { 
+    const check = () => setIsMobile(window.innerWidth < 768); 
+    check(); 
+    window.addEventListener('resize', check); 
+    return () => window.removeEventListener('resize', check); 
+  }, []);
 
-  const handleClose = useCallback(() => { setIsClosing(true); setTimeout(closeGallery, 280); }, [closeGallery]);
+  const handleClose = useCallback(() => { 
+    setIsClosing(true); 
+    setTimeout(closeGallery, 280); 
+  }, [closeGallery]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleClose();
-      if (e.key === 'ArrowLeft' && safeIndex > 0) setCurrentIndex(safeIndex - 1);
-      if (e.key === 'ArrowRight' && safeIndex < displayArtifacts.length - 1) setCurrentIndex(safeIndex + 1);
+      if (e.key === 'ArrowLeft' && safeIndex > 0 && !chatInput) setCurrentIndex(safeIndex - 1);
+      if (e.key === 'ArrowRight' && safeIndex < displayArtifacts.length - 1 && !chatInput) setCurrentIndex(safeIndex + 1);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [safeIndex, displayArtifacts.length, handleClose, setCurrentIndex]);
+  }, [safeIndex, displayArtifacts.length, handleClose, setCurrentIndex, chatInput]);
 
-  useEffect(() => { setIsLoaded(false); }, [safeIndex]);
+  useEffect(() => { setIsLoaded(false); }, [safeIndex, displayCode]);
 
-  const handleMouseDown = useCallback(() => { isDragging.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }, []);
+  // Smooth transition between artifacts
+  useEffect(() => {
+    if (prevIndexRef.current !== safeIndex) {
+      setIsTransitioning(true);
+      const timer = setTimeout(() => setIsTransitioning(false), 400);
+      prevIndexRef.current = safeIndex;
+      return () => clearTimeout(timer);
+    }
+  }, [safeIndex]);
+
+  // Splitter: Only expand PREVIEW (drag left to make preview bigger)
+  // Code panel: min 25%, max 50% (so preview: min 50%, max 75%)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => { if (!isDragging.current) return; setSplitPosition(Math.max(25, Math.min(75, (e.clientX / window.innerWidth) * 100))); };
-    const handleMouseUp = () => { isDragging.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; };
+    let rafId: number;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const rect = containerRef.current!.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percent = (x / rect.width) * 100;
+        // Code panel: min 25%, max 50% (preview gets 50% to 75%)
+        setSplitPosition(Math.max(25, Math.min(50, percent)));
+      });
+    };
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      cancelAnimationFrame(rafId);
+    };
   }, []);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
+    }
+  }, [chatInput]);
+
+  const handleSendEdit = useCallback(async () => {
+    if (!chatInput.trim() || !current || isTyping) return;
+    
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setIsTyping(true);
+    setStreamingCode('');
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMsg,
+          artifactCode: current.code,
+          artifactTitle: extractComponentName(current.code),
+        }),
+      });
+
+      if (!response.ok) throw new Error('API error');
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader');
+
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                fullResponse += parsed.content;
+                
+                // Show streaming code in REAL-TIME (even before code block closes)
+                // First try complete code block
+                const completeMatch = fullResponse.match(/```(\w+)?\n([\s\S]*?)```/);
+                if (completeMatch) {
+                  setStreamingCode(completeMatch[2].trim());
+                } else {
+                  // Show partial code as it streams (before closing ```)
+                  const partialMatch = fullResponse.match(/```(\w+)?\n([\s\S]*)/);
+                  if (partialMatch && partialMatch[2]) {
+                    setStreamingCode(partialMatch[2]);
+                  }
+                }
+              }
+            } catch {}
+          }
+        }
+      }
+
+      const extracted = extractCodeFromText(fullResponse);
+      if (extracted && current) {
+        updateArtifact(current.id, extracted.code, extractComponentName(extracted.code));
+        setStreamingCode('');
+        
+        // Save to database - include current.id to track which artifact was modified!
+        await saveArtifactToDb(current.id, extracted.code, extracted.language, extractComponentName(extracted.code));
+      }
+
+      const textPart = fullResponse.split(/```/)[0].trim();
+      setChatMessages(prev => [...prev, { 
+        role: 'alfred', 
+        content: textPart || 'Done! The code has been updated.' 
+      }]);
+      
+      // Show completion animation
+      setShowCompletion(true);
+      setTimeout(() => setShowCompletion(false), 1500);
+
+    } catch (error) {
+      console.error('[Gallery] API Error:', error);
+      setChatMessages(prev => [...prev, { 
+        role: 'alfred', 
+        content: 'Sorry, something went wrong. Please try again.' 
+      }]);
+      setStreamingCode('');
+    } finally {
+      setIsTyping(false);
+    }
+  }, [chatInput, current, isTyping, updateArtifact, saveArtifactToDb]);
 
   if (!current) return null;
   const currentName = extractComponentName(current.code);
 
   return (
-    <>
-      <div className={'gallery-root' + (isClosing ? ' closing' : '')}>
-        <div className="gallery-header">
-          <div className="gallery-nav-left">
-            <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex - 1)} disabled={safeIndex === 0}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <span className="counter">{safeIndex + 1}/{displayArtifacts.length}</span>
-            <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex + 1)} disabled={safeIndex === displayArtifacts.length - 1}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <span className="title">{currentName}</span>
-          </div>
-          <div className="gallery-nav-right">
-            {!isMobile && <button className={'toggle-btn' + (showCode ? ' active' : '')} onClick={() => setShowCode(!showCode)}>{showCode ? 'HIDE CODE' : 'SHOW CODE'}</button>}
-            <button className="icon-btn" onClick={() => { setIsLoaded(false); if(iframeRef.current) iframeRef.current.src = iframeRef.current.src; }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-            <button className="icon-btn close-btn" onClick={handleClose}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
+    <div className={`gallery-overlay ${isClosing ? 'closing' : ''} ${isDark ? 'dark' : 'light'}`}>
+      {/* HEADER */}
+      <header className="gallery-header">
+        <div className="header-left">
+          <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex - 1)} disabled={safeIndex === 0}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span className="counter">{safeIndex + 1}/{displayArtifacts.length}</span>
+          <button className="nav-btn" onClick={() => setCurrentIndex(safeIndex + 1)} disabled={safeIndex === displayArtifacts.length - 1}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          {/* Mobile tabs - in header left for better visibility */}
+          {isMobile && (
+            <div className="mobile-tabs">
+              <button className={`tab ${mobileTab === 'code' ? 'active' : ''}`} onClick={() => setMobileTab('code')}>Code</button>
+              <button className={`tab ${mobileTab === 'preview' ? 'active' : ''}`} onClick={() => setMobileTab('preview')}>Preview</button>
+            </div>
+          )}
+          {/* Title only on desktop */}
+          {!isMobile && <span className="title">{currentName}</span>}
+          {isTyping && <span className="updating-badge">Crafting</span>}
         </div>
-        <div className="gallery-main">
-          <div className="preview-area" style={{ width: showCode && !isMobile ? splitPosition + '%' : '100%' }}>
-            {!isLoaded && <div className="loader"><div className="spinner" /></div>}
-            <iframe ref={iframeRef} srcDoc={previewHTML} sandbox="allow-scripts allow-same-origin" onLoad={() => setIsLoaded(true)} className={isLoaded ? 'loaded' : ''} />
-          </div>
-          {showCode && !isMobile && (
-            <>
-              <div className="splitter" onMouseDown={handleMouseDown}><div className="splitter-line" /></div>
-              <div className="code-area" style={{ width: (100 - splitPosition) + '%' }}>
-                <div className="code-scroll">
-                  {current.code.split('\n').map((line, i) => (<div key={i} className="gal-line"><span className="gal-ln">{i + 1}</span><span className="gal-lc">{line}</span></div>))}
+        <div className="header-right">
+          {!isMobile && (
+            <button className={`toggle-btn ${showCode ? 'active' : ''}`} onClick={() => setShowCode(!showCode)}>
+              {showCode ? 'Hide Code' : 'Show Code'}
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => { setIsLoaded(false); if(iframeRef.current) iframeRef.current.src = iframeRef.current.src; }} title="Refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+          <button className="icon-btn close" onClick={handleClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </header>
+
+      {/* MAIN CONTENT */}
+      <main className="gallery-main" ref={containerRef}>
+        {/* CODE PANEL */}
+        {((showCode && !isMobile) || (isMobile && mobileTab === 'code')) && (
+          <div className="code-panel" style={{ width: isMobile ? '100%' : `${splitPosition}%` }}>
+            {/* Code Display */}
+            <div className={`code-display ${streamingCode ? 'streaming' : ''}`}>
+              {streamingCode && (
+                <div className="streaming-indicator">
+                  <span className="pulse"></span> Alfred is writing...
+                </div>
+              )}
+              {displayCode.split('\n').map((line, i) => (
+                <div key={i} className="code-line">
+                  <span className="ln">{i + 1}</span>
+                  <span className="lc">{line}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Chat Section - Fixed at bottom of code panel */}
+            <div className="chat-section">
+              {/* Messages */}
+              {chatMessages.length > 0 && (
+                <div className="chat-messages" ref={chatScrollRef}>
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`msg ${msg.role}`}>
+                      <span className="msg-role">{msg.role === 'user' ? 'You' : 'Alfred'}</span>
+                      <span className="msg-text">{msg.content}</span>
+                    </div>
+                  ))}
+                  {isTyping && (
+                    <div className="msg alfred">
+                      <span className="msg-role">Alfred</span>
+                      <span className="typing"><span/><span/><span/></span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Input Box - Styled exactly like ChatInput.tsx */}
+              <div className="input-wrapper">
+                <div className="input-container">
+                  <textarea
+                    ref={inputRef}
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendEdit();
+                      }
+                    }}
+                    placeholder="Ask Alfred to modify..."
+                    disabled={isTyping}
+                    rows={1}
+                  />
+                  <button 
+                    className={`send-btn ${chatInput.trim() ? 'active' : ''}`}
+                    onClick={handleSendEdit}
+                    disabled={!chatInput.trim() || isTyping}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 4L12 20M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        )}
+
+        {/* SPLITTER */}
+        {showCode && !isMobile && (
+          <div className="splitter" onMouseDown={handleMouseDown}>
+            <div className="splitter-handle" />
+          </div>
+        )}
+
+        {/* PREVIEW PANEL - State of the Art with Crafting Animation */}
+        {((!isMobile) || (isMobile && mobileTab === 'preview')) && (
+          <div className="preview-panel" style={{ width: showCode && !isMobile ? `${100 - splitPosition}%` : '100%' }}>
+            
+            {/* Alfred Crafting Overlay - Shows while modifying */}
+            {isTyping && (
+              <div className="crafting-overlay">
+                <div className="crafting-container">
+                  {/* Orbital rings */}
+                  <div className="orbit orbit-1">
+                    <div className="orbit-dot" />
+                    <div className="orbit-dot" style={{ animationDelay: '-2s' }} />
+                  </div>
+                  <div className="orbit orbit-2">
+                    <div className="orbit-dot" />
+                    <div className="orbit-dot" style={{ animationDelay: '-1.5s' }} />
+                  </div>
+                  <div className="orbit orbit-3">
+                    <div className="orbit-dot" />
+                  </div>
+                  
+                  {/* Central morphing cube */}
+                  <div className="morph-cube">
+                    <div className="cube-face face-front" />
+                    <div className="cube-face face-back" />
+                    <div className="cube-face face-left" />
+                    <div className="cube-face face-right" />
+                    <div className="cube-face face-top" />
+                    <div className="cube-face face-bottom" />
+                  </div>
+                  
+                  {/* Pulsing glow */}
+                  <div className="pulse-ring pulse-1" />
+                  <div className="pulse-ring pulse-2" />
+                  <div className="pulse-ring pulse-3" />
+                  
+                  {/* Floating code particles */}
+                  <div className="particles">
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} className="particle" style={{ 
+                        '--delay': `${i * 0.3}s`,
+                        '--angle': `${i * 30}deg`,
+                        '--distance': `${60 + (i % 3) * 25}px`
+                      } as React.CSSProperties} />
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Crafting text */}
+                <div className="crafting-text">
+                  <span className="crafting-label">Alfred is crafting</span>
+                  <div className="crafting-dots">
+                    <span className="dot" />
+                    <span className="dot" />
+                    <span className="dot" />
+                  </div>
+                </div>
+                
+                {/* Streaming code preview - subtle background */}
+                {streamingCode && (
+                  <div className="streaming-preview">
+                    <div className="streaming-lines">
+                      {streamingCode.split('\n').slice(-8).map((line, i) => (
+                        <div key={i} className="streaming-line" style={{ opacity: 0.3 + (i * 0.08) }}>
+                          {line.substring(0, 50)}{line.length > 50 ? '...' : ''}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Normal loader - only when not typing and not loaded */}
+            {!isLoaded && !isTyping && <div className="loader"><div className="spinner" /></div>}
+            
+            {/* Completion celebration - brief flash when done */}
+            {showCompletion && (
+              <div className="completion-overlay">
+                <div className="completion-ring" />
+                <div className="completion-check">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </div>
+            )}
+            
+            {/* Preview iframe with smooth transition */}
+            <iframe 
+              ref={iframeRef} 
+              srcDoc={previewHTML} 
+              sandbox="allow-scripts allow-same-origin" 
+              onLoad={() => setIsLoaded(true)} 
+              className={`${isLoaded ? 'loaded' : ''} ${isTyping ? 'crafting' : ''} ${isTransitioning ? 'transitioning' : ''}`}
+            />
+          </div>
+        )}
+      </main>
+
       <style jsx>{`
-        .gallery-root { position: fixed; inset: 0; z-index: 99999; background: #000; display: flex; flex-direction: column; animation: galleryIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-        .gallery-root.closing { animation: galleryOut 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
-        @keyframes galleryIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
-        @keyframes galleryOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.98); } }
-        .gallery-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .gallery-nav-left, .gallery-nav-right { display: flex; align-items: center; gap: 8px; }
-        .nav-btn, .icon-btn { width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        .nav-btn:hover:not(:disabled), .icon-btn:hover { color: #fff; background: rgba(255,255,255,0.1); transform: scale(1.05); }
-        .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-        .close-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .counter { font-family: 'SF Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.4); min-width: 40px; text-align: center; }
-        .title { font-size: 13px; font-weight: 500; color: #fff; margin-left: 12px; }
-        .toggle-btn { font-family: 'SF Mono', monospace; font-size: 9px; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 12px; cursor: pointer; transition: all 0.2s; }
-        .toggle-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
-        .toggle-btn.active { color: #C9B99A; border-color: rgba(201,185,154,0.4); background: rgba(201,185,154,0.1); }
-        .gallery-main { flex: 1; display: flex; overflow: hidden; }
-        .preview-area { position: relative; background: #000; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        /* ═══════════════════════════════════════════════════════════════════════
+           THEME VARIABLES
+           ═══════════════════════════════════════════════════════════════════════ */
+        .gallery-overlay.light {
+          --bg: #f5f5f5;
+          --bg-secondary: #fafafa;
+          --bg-glass: rgba(255, 255, 255, 0.95);
+          --border: rgba(0, 0, 0, 0.08);
+          --border-hover: rgba(0, 0, 0, 0.15);
+          --text: rgba(0, 0, 0, 0.85);
+          --text-secondary: rgba(0, 0, 0, 0.5);
+          --text-muted: rgba(0, 0, 0, 0.25);
+          --btn-bg: rgba(0, 0, 0, 0.04);
+          --btn-bg-hover: rgba(0, 0, 0, 0.08);
+          --btn-active: black;
+          --btn-active-text: white;
+          --bubble: rgba(0, 0, 0, 0.04);
+          --bubble-user: rgba(0, 0, 0, 0.08);
+          --preview-bg: white;
+          --input-bg: rgba(255, 255, 255, 0.95);
+          --input-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 4px 24px -4px rgba(0, 0, 0, 0.08);
+        }
+
+        .gallery-overlay.dark {
+          --bg: #0a0a0b;
+          --bg-secondary: #0d0d0e;
+          --bg-glass: rgba(0, 0, 0, 0.7);
+          --border: rgba(255, 255, 255, 0.08);
+          --border-hover: rgba(255, 255, 255, 0.15);
+          --text: rgba(255, 255, 255, 0.9);
+          --text-secondary: rgba(255, 255, 255, 0.5);
+          --text-muted: rgba(255, 255, 255, 0.25);
+          --btn-bg: rgba(255, 255, 255, 0.06);
+          --btn-bg-hover: rgba(255, 255, 255, 0.1);
+          --btn-active: white;
+          --btn-active-text: black;
+          --bubble: rgba(255, 255, 255, 0.06);
+          --bubble-user: rgba(255, 255, 255, 0.1);
+          --preview-bg: #111;
+          --input-bg: rgba(0, 0, 0, 0.7);
+          --input-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           GALLERY OVERLAY
+           ═══════════════════════════════════════════════════════════════════════ */
+        .gallery-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          display: flex;
+          flex-direction: column;
+          background: var(--bg);
+          animation: fadeIn 0.3s ease-out;
+        }
+        .gallery-overlay.closing { animation: fadeOut 0.25s ease-in forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════════════════════════ */
+        .gallery-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--border);
+          background: var(--bg-glass);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          flex-shrink: 0;
+        }
+        .header-left, .header-right { display: flex; align-items: center; gap: 8px; }
+        .header-left { flex: 1; min-width: 0; }
+        .header-right { flex-shrink: 0; }
+
+        .nav-btn, .icon-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: var(--btn-bg);
+          border: 1px solid var(--border);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-secondary);
+          transition: all 0.15s ease;
+        }
+        .nav-btn:hover:not(:disabled), .icon-btn:hover {
+          color: var(--text);
+          background: var(--btn-bg-hover);
+        }
+        .nav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+        .icon-btn.close:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+
+        .counter {
+          font-family: 'SF Mono', monospace;
+          font-size: 11px;
+          color: var(--text-muted);
+          min-width: 36px;
+          text-align: center;
+        }
+        .title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text);
+          margin-left: 8px;
+        }
+        .updating-badge {
+          font-size: 10px;
+          font-weight: 500;
+          color: var(--text);
+          background: linear-gradient(135deg, var(--btn-bg) 0%, var(--btn-bg-hover) 100%);
+          padding: 4px 10px;
+          border-radius: 20px;
+          margin-left: 8px;
+          letter-spacing: 0.02em;
+          border: 1px solid var(--border);
+          animation: badgePulse 2s ease-in-out infinite;
+          position: relative;
+          overflow: hidden;
+        }
+        .updating-badge::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+          animation: badgeShine 2s ease-in-out infinite;
+        }
+        @keyframes badgePulse { 
+          0%, 100% { opacity: 1; transform: scale(1); } 
+          50% { opacity: 0.8; transform: scale(0.98); } 
+        }
+        @keyframes badgeShine {
+          0% { left: -100%; }
+          50%, 100% { left: 100%; }
+        }
+
+        .mobile-tabs {
+          display: flex;
+          background: var(--btn-bg);
+          border-radius: 6px;
+          padding: 2px;
+          margin-left: 8px;
+          flex-shrink: 0;
+        }
+        .tab {
+          padding: 5px 12px;
+          border-radius: 5px;
+          border: none;
+          background: transparent;
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .tab.active {
+          background: var(--btn-bg-hover);
+          color: var(--text);
+        }
+
+        .toggle-btn {
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          background: transparent;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          padding: 6px 12px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .toggle-btn:hover { color: var(--text); border-color: var(--border-hover); }
+        .toggle-btn.active { color: var(--text); background: var(--btn-bg); }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           MAIN LAYOUT
+           ═══════════════════════════════════════════════════════════════════════ */
+        .gallery-main { 
+          flex: 1; 
+          display: flex; 
+          overflow: hidden;
+          position: relative;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           CODE PANEL - Contains code display + chat section
+           ═══════════════════════════════════════════════════════════════════════ */
+        .code-panel {
+          display: flex;
+          flex-direction: column;
+          background: var(--bg-secondary);
+          overflow: hidden;
+          position: relative;
+        }
+
+        .code-display {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px 0;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border) transparent;
+        }
+        .code-display::-webkit-scrollbar { width: 6px; }
+        .code-display::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Streaming state */
+        .code-display.streaming {
+          background: linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
+        }
+        .streaming-indicator {
+          position: sticky;
+          top: 0;
+          padding: 8px 16px;
+          font-size: 12px;
+          color: #3b82f6;
+          background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), transparent);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          z-index: 10;
+        }
+        .streaming-indicator .pulse {
+          width: 8px;
+          height: 8px;
+          background: #3b82f6;
+          border-radius: 50%;
+          animation: pulse 1s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .code-line {
+          display: flex;
+          padding: 1px 16px;
+          font-family: 'JetBrains Mono', 'SF Mono', monospace;
+          font-size: 12px;
+          line-height: 1.6;
+        }
+        .ln {
+          width: 36px;
+          color: var(--text-muted);
+          text-align: right;
+          padding-right: 16px;
+          user-select: none;
+          flex-shrink: 0;
+        }
+        .lc { color: var(--text); white-space: pre; opacity: 0.8; }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           CHAT SECTION - Fixed at bottom of code panel
+           ═══════════════════════════════════════════════════════════════════════ */
+        .chat-section {
+          flex-shrink: 0;
+          border-top: 1px solid var(--border);
+          background: var(--bg-secondary);
+          display: flex;
+          flex-direction: column;
+          max-height: 40%;
+        }
+
+        .chat-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          scrollbar-width: thin;
+          max-height: 180px;
+        }
+        .msg {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-width: 90%;
+        }
+        .msg.user { align-self: flex-end; align-items: flex-end; }
+        .msg.alfred { align-self: flex-start; align-items: flex-start; }
+        .msg-role {
+          font-size: 10px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          color: var(--text-secondary);
+        }
+        .msg-text {
+          font-size: 13px;
+          line-height: 1.5;
+          color: var(--text);
+          padding: 10px 14px;
+          border-radius: 16px;
+          background: var(--bubble);
+        }
+        .msg.user .msg-text {
+          background: var(--bubble-user);
+          border-radius: 16px 16px 4px 16px;
+        }
+        .msg.alfred .msg-text { border-radius: 16px 16px 16px 4px; }
+
+        .typing { display: flex; gap: 4px; padding: 10px 14px; }
+        .typing span {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--text-secondary);
+          animation: bounce 1.2s ease-in-out infinite;
+        }
+        .typing span:nth-child(2) { animation-delay: 0.15s; }
+        .typing span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           INPUT - Matches ChatInput.tsx exactly
+           ═══════════════════════════════════════════════════════════════════════ */
+        .input-wrapper {
+          padding: 16px;
+        }
+
+        .input-container {
+          display: flex;
+          align-items: flex-end;
+          gap: 6px;
+          padding: 10px 12px;
+          background: var(--input-bg);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border: 1px solid var(--border);
+          border-radius: 24px;
+          transition: all 0.2s ease;
+          box-shadow: var(--input-shadow);
+        }
+        .input-container:focus-within {
+          border-color: var(--border-hover);
+        }
+
+        .input-container textarea {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+          font-size: 16px;
+          color: var(--text);
+          resize: none;
+          min-height: 24px;
+          max-height: 120px;
+          line-height: 1.5;
+          padding: 0;
+        }
+        .input-container textarea::placeholder { color: var(--text-secondary); }
+        .input-container textarea:disabled { opacity: 0.5; }
+
+        .send-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 12px;
+          border: none;
+          background: var(--btn-bg);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted);
+          transition: all 0.15s ease;
+          flex-shrink: 0;
+        }
+        .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .send-btn:hover:not(:disabled) {
+          background: var(--btn-bg-hover);
+          color: var(--text-secondary);
+        }
+        .send-btn.active {
+          background: var(--btn-active);
+          color: var(--btn-active-text);
+        }
+        .send-btn.active:hover:not(:disabled) {
+          opacity: 0.9;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           SPLITTER - Only expands code panel (45% to 70%)
+           ═══════════════════════════════════════════════════════════════════════ */
+        .splitter {
+          width: 12px;
+          background: transparent;
+          cursor: col-resize;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          position: relative;
+        }
+        .splitter::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: transparent;
+          transition: background 0.15s;
+        }
+        .splitter:hover::before { background: var(--btn-bg); }
+        .splitter:active::before { background: var(--btn-bg-hover); }
+        .splitter-handle {
+          width: 3px;
+          height: 48px;
+          background: var(--border);
+          border-radius: 2px;
+          transition: all 0.15s ease;
+          z-index: 1;
+        }
+        .splitter:hover .splitter-handle { height: 64px; background: var(--border-hover); }
+        .splitter:active .splitter-handle { height: 80px; background: var(--text-secondary); }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           PREVIEW PANEL
+           ═══════════════════════════════════════════════════════════════════════ */
+        .preview-panel {
+          position: relative;
+          background: var(--preview-bg);
+          flex: 1;
+          min-width: 0;
+        }
+        iframe {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          border: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
         iframe.loaded { opacity: 1; }
-        .loader { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-        .spinner { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.08); border-top-color: rgba(255,255,255,0.5); border-radius: 50%; animation: spin 0.6s linear infinite; }
+
+        .loader {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .spinner {
+          width: 24px;
+          height: 24px;
+          border: 2px solid var(--border);
+          border-top-color: var(--text-secondary);
+          border-radius: 50%;
+          animation: spin 0.6s linear infinite;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .splitter { width: 12px; background: rgba(255,255,255,0.02); cursor: col-resize; display: flex; align-items: center; justify-content: center; transition: background 0.2s; position: relative; z-index: 10; }
-        .splitter:hover { background: rgba(255,255,255,0.05); }
-        .splitter:hover .splitter-line { background: rgba(201,185,154,0.6); }
-        .splitter-line { width: 3px; height: 40px; background: rgba(255,255,255,0.15); border-radius: 2px; transition: all 0.2s; }
-        .code-area { background: #0d0d0f; border-left: 1px solid rgba(255,255,255,0.06); overflow: hidden; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .code-scroll { flex: 1; overflow-y: auto; padding: 16px 0; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
-        .code-scroll::-webkit-scrollbar { width: 6px; }
-        .code-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-        .gal-line { display: flex; padding: 1px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; }
-        .gal-ln { width: 36px; color: rgba(255,255,255,0.2); text-align: right; padding-right: 16px; user-select: none; flex-shrink: 0; }
-        .gal-lc { color: rgba(255,255,255,0.8); white-space: pre; }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           ALFRED CRAFTING ANIMATION - State of the Art
+           ═══════════════════════════════════════════════════════════════════════ */
+        .crafting-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: var(--preview-bg);
+          z-index: 10;
+          animation: craftingFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes craftingFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .crafting-container {
+          position: relative;
+          width: 200px;
+          height: 200px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        /* Orbital rings */
+        .orbit {
+          position: absolute;
+          border: 1px solid var(--border);
+          border-radius: 50%;
+          animation: orbitSpin 8s linear infinite;
+        }
+        .orbit-1 { width: 120px; height: 120px; animation-duration: 6s; }
+        .orbit-2 { width: 160px; height: 160px; animation-duration: 10s; animation-direction: reverse; }
+        .orbit-3 { width: 190px; height: 190px; animation-duration: 14s; opacity: 0.5; }
+
+        @keyframes orbitSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .orbit-dot {
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          background: linear-gradient(135deg, var(--text-secondary), var(--text-muted));
+          border-radius: 50%;
+          top: -4px;
+          left: calc(50% - 4px);
+          box-shadow: 0 0 12px var(--text-muted);
+          animation: dotPulse 2s ease-in-out infinite;
+        }
+        @keyframes dotPulse {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.3); opacity: 1; }
+        }
+
+        /* Morphing cube - the centerpiece */
+        .morph-cube {
+          position: relative;
+          width: 40px;
+          height: 40px;
+          transform-style: preserve-3d;
+          animation: cubeFloat 4s ease-in-out infinite, cubeMorph 8s ease-in-out infinite;
+        }
+        @keyframes cubeFloat {
+          0%, 100% { transform: rotateX(-20deg) rotateY(0deg) translateY(0); }
+          50% { transform: rotateX(-20deg) rotateY(180deg) translateY(-8px); }
+        }
+        @keyframes cubeMorph {
+          0%, 100% { border-radius: 4px; }
+          50% { border-radius: 50%; }
+        }
+
+        .cube-face {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, 
+            rgba(var(--text-secondary), 0.1) 0%,
+            rgba(var(--text-secondary), 0.05) 100%
+          );
+          border: 1px solid var(--border);
+          backdrop-filter: blur(4px);
+        }
+        .gallery-overlay.dark .cube-face {
+          background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+        }
+        .gallery-overlay.light .cube-face {
+          background: linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.01) 100%);
+        }
+
+        .face-front { transform: translateZ(20px); }
+        .face-back { transform: translateZ(-20px) rotateY(180deg); }
+        .face-left { transform: translateX(-20px) rotateY(-90deg); }
+        .face-right { transform: translateX(20px) rotateY(90deg); }
+        .face-top { transform: translateY(-20px) rotateX(90deg); }
+        .face-bottom { transform: translateY(20px) rotateX(-90deg); }
+
+        /* Pulse rings */
+        .pulse-ring {
+          position: absolute;
+          border-radius: 50%;
+          border: 1px solid var(--text-muted);
+          animation: pulseExpand 3s ease-out infinite;
+        }
+        .pulse-1 { width: 60px; height: 60px; }
+        .pulse-2 { width: 60px; height: 60px; animation-delay: 1s; }
+        .pulse-3 { width: 60px; height: 60px; animation-delay: 2s; }
+
+        @keyframes pulseExpand {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(3.5); opacity: 0; }
+        }
+
+        /* Floating particles */
+        .particles {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+        }
+        .particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: var(--text-muted);
+          border-radius: 50%;
+          top: 50%;
+          left: 50%;
+          animation: particleFloat 4s ease-in-out infinite;
+          animation-delay: var(--delay);
+        }
+        @keyframes particleFloat {
+          0%, 100% {
+            transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance)) scale(1);
+            opacity: 0.3;
+          }
+          50% {
+            transform: translate(-50%, -50%) rotate(calc(var(--angle) + 180deg)) translateX(calc(var(--distance) * 1.3)) scale(1.5);
+            opacity: 0.7;
+          }
+        }
+
+        /* Crafting text */
+        .crafting-text {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 32px;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          letter-spacing: 0.02em;
+        }
+        .crafting-label {
+          animation: textShimmer 2s ease-in-out infinite;
+        }
+        @keyframes textShimmer {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+
+        .crafting-dots {
+          display: flex;
+          gap: 3px;
+          padding-left: 2px;
+        }
+        .crafting-dots .dot {
+          width: 4px;
+          height: 4px;
+          background: var(--text-secondary);
+          border-radius: 50%;
+          animation: dotBounce 1.4s ease-in-out infinite;
+        }
+        .crafting-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+        .crafting-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+
+        /* Streaming code preview - subtle background effect */
+        .streaming-preview {
+          position: absolute;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 80%;
+          max-width: 400px;
+          padding: 16px;
+          background: var(--bubble);
+          border-radius: 12px;
+          border: 1px solid var(--border);
+          overflow: hidden;
+          animation: streamingSlideUp 0.4s ease-out;
+        }
+        @keyframes streamingSlideUp {
+          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .streaming-lines {
+          font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+          font-size: 10px;
+          line-height: 1.6;
+          color: var(--text-muted);
+          white-space: pre;
+          overflow: hidden;
+        }
+        .streaming-line {
+          animation: lineSlide 0.3s ease-out;
+        }
+        @keyframes lineSlide {
+          from { transform: translateY(8px); opacity: 0; }
+          to { transform: translateY(0); opacity: inherit; }
+        }
+
+        /* Iframe crafting state - smooth blur transition */
+        iframe.crafting {
+          filter: blur(8px);
+          transform: scale(0.98);
+          transition: filter 0.4s ease, transform 0.4s ease, opacity 0.4s ease;
+        }
+        iframe.loaded:not(.crafting) {
+          filter: blur(0);
+          transform: scale(1);
+          transition: filter 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 0.4s ease;
+        }
+
+        /* Smooth artifact switching transition */
+        iframe.transitioning {
+          animation: artifactSwitch 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes artifactSwitch {
+          0% { opacity: 1; transform: scale(1); }
+          40% { opacity: 0; transform: scale(0.96) translateY(8px); }
+          60% { opacity: 0; transform: scale(0.96) translateY(-8px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Preview panel smooth transitions */
+        .preview-panel {
+          transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           COMPLETION CELEBRATION
+           ═══════════════════════════════════════════════════════════════════════ */
+        .completion-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 15;
+          pointer-events: none;
+          animation: completionFade 1.5s ease-out forwards;
+        }
+        @keyframes completionFade {
+          0% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+
+        .completion-ring {
+          position: absolute;
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          border: 2px solid var(--text-secondary);
+          animation: ringExpand 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes ringExpand {
+          0% { transform: scale(0); opacity: 1; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        .completion-check {
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          animation: checkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+        }
+        @keyframes checkPop {
+          0% { transform: scale(0) rotate(-45deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+        .completion-check svg {
+          animation: checkDraw 0.4s ease-out 0.2s forwards;
+          stroke-dasharray: 30;
+          stroke-dashoffset: 30;
+        }
+        @keyframes checkDraw {
+          to { stroke-dashoffset: 0; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           MOBILE
+           ═══════════════════════════════════════════════════════════════════════ */
+        @media (max-width: 767px) {
+          .gallery-header { padding: 8px 10px; gap: 8px; }
+          .header-left { gap: 4px; }
+          .nav-btn, .icon-btn { width: 32px; height: 32px; }
+          .counter { font-size: 10px; min-width: 28px; }
+          .updating-badge { font-size: 9px; padding: 3px 8px; margin-left: 4px; }
+          .code-panel { width: 100% !important; }
+          .preview-panel { width: 100% !important; }
+          .code-line { padding: 1px 12px; font-size: 11px; }
+          .ln { width: 28px; padding-right: 12px; }
+          .chat-messages { padding: 12px; max-height: 150px; }
+          .input-wrapper { padding: 12px; }
+          .input-container { border-radius: 20px; }
+          .input-container textarea { font-size: 16px; }
+        }
       `}</style>
-    </>
+    </div>
   );
 }
 
@@ -431,7 +1662,7 @@ function processInline(text: string, key: number): React.ReactNode[] {
     if (match.index > lastIndex) elements.push(<span key={key + '-' + lastIndex}>{text.slice(lastIndex, match.index)}</span>);
     if (match[2]) elements.push(<span key={key + '-' + match.index} style={{ fontWeight: 600 }}>{match[2]}</span>);
     else if (match[3]) elements.push(<span key={key + '-' + match.index} style={{ fontStyle: 'italic', opacity: 0.9 }}>{match[3]}</span>);
-    else if (match[4]) elements.push(<code key={key + '-' + match.index} style={{ fontFamily: "'SF Mono', monospace", fontSize: '0.9em', background: 'rgba(156,163,175,0.12)', padding: '2px 6px', borderRadius: '4px', color: '#C9B99A' }}>{match[4]}</code>);
+    else if (match[4]) elements.push(<code key={key + '-' + match.index} style={{ fontFamily: "'SF Mono', monospace", fontSize: '0.9em', background: 'rgba(156,163,175,0.12)', padding: '2px 6px', borderRadius: '4px', color: 'inherit' }}>{match[4]}</code>);
     lastIndex = match.index + match[0].length;
   }
 
@@ -465,12 +1696,35 @@ const Message = React.memo(function Message({ id, role, content, timestamp, isSt
     }
   }, [artifactCtx, id]);
 
+  // Get the SAVED code for a code block (if available)
+  const getCodeForBlock = useCallback((index: number, originalCode: string) => {
+    if (!artifactCtx) return originalCode;
+    const artifact = artifactCtx.artifacts.find(a => a.id === id + '-' + index);
+    if (artifact && artifact.code !== originalCode) {
+      console.log('[Message] Using SAVED code for block', index);
+      return artifact.code;
+    }
+    return originalCode;
+  }, [artifactCtx?.artifacts, id]);
+
+  // Force re-render when artifacts change
+  const artifactsVersion = artifactCtx?.artifacts.map(a => a.code.length).join('-') || '';
+  
+  // Debug log
+  useEffect(() => {
+    console.log('[Message] Artifacts in context:', artifactCtx?.artifacts.map(a => ({ id: a.id, codeLen: a.code.length })));
+  }, [artifactCtx?.artifacts]);
+
   return (
-    <div className="message-wrapper">
+    <div className="message-wrapper" data-artifacts-version={artifactsVersion}>
       <div className={'message-content ' + role}>
         {files && files.length > 0 && <MessageAttachments attachments={files} isUser={role === 'user'} />}
         {parsedContent.map((part, index) => {
-          if (part.type === 'code' || part.type === 'code-streaming') return <CodeBlock key={index} language={part.language || 'plaintext'} code={part.content} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;
+          if (part.type === 'code' || part.type === 'code-streaming') {
+            // Use saved artifact code if available!
+            const displayCode = part.type === 'code' ? getCodeForBlock(index, part.content) : part.content;
+            return <CodeBlock key={index} language={part.language || 'plaintext'} code={displayCode} isStreaming={part.type === 'code-streaming'} onPreview={part.type === 'code' ? () => handlePreview(index) : undefined} />;
+          }
           return <div key={index} style={{ padding: '2px 0' }}>{formatText(part.content)}</div>;
         })}
         {isStreaming && parsedContent.every(p => p.type === 'text') && <span className="streaming-cursor" />}
@@ -478,13 +1732,14 @@ const Message = React.memo(function Message({ id, role, content, timestamp, isSt
       {!isStreaming && role === 'alfred' && <MessageActions content={content} isAlfred={true} />}
       <style jsx>{`
         .message-wrapper { display: flex; flex-direction: column; align-items: ${role === 'user' ? 'flex-end' : 'flex-start'}; width: 100%; }
-        .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary, rgba(255,255,255,0.9)); -webkit-font-smoothing: antialiased;  }
-        .streaming-cursor { display: inline-block; width: 2px; height: 16px; background: #C9B99A; margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: text-bottom; box-shadow: 0 0 8px #C9B99A; }
+        .message-content { display: flex; flex-direction: column; gap: 8px; width: ${role === 'user' ? 'auto' : '100%'}; max-width: ${role === 'user' ? '80%' : '100%'}; font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary); }
+        .streaming-cursor { display: inline-block; width: 2px; height: 16px; background: var(--text-secondary, rgba(100,100,100,0.6)); margin-left: 2px; animation: blink 1s step-end infinite; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
       `}</style>
     </div>
   );
 });
+
 export default Message;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -494,7 +1749,7 @@ export default Message;
 export function AlfredThinking() {
   return (
     <div style={{ display: 'flex', gap: 5, padding: '12px 0' }}>
-      {[0, 1, 2].map(i => (<span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#666', animation: 'dot 1.4s ease-in-out infinite', animationDelay: i * 0.15 + 's' }} />))}
+      {[0, 1, 2].map(i => (<span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-secondary, rgba(100,100,100,0.5))', animation: 'dot 1.4s ease-in-out infinite', animationDelay: i * 0.15 + 's' }} />))}
       <style>{`@keyframes dot{0%,100%{opacity:0.3;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}`}</style>
     </div>
   );
