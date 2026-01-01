@@ -403,10 +403,15 @@ function ArtifactGallery() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(20).fill(0));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const isRecordingRef = useRef(false);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // SMART MODIFICATION INTENT DETECTION
@@ -506,10 +511,53 @@ function ArtifactGallery() {
     setChatAttachments(prev => prev.filter(a => a.id !== id));
   }, []);
 
+  // Audio level analysis for responsive orb
+  const analyzeAudio = useCallback(() => {
+    if (!analyserRef.current || !isRecordingRef.current) return;
+
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
+
+    const bands = 20;
+    const bandSize = Math.floor(dataArray.length / bands);
+    const newLevels: number[] = [];
+
+    for (let i = 0; i < bands; i++) {
+      let sum = 0;
+      for (let j = 0; j < bandSize; j++) {
+        sum += dataArray[i * bandSize + j];
+      }
+      const average = sum / bandSize;
+      const normalized = Math.pow(average / 255, 0.65);
+      newLevels.push(normalized);
+    }
+
+    // Smooth transition
+    setAudioLevels(prev => 
+      prev.map((prevLevel, i) => 
+        prevLevel * 0.08 + newLevels[i] * 0.92
+      )
+    );
+
+    animationRef.current = requestAnimationFrame(analyzeAudio);
+  }, []);
+
   // Voice recording functions
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Set up audio analysis
+      audioContextRef.current = new AudioContext();
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 128;
+      analyserRef.current.smoothingTimeConstant = 0.4;
+      source.connect(analyserRef.current);
+      
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -520,7 +568,11 @@ function ArtifactGallery() {
 
       mediaRecorder.start(100);
       setIsRecording(true);
+      isRecordingRef.current = true;
       setRecordingTime(0);
+      
+      // Start audio analysis
+      analyzeAudio();
       
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(t => t + 1);
@@ -528,14 +580,20 @@ function ArtifactGallery() {
     } catch (err) {
       console.error('Microphone access denied:', err);
     }
-  }, []);
+  }, [analyzeAudio]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
       setIsRecording(false);
+      isRecordingRef.current = false;
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (audioContextRef.current?.state !== 'closed') {
+        audioContextRef.current?.close();
+      }
+      setAudioLevels(new Array(20).fill(0));
     }
   }, [isRecording]);
 
@@ -1013,9 +1071,26 @@ function ArtifactGallery() {
                       </button>
                       <div className="recording-center">
                         <div className="orb-container">
-                          <div className="orb" />
-                          <div className="orb-ring orb-ring-1" />
-                          <div className="orb-ring orb-ring-2" />
+                          <div 
+                            className="orb" 
+                            style={{
+                              transform: `scale(${1 + (audioLevels.reduce((a, b) => a + b, 0) / audioLevels.length) * 0.5})`,
+                            }}
+                          />
+                          <div 
+                            className="orb-ring orb-ring-1" 
+                            style={{
+                              transform: `scale(${1.3 + (audioLevels[5] || 0) * 0.4})`,
+                              opacity: 0.15 + (audioLevels[5] || 0) * 0.2,
+                            }}
+                          />
+                          <div 
+                            className="orb-ring orb-ring-2" 
+                            style={{
+                              transform: `scale(${1.6 + (audioLevels[15] || 0) * 0.5})`,
+                              opacity: 0.08 + (audioLevels[15] || 0) * 0.15,
+                            }}
+                          />
                         </div>
                       </div>
                       <button className="recording-send" onClick={sendRecording} aria-label="Done">
@@ -1831,39 +1906,31 @@ function ArtifactGallery() {
           justify-content: center;
         }
 
-        /* The Core Orb - Breathes */
+        /* The Core Orb - Breathes with voice */
         .orb {
           width: 20px;
           height: 20px;
           background: black;
           border-radius: 50%;
-          animation: orbPulse 1.5s ease-in-out infinite;
-        }
-        @keyframes orbPulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.3); }
+          transition: transform 0.03s linear;
+          will-change: transform;
         }
 
-        /* Ripple Rings */
+        /* Ripple Rings - Respond to different frequencies */
         .orb-ring {
           position: absolute;
           inset: 0;
           border: 1.5px solid black;
           border-radius: 50%;
+          transition: transform 0.04s linear, opacity 0.04s linear;
+          will-change: transform, opacity;
           pointer-events: none;
-          animation: ringPulse 1.5s ease-in-out infinite;
         }
         .orb-ring-1 {
           inset: 4px;
-          animation-delay: 0.1s;
         }
         .orb-ring-2 {
           inset: -2px;
-          animation-delay: 0.2s;
-        }
-        @keyframes ringPulse {
-          0%, 100% { transform: scale(1); opacity: 0.15; }
-          50% { transform: scale(1.2); opacity: 0.3; }
         }
 
         /* Send Button - black circle with white checkmark */
