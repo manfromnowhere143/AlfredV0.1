@@ -37,10 +37,10 @@ import type {
     'class-variance-authority': '^0.7.0',
     'clsx': '^2.1.0',
     'tailwind-merge': '^2.2.0',
-    // THREE.JS - Use r128 to match CDN preview version (avoids shader conflicts)
-    'three': '0.128.0',
-    '@react-three/fiber': '^8.0.0',
-    '@react-three/drei': '^9.0.0',
+    // THREE.JS - Use 0.149.0 (compatible with R3F 8.x, stable before major shader changes)
+    'three': '0.149.0',
+    '@react-three/fiber': '^8.15.0',
+    '@react-three/drei': '^9.88.0',
     'd3': '^7.8.5',
     'lodash': '^4.17.21',
     'axios': '^1.6.0',
@@ -67,7 +67,7 @@ import type {
     'typescript': '^5.3.0',
     '@types/react': '^18.3.0',
     '@types/react-dom': '^18.3.0',
-    '@types/three': '0.128.0',
+    '@types/three': '^0.149.0',
     '@types/lodash': '^4.14.202',
     '@types/d3': '^7.4.3',
     '@types/uuid': '^9.0.7',
@@ -265,6 +265,7 @@ import type {
     }
   
     files.push(generateGitignore());
+    files.push(generateNpmrc());
     files.push(generateVercelJson());
   
     return {
@@ -313,51 +314,28 @@ import type {
   
   /**
    * Fix shader attribute conflicts
-   * In modern Three.js, 'color' is a reserved/built-in attribute
-   * Rename to 'particleColor' or 'vertexColor' to avoid conflicts
+   * In Three.js 0.133+, 'color' is automatically provided by the shader prefix
+   * when vertexColors is enabled or BufferGeometry has 'color' attribute.
+   * Remove manual declarations to avoid redefinition errors.
    */
   function fixShaderAttributeConflicts(code: string): string {
     let fixed = code;
   
     // Check if code contains ShaderMaterial or custom shaders
     if (/ShaderMaterial|vertexShader|fragmentShader/.test(code)) {
-      // Rename 'attribute vec3 color' to 'attribute vec3 particleColor'
+      // REMOVE the 'attribute vec3 color' declaration (Three.js provides it automatically)
+      // Match: attribute vec3 color; or attribute vec3 color (with various spacing)
       fixed = fixed.replace(
-        /attribute\s+(vec[234]|float)\s+color\b/g,
-        'attribute $1 particleColor'
+        /\battribute\s+(vec[234]|float)\s+color\s*;?\s*\n?/g,
+        '// color attribute provided by Three.js\n'
       );
       
-      // Also rename usages of 'color' variable to 'particleColor' within shaders
-      // This is tricky - we need to be careful not to replace other uses of 'color'
-      // Look for patterns like 'vColor = color' or 'color *' within shader strings
+      // Also handle inline in template literals
       fixed = fixed.replace(
-        /(vertexShader\s*:\s*`[^`]*)\bcolor\b([^`]*`)/g,
-        (_match, before, after) => {
-          // Replace standalone 'color' variable references
-          const replaced = before.replace(/\bcolor\b(?!\s*[:\(])/g, 'particleColor') + 
-                          'particleColor' + 
-                          after.replace(/\bcolor\b(?!\s*[:\(])/g, 'particleColor');
-          return replaced;
+        /(['"`])([^'"`]*)\battribute\s+(vec[234]|float)\s+color\s*;?\s*([^'"`]*)\1/g,
+        (_match, quote, before, _type, after) => {
+          return `${quote}${before}// color attribute provided by Three.js\n${after}${quote}`;
         }
-      );
-  
-      // Handle case where shader is defined with template literals and uses 'color' attribute
-      // Replace in the context of shader code: vColor = color -> vColor = particleColor
-      fixed = fixed.replace(
-        /(\bvColor\s*=\s*)color\b/g,
-        '$1particleColor'
-      );
-  
-      // Also update BufferAttribute for 'color' to 'particleColor'
-      fixed = fixed.replace(
-        /\.setAttribute\s*\(\s*['"]color['"]/g,
-        ".setAttribute('particleColor'"
-      );
-  
-      // Update geometry.attributes.color references
-      fixed = fixed.replace(
-        /geometry\.attributes\.color\b/g,
-        'geometry.attributes.particleColor'
       );
     }
   
@@ -1110,13 +1088,22 @@ import type {
     return { path: '.gitignore', content };
   }
   
+  function generateNpmrc(): ProjectFile {
+    // Use legacy-peer-deps to handle potential peer dependency conflicts
+    // especially with Three.js ecosystem packages
+    const content = `legacy-peer-deps=true
+  `;
+  
+    return { path: '.npmrc', content };
+  }
+  
   function generateVercelJson(): ProjectFile {
     const content = {
       $schema: 'https://openapi.vercel.sh/vercel.json',
       framework: 'vite',
       buildCommand: 'npm run build',
       outputDirectory: 'dist',
-      installCommand: 'npm install',
+      installCommand: 'npm install --legacy-peer-deps',
       devCommand: 'npm run dev',
     };
   
