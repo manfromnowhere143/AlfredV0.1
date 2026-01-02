@@ -458,13 +458,12 @@ export default function AlfredChat() {
           onSelectConversation={handleSelectConversation}
           isLoadingConversations={isLoadingConversations}
           isLoadingProjects={isLoadingConversations}
-          isLoadingProjects={isLoadingConversations}
           user={session?.user}
           onSignIn={handleOpenAuth}
           onSignOut={handleLogout}
         />
 
-        {/* HAMBURGER - Top Right, Portfolio Style */}
+       {/* HAMBURGER - Top Right, Portfolio Style */}
         <button
           className="hamburger-btn"
           onClick={() => setSidebarOpen(!sidebarOpen)}
