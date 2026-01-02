@@ -1,10 +1,10 @@
 /**
- * Project Generator - State of the Art
+ * Project Generator - State of the Art (Three.js Fixed)
  *
- * Transforms single-file artifacts into complete, deployable Vite + React projects.
- * Handles all edge cases for CDN-loaded components, missing imports, and production builds.
- * 
- * Built to OpenAI/Anthropic engineering standards - zero white pages, always works.
+ * FIXES:
+ * 1. Three.js version matched to r128 (same as CDN preview)
+ * 2. Shader attribute 'color' renamed to 'particleColor' to avoid conflicts
+ * 3. Removed duplicate import possibilities
  */
 
 import type {
@@ -37,9 +37,10 @@ import type {
     'class-variance-authority': '^0.7.0',
     'clsx': '^2.1.0',
     'tailwind-merge': '^2.2.0',
-    'three': '^0.162.0',
-    '@react-three/fiber': '^8.15.0',
-    '@react-three/drei': '^9.92.0',
+    // THREE.JS - Use r128 to match CDN preview version (avoids shader conflicts)
+    'three': '0.128.0',
+    '@react-three/fiber': '^8.0.0',
+    '@react-three/drei': '^9.0.0',
     'd3': '^7.8.5',
     'lodash': '^4.17.21',
     'axios': '^1.6.0',
@@ -66,7 +67,7 @@ import type {
     'typescript': '^5.3.0',
     '@types/react': '^18.3.0',
     '@types/react-dom': '^18.3.0',
-    '@types/three': '^0.162.0',
+    '@types/three': '0.128.0',
     '@types/lodash': '^4.14.202',
     '@types/d3': '^7.4.3',
     '@types/uuid': '^9.0.7',
@@ -286,25 +287,81 @@ import type {
     // Step 1: Remove CDN-specific mock code
     prepared = removeCdnMocks(prepared);
   
-    // Step 2: Collect all required imports
+    // Step 2: Fix shader attribute conflicts (color -> particleColor)
+    prepared = fixShaderAttributeConflicts(prepared);
+  
+    // Step 3: Collect all required imports
     const imports = collectRequiredImports(prepared, artifact);
   
-    // Step 3: Remove existing imports (we'll add clean ones)
+    // Step 4: Remove existing imports (we'll add clean ones)
     prepared = removeExistingImports(prepared);
   
-    // Step 4: Build import block
+    // Step 5: Build import block
     const importBlock = buildImportBlock(imports);
   
-    // Step 5: Ensure default export exists
+    // Step 6: Ensure default export exists
     prepared = ensureDefaultExport(prepared, artifact.componentName);
   
-    // Step 6: Combine imports with code
+    // Step 7: Combine imports with code
     prepared = importBlock + '\n' + prepared;
   
-    // Step 7: Clean up any double newlines and formatting
+    // Step 8: Clean up any double newlines and formatting
     prepared = cleanupCode(prepared);
   
     return prepared;
+  }
+  
+  /**
+   * Fix shader attribute conflicts
+   * In modern Three.js, 'color' is a reserved/built-in attribute
+   * Rename to 'particleColor' or 'vertexColor' to avoid conflicts
+   */
+  function fixShaderAttributeConflicts(code: string): string {
+    let fixed = code;
+  
+    // Check if code contains ShaderMaterial or custom shaders
+    if (/ShaderMaterial|vertexShader|fragmentShader/.test(code)) {
+      // Rename 'attribute vec3 color' to 'attribute vec3 particleColor'
+      fixed = fixed.replace(
+        /attribute\s+(vec[234]|float)\s+color\b/g,
+        'attribute $1 particleColor'
+      );
+      
+      // Also rename usages of 'color' variable to 'particleColor' within shaders
+      // This is tricky - we need to be careful not to replace other uses of 'color'
+      // Look for patterns like 'vColor = color' or 'color *' within shader strings
+      fixed = fixed.replace(
+        /(vertexShader\s*:\s*`[^`]*)\bcolor\b([^`]*`)/g,
+        (match, before, after) => {
+          // Replace standalone 'color' variable references
+          const replaced = before.replace(/\bcolor\b(?!\s*[:\(])/g, 'particleColor') + 
+                          'particleColor' + 
+                          after.replace(/\bcolor\b(?!\s*[:\(])/g, 'particleColor');
+          return replaced;
+        }
+      );
+  
+      // Handle case where shader is defined with template literals and uses 'color' attribute
+      // Replace in the context of shader code: vColor = color -> vColor = particleColor
+      fixed = fixed.replace(
+        /(\bvColor\s*=\s*)color\b/g,
+        '$1particleColor'
+      );
+  
+      // Also update BufferAttribute for 'color' to 'particleColor'
+      fixed = fixed.replace(
+        /\.setAttribute\s*\(\s*['"]color['"]/g,
+        ".setAttribute('particleColor'"
+      );
+  
+      // Update geometry.attributes.color references
+      fixed = fixed.replace(
+        /geometry\.attributes\.color\b/g,
+        'geometry.attributes.particleColor'
+      );
+    }
+  
+    return fixed;
   }
   
   function removeCdnMocks(code: string): string {
@@ -331,6 +388,12 @@ import type {
     // Remove Three.js CDN OrbitControls mock
     cleaned = cleaned.replace(
       /THREE\.OrbitControls\s*=\s*class\s+OrbitControls[\s\S]*?dispose\s*\(\s*\)\s*\{\s*\}\s*\};\s*\n?/g,
+      ''
+    );
+  
+    // Remove any CDN script injections
+    cleaned = cleaned.replace(
+      /<script\s+src=["'][^"']*three[^"']*["'][^>]*>[\s\S]*?<\/script>/gi,
       ''
     );
   
@@ -496,7 +559,7 @@ import type {
       lines.push(reactImport);
     }
   
-    // Three.js imports
+    // Three.js imports - ONLY import once!
     if (imports.three.size > 0) {
       if (imports.three.has('*')) {
         lines.push("import * as THREE from 'three';");
