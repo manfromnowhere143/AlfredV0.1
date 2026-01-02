@@ -332,7 +332,7 @@ import type {
       // Look for patterns like 'vColor = color' or 'color *' within shader strings
       fixed = fixed.replace(
         /(vertexShader\s*:\s*`[^`]*)\bcolor\b([^`]*`)/g,
-        (match, before, after) => {
+        (_match, before, after) => {
           // Replace standalone 'color' variable references
           const replaced = before.replace(/\bcolor\b(?!\s*[:\(])/g, 'particleColor') + 
                           'particleColor' + 
