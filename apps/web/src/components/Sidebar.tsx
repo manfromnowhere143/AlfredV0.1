@@ -349,7 +349,7 @@ const Sidebar = React.memo(function Sidebar({
                   <button
                     key={p.id}
                     className="list-item"
-                    onClick={() => { onSelectProject?.(p.id); onClose(); }}
+                    onClick={() => { router.push(`/projects/${p.id}`); onClose(); }}
                     style={{ animationDelay: `${i * 40}ms` }}
                   >
                     <div className="item-icon project">
