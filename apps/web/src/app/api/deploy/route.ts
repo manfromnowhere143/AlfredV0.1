@@ -6,6 +6,7 @@
  * - Auto-fix with Claude Sonnet 4 (up to 3 attempts)
  * - Database persistence after successful deployment
  * - Artifact-to-project linking for edit/redeploy flow
+ * - Automatic screenshot capture for project previews
  * - Proper error handling and cleanup
  */
 
@@ -110,6 +111,37 @@ Return ONLY the fixed code in \`\`\`jsx blocks. No explanations.`,
 }
 
 /**
+ * Capture screenshot of deployed site using Browserless
+ */
+async function captureScreenshot(
+  url: string,
+  projectId: string
+): Promise<string | null> {
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'http://localhost:3000';
+    
+    const response = await fetch(`${baseUrl}/api/screenshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, projectId }),
+    });
+
+    if (!response.ok) {
+      console.error('[Deploy] Screenshot API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.screenshotUrl || null;
+  } catch (err) {
+    console.error('[Deploy] Screenshot capture failed:', err);
+    return null;
+  }
+}
+
+/**
  * Save or update project in database after successful deployment
  * Also links the deployed artifact to the project for edit/redeploy flow
  */
@@ -161,7 +193,7 @@ async function saveProjectToDatabase(
         })
         .where(eq(projects.id, projectId));
       
-      console.log(`[Deploy] Updated existing project: ${projectId}`);
+      console.log("[Deploy] Updated existing project:", projectId);
     } else {
       // Create new project
       const [newProject] = await client.db
@@ -180,7 +212,7 @@ async function saveProjectToDatabase(
         .returning();
       
       projectId = newProject.id;
-      console.log(`[Deploy] Created new project: ${projectId}`);
+      console.log("[Deploy] Created new project:", projectId);
     }
 
     // 🔗 Link the artifact to this project (enables Edit & Redeploy)
@@ -190,7 +222,26 @@ async function saveProjectToDatabase(
         .set({ projectId: projectId })
         .where(eq(artifacts.id, artifactId));
       
-      console.log(`[Deploy] Linked artifact ${artifactId} to project ${projectId}`);
+      console.log("[Deploy] Linked artifact", artifactId, "to project", projectId);
+    }
+
+    // 📸 Capture screenshot for project preview (async, non-blocking)
+    if (result.url) {
+      // Don't await - let it run in background
+      captureScreenshot(result.url, projectId).then(async (screenshotUrl) => {
+        if (screenshotUrl) {
+          try {
+            const dbClient = await getDb();
+            await dbClient.db
+              .update(projects)
+              .set({ screenshotUrl })
+              .where(eq(projects.id, projectId));
+            console.log("[Deploy] Screenshot saved:", screenshotUrl);
+          } catch (err) {
+            console.error("[Deploy] Failed to save screenshot URL:", err);
+          }
+        }
+      });
     }
   } catch (err) {
     // Log but don't fail the deployment - Vercel deployment already succeeded
@@ -330,7 +381,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (result.status === 'ready' && result.url) {
-              // ✅ SUCCESS - Save to database and link artifact!
+              // ✅ SUCCESS - Save to database, link artifact, and capture screenshot!
               await saveProjectToDatabase(
                 userId,
                 artifactId,
