@@ -260,7 +260,9 @@ export async function deployArtifact(
       );
     }
 
-    state.url = `https://${finalDeployment.url}`;
+    // Use clean production alias if available
+    const cleanUrl = finalDeployment.alias?.[0] || finalDeployment.url;
+    state.url = `https://${cleanUrl}`;
     emit('deploying', `Build complete: ${state.url}`, 90);
 
     // Step 10: Configure custom domain if requested
