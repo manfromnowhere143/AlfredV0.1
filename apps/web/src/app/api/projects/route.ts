@@ -9,13 +9,11 @@ export async function GET() {
     if (!session?.user?.id) {
       return NextResponse.json({ data: [] });
     }
-
     const data = await db
       .select()
       .from(projects)
       .where(eq(projects.userId, session.user.id))
       .orderBy(desc(projects.updatedAt));
-
     return NextResponse.json({ data }, { headers: { "Cache-Control": "private, max-age=5, stale-while-revalidate=30" } });
   } catch (error) {
     console.error('[API] GET /projects error:', error);
@@ -29,9 +27,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     const { name, description, type } = await request.json();
-
     const [newProj] = await db
       .insert(projects)
       .values({
@@ -41,7 +37,6 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
       })
       .returning();
-
     return NextResponse.json({ data: newProj });
   } catch (error) {
     console.error('[API] POST /projects error:', error);
