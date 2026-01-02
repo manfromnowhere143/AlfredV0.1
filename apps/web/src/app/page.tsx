@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import ChatInput from '@/components/ChatInput';
 import Message, { AlfredThinking, ArtifactProvider } from '@/components/Message';
 import AuthModal from '@/components/AuthModal';
+import LimitReached from '@/components/LimitReached';
 
 const GoldenSpiral3D = dynamic(() => import('@/components/Goldenspiral3d'), {
   ssr: false,
@@ -124,6 +125,7 @@ export default function AlfredChat() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [limitReached, setLimitReached] = useState<{ type: 'daily' | 'monthly'; resetIn?: number } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
@@ -336,7 +338,18 @@ export default function AlfredChat() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        if (response.status === 429) {
+          const data = await response.json();
+          setLimitReached({
+            type: data.message?.includes('daily') ? 'daily' : 'monthly',
+            resetIn: data.resetInSeconds,
+          });
+          setIsLoading(false);
+          return;
+        }
+        throw new Error('Failed to send message');
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -670,6 +683,13 @@ export default function AlfredChat() {
           }
         }
       `}</style>
+      {limitReached && (
+        <LimitReached
+          limitType={limitReached.type}
+          resetIn={limitReached.resetIn}
+          onDismiss={() => setLimitReached(null)}
+        />
+      )}
     </>
   );
 }

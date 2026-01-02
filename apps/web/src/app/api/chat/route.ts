@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHAT API ROUTE - /api/chat
 // Production-grade with persistent file context + video support + artifact editing
+// + Usage tracking for billing/limits
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -8,7 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions } from '@alfred/llm';
-import { db, conversations, messages, files, eq, asc, desc } from '@alfred/database';
+import { db, conversations, messages, files, users, eq, asc, desc, sql } from '@alfred/database';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -57,6 +58,11 @@ interface LLMMessage {
   content: string | ContentBlock[];
 }
 
+interface UsageData {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -68,6 +74,17 @@ const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'vi
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_IMAGES_PER_REQUEST = 5;
 const MAX_HISTORY_MESSAGES = 20;
+
+/**
+ * Tier Limits - Based on 50% margin model
+ * Must match /api/usage/route.ts
+ */
+const TIER_LIMITS = {
+  free: { dailyTokens: 4_500, monthlyTokens: 135_000 },
+  pro: { dailyTokens: 22_000, monthlyTokens: 660_000 },
+  business: { dailyTokens: 55_000, monthlyTokens: 1_650_000 },
+  enterprise: { dailyTokens: -1, monthlyTokens: -1 },
+};
 
 const CODE_FORMATTING_RULES = `
 ██████████████████████████████████████████████████████████████████████████████
@@ -151,6 +168,95 @@ function getLLMClient() {
     });
   }
   return llmClient;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USAGE TRACKING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if user has exceeded their usage limits
+ * Returns null if within limits, or an error object if exceeded
+ */
+async function checkUsageLimits(userId: string): Promise<{ exceeded: boolean; message?: string; tier?: string }> {
+  try {
+    // Get user tier
+    const [user] = await db
+      .select({ tier: users.tier })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    const tier = (user?.tier || 'free') as keyof typeof TIER_LIMITS;
+    const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
+    
+    // Unlimited tier
+    if (limits.dailyTokens < 0) {
+      return { exceeded: false, tier };
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    const monthStart = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}-01`;
+    
+    // Check daily usage
+    const dailyResult: any = await db.execute(
+      sql`SELECT COALESCE(SUM(output_tokens), 0) as tokens FROM usage WHERE user_id = ${userId} AND date = ${today}`
+    );
+    const dailyUsed = Number(dailyResult.rows?.[0]?.tokens || dailyResult[0]?.tokens || 0);
+    
+    if (dailyUsed >= limits.dailyTokens) {
+      return {
+        exceeded: true,
+        tier,
+        message: `You've reached your daily limit. Your quota resets at midnight UTC.`,
+      };
+    }
+    
+    // Check monthly usage
+    const monthlyResult: any = await db.execute(
+      sql`SELECT COALESCE(SUM(output_tokens), 0) as tokens FROM usage WHERE user_id = ${userId} AND date >= ${monthStart}`
+    );
+    const monthlyUsed = Number(monthlyResult.rows?.[0]?.tokens || monthlyResult[0]?.tokens || 0);
+    
+    if (monthlyUsed >= limits.monthlyTokens) {
+      return {
+        exceeded: true,
+        tier,
+        message: `You've reached your monthly limit. Upgrade your plan for more tokens.`,
+      };
+    }
+    
+    return { exceeded: false, tier };
+  } catch (error) {
+    console.error('[Alfred] Error checking usage limits:', error);
+    // On error, allow the request to proceed (fail open)
+    return { exceeded: false };
+  }
+}
+
+/**
+ * Track usage after successful response
+ */
+async function trackUsage(userId: string, usage: UsageData): Promise<void> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    await db.execute(sql`
+      INSERT INTO usage (user_id, date, output_tokens, input_tokens, request_count, artifact_count)
+      VALUES (${userId}, ${today}, ${usage.outputTokens}, ${usage.inputTokens}, 1, 0)
+      ON CONFLICT (user_id, date) 
+      DO UPDATE SET 
+        output_tokens = usage.output_tokens + ${usage.outputTokens},
+        input_tokens = usage.input_tokens + ${usage.inputTokens},
+        request_count = usage.request_count + 1,
+        updated_at = NOW()
+    `);
+    
+    console.log(`[Alfred] 📊 Tracked usage: ${usage.outputTokens} output, ${usage.inputTokens} input tokens`);
+  } catch (error) {
+    // Don't fail the request if usage tracking fails
+    console.error('[Alfred] Failed to track usage:', error);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -387,6 +493,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Usage Limit Check (only for authenticated users)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (userId) {
+      const usageCheck = await checkUsageLimits(userId);
+      
+      if (usageCheck.exceeded) {
+        console.log(`[Alfred] ⚠️ Usage limit exceeded for user ${userId} (${usageCheck.tier})`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'limit_exceeded',
+            message: usageCheck.message,
+            tier: usageCheck.tier,
+            upgradeUrl: '/pricing',
+          }), 
+          { status: 429, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Log artifact edit mode
     if (isArtifactEdit) {
       console.log(`[Alfred] 🎨 ARTIFACT EDIT MODE: ${artifactTitle || 'Component'}`);
@@ -610,10 +736,11 @@ RULES:
     console.log(`[Alfred] Sending ${llmMessages.length} messages to Claude`);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Stream Response
+    // Stream Response with Usage Tracking
     // ─────────────────────────────────────────────────────────────────────────
     const encoder = new TextEncoder();
     let fullResponse = '';
+    let usageData: UsageData | null = null;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -631,6 +758,12 @@ RULES:
             onError: (error: Error) => {
               console.error('[Alfred] Stream error:', error);
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+            },
+            onUsage: (usage) => {
+              usageData = { 
+                inputTokens: usage.inputTokens, 
+                outputTokens: usage.outputTokens 
+              };
             },
           };
 
@@ -659,11 +792,17 @@ RULES:
             }
           }
 
+          // Track usage for billing (always track, even for artifact edits)
+          if (userId && usageData) {
+            await trackUsage(userId, usageData);
+          }
+
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
             conversationId: convId, 
             done: true, 
             duration: Date.now() - startTime,
             isArtifactEdit,
+            usage: usageData, // Include usage in response for frontend
           })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
