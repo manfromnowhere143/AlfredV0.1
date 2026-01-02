@@ -457,6 +457,8 @@ export default function AlfredChat() {
           onSelectProject={handleSelectProject}
           onSelectConversation={handleSelectConversation}
           isLoadingConversations={isLoadingConversations}
+          isLoadingProjects={isLoadingConversations}
+          isLoadingProjects={isLoadingConversations}
           user={session?.user}
           onSignIn={handleOpenAuth}
           onSignOut={handleLogout}

@@ -19,6 +19,7 @@ interface SidebarProps {
   projects?: Project[];
   conversations?: Conversation[];
   isLoadingConversations?: boolean;
+  isLoadingProjects?: boolean;
   onSelectProject?: (id: string) => void;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
@@ -45,6 +46,7 @@ const Sidebar = React.memo(function Sidebar({
   onSelectConversation,
   onNewConversation,
   isLoadingConversations = false,
+  isLoadingProjects = false,
   user,
   onSignOut,
   onSignIn,
@@ -371,6 +373,12 @@ const Sidebar = React.memo(function Sidebar({
           )}
 
           {activePanel === 'projects' && (
+            isLoadingProjects ? (
+              <div className="list-loading">
+                <div className="loading-spinner" />
+                <span>Loading...</span>
+              </div>
+            ) :
             projects.length === 0 ? (
               <div className="list-empty-state">
                 <div className="empty-icon">
