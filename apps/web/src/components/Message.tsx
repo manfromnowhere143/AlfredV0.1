@@ -8,7 +8,7 @@ import { DeployButton } from './DeployButton';
 // ARTIFACT CONTEXT - with updateArtifact for live modifications
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface Artifact { id: string; code: string; language: string; title?: string; }
+interface Artifact { id: string; dbId?: string; code: string; language: string; title?: string; }
 interface ArtifactContextType {
   artifacts: Artifact[];
   addArtifact: (artifact: Artifact) => void;
@@ -150,9 +150,16 @@ export function ArtifactProvider({ children, conversationId }: { children: React
       
       const data = await response.json();
       console.log('[Artifact] ✅ Saved to DB:', data);
-      
-      // Update local savedDataMap so subsequent renders use this
-      setSavedDataMap(prev => {
+
+// Store the database UUID for deployment
+      if (data.artifact?.id) {
+  setArtifacts(prev => prev.map(a => 
+    a.id === artifactId ? { ...a, dbId: data.artifact.id } : a
+     ));
+    }
+
+// Update local savedDataMap so subsequent renders use this
+setSavedDataMap(prev => {
         const next = new Map(prev);
         next.set(artifactId, { code, title });
         return next;
@@ -963,7 +970,7 @@ function ArtifactGallery() {
           )}
           {current && (
             <DeployButton
-              artifactId={current.id}
+              artifactId={current.dbId || current.id}
               artifactTitle={currentName}
               artifactCode={displayCode}
               onDeployed={(url) => console.log('Deployed:', url)}
