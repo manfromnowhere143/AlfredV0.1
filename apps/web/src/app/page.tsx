@@ -236,7 +236,7 @@ export default function AlfredChat() {
       ]);
       if (projectsRes.ok) {
         const data = await projectsRes.json();
-        setProjects(data.data || []);
+        setProjects(data.projects || data.data || []);
       }
       if (convsRes.ok) {
         const data = await convsRes.json();

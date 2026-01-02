@@ -29,14 +29,14 @@ export function ArtifactProvider({ children, conversationId }: { children: React
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   
-  // Simple: just store the saved artifact with its ID
-  const [savedData, setSavedData] = useState<{ artifactId: string | null; code: string; title?: string } | null>(null);
+  // Multi-artifact support: Map of artifactId -> saved data
+  const [savedDataMap, setSavedDataMap] = useState<Map<string, { code: string; title?: string }>>(new Map());
 
-  // Fetch saved artifact on mount
+  // Fetch ALL saved artifacts on mount
   useEffect(() => {
     console.log('🔄 [Provider] Reset for conversation:', conversationId);
     setArtifacts([]);
-    setSavedData(null);
+    setSavedDataMap(new Map());
     
     if (!conversationId) return;
     
@@ -44,31 +44,36 @@ export function ArtifactProvider({ children, conversationId }: { children: React
       .then(res => res.json())
       .then(data => {
         console.log('📡 [Fetch] Response:', data);
-        if (data.artifact?.code) {
-          // Corruption check
-          if (data.artifact.code.includes('ReactDOM.createRoot(document.getElementById')) {
-            console.error('❌ CORRUPTED - ignoring');
-            return;
+        const newMap = new Map<string, { code: string; title?: string }>();
+        
+        // Handle new format (multiple artifacts)
+        if (data.artifacts && Array.isArray(data.artifacts)) {
+          for (const art of data.artifacts) {
+            if (art.artifactId && art.code && !art.code.includes('ReactDOM.createRoot(document.getElementById')) {
+              console.log('✅ [Fetch] Loaded artifact:', art.artifactId);
+              newMap.set(art.artifactId, { code: art.code, title: art.title });
+            }
           }
-          const artifactId = data.artifact.metadata?.artifactId || null;
-          console.log('✅ [Fetch] Loaded artifact:');
-          console.log('   artifactId:', artifactId);
-          console.log('   code length:', data.artifact.code.length);
-          setSavedData({
-            artifactId,
-            code: data.artifact.code,
-            title: data.artifact.title,
-          });
         }
+        // Fallback to old format (single artifact)
+        else if (data.artifact?.code && !data.artifact.code.includes('ReactDOM.createRoot(document.getElementById')) {
+          const artifactId = data.artifact.metadata?.artifactId;
+          if (artifactId) {
+            console.log('✅ [Fetch] Loaded single artifact:', artifactId);
+            newMap.set(artifactId, { code: data.artifact.code, title: data.artifact.title });
+          }
+        }
+        
+        console.log('📦 Loaded', newMap.size, 'saved artifacts');
+        setSavedDataMap(newMap);
       })
       .catch(err => console.error('❌ Fetch error:', err));
   }, [conversationId]);
 
-  // Add artifact - check if it matches saved data
+  // Add artifact - check if it matches ANY saved data
   const addArtifact = useCallback((artifact: Artifact) => {
-    console.log('➕ [Add] artifact.id:', artifact.id);
-    console.log('   savedData.artifactId:', savedData?.artifactId);
-    console.log('   match?', savedData?.artifactId === artifact.id);
+    const savedData = savedDataMap.get(artifact.id);
+    console.log('➕ [Add] artifact.id:', artifact.id, 'has saved?', !!savedData);
     
     setArtifacts(prev => {
       // Skip if exists
@@ -76,8 +81,8 @@ export function ArtifactProvider({ children, conversationId }: { children: React
         return prev;
       }
       
-      // Check for EXACT ID match
-      if (savedData && savedData.artifactId && savedData.artifactId === artifact.id) {
+      // Check for EXACT ID match in Map
+      if (savedData) {
         console.log('   ✅ MATCH! Using saved code');
         return [...prev, { ...artifact, code: savedData.code, title: savedData.title || artifact.title }];
       }
@@ -86,22 +91,25 @@ export function ArtifactProvider({ children, conversationId }: { children: React
       console.log('   📝 No match, using original code');
       return [...prev, artifact];
     });
-  }, [savedData]);
+  }, [savedDataMap]);
 
-  // Late update - if savedData loads after artifacts
+  // Late update - if savedDataMap loads after artifacts
   useEffect(() => {
-    if (!savedData || !savedData.artifactId || artifacts.length === 0) return;
+    if (savedDataMap.size === 0 || artifacts.length === 0) return;
     
-    const target = artifacts.find(a => a.id === savedData.artifactId);
-    if (target && target.code !== savedData.code) {
-      console.log('🔄 [Late] Updating artifact:', savedData.artifactId);
-      setArtifacts(prev => prev.map(a => 
-        a.id === savedData.artifactId 
-          ? { ...a, code: savedData.code, title: savedData.title || a.title }
-          : a
-      ));
-    }
-  }, [savedData, artifacts]);
+    let needsUpdate = false;
+    const updated = artifacts.map(a => {
+      const saved = savedDataMap.get(a.id);
+      if (saved && a.code !== saved.code) {
+        console.log('🔄 [Late] Updating artifact:', a.id);
+        needsUpdate = true;
+        return { ...a, code: saved.code, title: saved.title || a.title };
+      }
+      return a;
+    });
+    
+    if (needsUpdate) setArtifacts(updated);
+  }, [savedDataMap, artifacts]);
 
   const updateArtifact = useCallback((id: string, code: string, title?: string) => {
     setArtifacts(prev => prev.map(a => 
@@ -143,11 +151,11 @@ export function ArtifactProvider({ children, conversationId }: { children: React
       const data = await response.json();
       console.log('[Artifact] ✅ Saved to DB:', data);
       
-      // Update local savedData so subsequent renders use this
-      setSavedData({
-        artifactId,
-        code,
-        title,
+      // Update local savedDataMap so subsequent renders use this
+      setSavedDataMap(prev => {
+        const next = new Map(prev);
+        next.set(artifactId, { code, title });
+        return next;
       });
     } catch (error) {
       console.error('[Artifact] Save to DB error:', error);
