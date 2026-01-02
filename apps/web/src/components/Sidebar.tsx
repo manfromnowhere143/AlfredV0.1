@@ -129,7 +129,7 @@ const Sidebar = React.memo(function Sidebar({
         {user ? (
           <>
             <button
-              className="icon-btn user-btn"
+              className={`icon-btn user-btn ${currentTier === 'pro' ? 'pro-ring' : ''} ${currentTier === 'enterprise' ? 'enterprise-ring' : ''}`}
               onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); }}
               aria-label="User menu"
             >
@@ -141,33 +141,94 @@ const Sidebar = React.memo(function Sidebar({
             </button>
             {/* User Dropdown */}
             <div className={`user-dropdown ${showUserMenu ? 'open' : ''}`}>
-              <div className="user-info">
-                <span className="user-name">{user.name || 'User'}</span>
-                <span className="user-email">{user.email}</span>
+              {/* User Info Header */}
+              <div className="user-header">
+                <div className="user-avatar-large">
+                  {user.image ? (
+                    <img src={user.image} alt="" />
+                  ) : (
+                    <span>{getUserInitial()}</span>
+                  )}
+                  {currentTier !== 'free' && (
+                    <div className={`tier-badge-avatar ${currentTier}`}>
+                      {currentTier === 'pro' ? '✦' : '◆'}
+                    </div>
+                  )}
+                </div>
+                <div className="user-details">
+                  <span className="user-name">{user.name || 'User'}</span>
+                  <span className="user-email">{user.email}</span>
+                </div>
               </div>
               
               {/* Plan Section */}
               <div className="plan-section">
-                <div className="plan-row">
-                  <span className="plan-label">Plan</span>
-                  <span className={`plan-badge ${currentTier}`}>{tierLabels[currentTier]}</span>
+                <div className="plan-info">
+                  <span className={`plan-badge ${currentTier}`}>
+                    {currentTier === 'pro' && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2Z"/>
+                      </svg>
+                    )}
+                    {currentTier === 'enterprise' && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                      </svg>
+                    )}
+                    {tierLabels[currentTier]}
+                  </span>
                 </div>
                 {currentTier === 'free' && (
                   <button className="upgrade-btn" onClick={handleUpgrade}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round"/>
+                    <div className="upgrade-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2Z" fill="currentColor"/>
+                      </svg>
+                    </div>
+                    <span>Upgrade to Pro</span>
+                    <svg className="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    Upgrade to Pro
                   </button>
                 )}
                 {currentTier === 'pro' && (
-                  <button className="upgrade-btn secondary" onClick={handleUpgrade}>
-                    View Plans
+                  <button className="manage-btn" onClick={handleUpgrade}>
+                    <span>Manage subscription</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </button>
                 )}
               </div>
+
+              {/* Theme Selector */}
+              <div className="theme-section">
+                <span className="theme-label">Theme</span>
+                <div className="theme-orbs-row">
+                  <button
+                    className={`theme-orb dark ${theme === 'dark' ? 'active' : ''}`}
+                    onClick={() => handleThemeChange('dark')}
+                    aria-label="Dark theme"
+                    title="Dark"
+                  />
+                  <button
+                    className={`theme-orb space ${theme === 'space' ? 'active' : ''}`}
+                    onClick={() => handleThemeChange('space')}
+                    aria-label="Space theme"
+                    title="Space"
+                  />
+                  <button
+                    className={`theme-orb light ${theme === 'light' ? 'active' : ''}`}
+                    onClick={() => handleThemeChange('light')}
+                    aria-label="Light theme"
+                    title="Light"
+                  />
+                </div>
+              </div>
               
               <div className="dropdown-divider" />
+              
+              {/* Menu Items */}
               <button className="dropdown-item" onClick={() => setShowUserMenu(false)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -185,7 +246,7 @@ const Sidebar = React.memo(function Sidebar({
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
-                Log out
+                Sign out
               </button>
             </div>
           </>
@@ -232,29 +293,6 @@ const Sidebar = React.memo(function Sidebar({
               <rect x="18" y="18" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
             </svg>
           </button>
-        </div>
-      </aside>
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* RIGHT THEME ORBS                                                        */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      <aside className={`control-panel right ${isOpen ? 'open' : 'closing'}`}>
-        <div className="theme-column">
-          <button
-            className={`theme-orb dark ${theme === 'dark' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('dark')}
-            aria-label="Dark"
-          />
-          <button
-            className={`theme-orb space ${theme === 'space' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('space')}
-            aria-label="Space"
-          />
-          <button
-            className={`theme-orb light ${theme === 'light' ? 'active' : ''}`}
-            onClick={() => handleThemeChange('light')}
-            aria-label="Light"
-          />
         </div>
       </aside>
 
@@ -425,13 +463,6 @@ const Sidebar = React.memo(function Sidebar({
         .control-panel.left.open { transform: translateY(-50%) translateX(0); opacity: 1; }
         .control-panel.left.closing { transform: translateY(-50%) translateX(-120%); opacity: 0; }
         
-        .control-panel.right {
-          right: 24px;
-          transform: translateY(-50%) translateX(120%);
-        }
-        .control-panel.right.open { transform: translateY(-50%) translateX(0); opacity: 1; }
-        .control-panel.right.closing { transform: translateY(-50%) translateX(120%); opacity: 0; }
-        
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* ICON BUTTONS                                                                    */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
@@ -508,64 +539,19 @@ const Sidebar = React.memo(function Sidebar({
         :global([data-theme="light"]) .icon-btn.active { background: linear-gradient(145deg, #f8f8f8 0%, #f0f0f0 50%, #e8e8e8 100%); color: #8B7355; }
         :global([data-theme="light"]) .icon-btn::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%); }
         
+        /* User Button Special Styling */
         .user-btn { border-radius: 50%; }
         .user-btn::before, .user-btn::after { border-radius: 50%; }
         .avatar-img { width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 5; border-radius: 50%; }
         .avatar-initial { font-size: 18px; font-weight: 600; position: relative; z-index: 5; }
         
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        /* THEME ORBS                                                                      */
-        /* ═══════════════════════════════════════════════════════════════════════════════ */
-        
-        .theme-column {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-          padding: 14px 12px;
-          border-radius: 20px;
-          background: linear-gradient(145deg, rgba(26, 26, 26, 0.9), rgba(10, 10, 11, 0.95));
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
+        /* Pro/Enterprise Ring around avatar */
+        .user-btn.pro-ring {
+          box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.6), 0 0 20px rgba(201, 185, 154, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
         }
-        
-        :global([data-theme="light"]) .theme-column {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(245, 245, 240, 0.9));
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+        .user-btn.enterprise-ring {
+          box-shadow: 0 0 0 2px rgba(147, 112, 219, 0.6), 0 0 20px rgba(147, 112, 219, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
         }
-        
-        .theme-orb {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          border: none;
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: relative;
-        }
-        
-        .theme-orb.dark {
-          background: linear-gradient(145deg, #1a1a1a, #000);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.5);
-        }
-        .theme-orb.dark::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%); }
-        
-        .theme-orb.space {
-          background: linear-gradient(145deg, #48484A, #2C2C2E);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
-        }
-        .theme-orb.space::after { content: ''; position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%); }
-        
-        .theme-orb.light {
-          background: linear-gradient(145deg, #fff, #e5e5e5);
-          box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(0, 0, 0, 0.15);
-        }
-        .theme-orb.light::after { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
-        
-        .theme-orb.active { transform: scale(1.2); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.5); }
-        :global([data-theme="light"]) .theme-orb.active { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.15); }
-        .theme-orb:hover:not(.active) { transform: scale(1.1); }
-        .theme-orb:active { transform: scale(0.92); transition: transform 0.1s ease; }
         
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* USER DROPDOWN                                                                   */
@@ -575,11 +561,11 @@ const Sidebar = React.memo(function Sidebar({
           position: absolute;
           top: 0;
           left: 60px;
-          min-width: 220px;
+          min-width: 260px;
           background: var(--bg-secondary, rgba(10, 10, 11, 0.98));
           border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
-          border-radius: 14px;
-          padding: 8px;
+          border-radius: 16px;
+          padding: 0;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 16px 48px rgba(0, 0, 0, 0.4);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
@@ -589,6 +575,7 @@ const Sidebar = React.memo(function Sidebar({
           transform: translateX(-8px) scale(0.95);
           pointer-events: none;
           transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+          overflow: hidden;
         }
         
         .user-dropdown.open {
@@ -604,90 +591,326 @@ const Sidebar = React.memo(function Sidebar({
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }
         
-        .user-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
-        .user-name { font-size: 13px; font-weight: 500; color: var(--text-primary, #fff); }
-        .user-email { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.5)); }
-        
-        .plan-section {
-          padding: 10px 12px;
-          background: var(--border-subtle, rgba(255,255,255,0.03));
-          border-radius: 10px;
-          margin: 4px 0;
-        }
-        
-        .plan-row {
+        /* User Header */
+        .user-header {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          margin-bottom: 8px;
+          gap: 12px;
+          padding: 16px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
         }
         
-        .plan-label {
-          font-size: 11px;
-          color: var(--text-muted, rgba(255,255,255,0.5));
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        
-        .plan-badge {
-          font-size: 11px;
-          font-weight: 600;
-          padding: 3px 8px;
-          border-radius: 6px;
-          letter-spacing: 0.02em;
-        }
-        
-        .plan-badge.free { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
-        .plan-badge.pro { background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
-        .plan-badge.enterprise { background: linear-gradient(135deg, rgba(201,185,154,0.2) 0%, rgba(201,185,154,0.1) 100%); color: #C9B99A; border: 1px solid rgba(201,185,154,0.2); }
-        
-        :global([data-theme="light"]) .plan-badge.free { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.6); }
-        :global([data-theme="light"]) .plan-badge.pro { background: linear-gradient(135deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.04) 100%); color: #1a1a1a; border-color: rgba(0,0,0,0.08); }
-        
-        .upgrade-btn {
-          width: 100%;
+        .user-avatar-large {
+          position: relative;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          padding: 8px 12px;
-          background: #fff;
-          border: none;
-          border-radius: 8px;
-          color: #000;
-          font-size: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
+          flex-shrink: 0;
+          overflow: visible;
         }
         
-        .upgrade-btn:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
-        .upgrade-btn.secondary { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.1); }
-        .upgrade-btn.secondary:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .user-avatar-large img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
+        }
         
-        :global([data-theme="light"]) .upgrade-btn { background: #1a1a1a; color: #fff; }
-        :global([data-theme="light"]) .upgrade-btn:hover { background: #000; }
-        :global([data-theme="light"]) .upgrade-btn.secondary { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.7); border-color: rgba(0,0,0,0.08); }
+        .user-avatar-large span {
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--text-primary, #fff);
+        }
         
-        .dropdown-divider { height: 1px; background: var(--border-subtle, rgba(255,255,255,0.08)); margin: 6px 0; }
+        .tier-badge-avatar {
+          position: absolute;
+          bottom: -2px;
+          right: -2px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 700;
+          border: 2px solid var(--bg-secondary, #0a0a0b);
+        }
         
-        .dropdown-item {
+        .tier-badge-avatar.pro {
+          background: linear-gradient(135deg, #C9B99A 0%, #A89968 100%);
+          color: #1a1a1a;
+        }
+        
+        .tier-badge-avatar.enterprise {
+          background: linear-gradient(135deg, #9370DB 0%, #7B68EE 100%);
+          color: #fff;
+        }
+        
+        .user-details {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+        
+        .user-name {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary, #fff);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .user-email {
+          font-size: 12px;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        /* Plan Section */
+        .plan-section {
+          padding: 12px 16px;
+          background: var(--border-subtle, rgba(255,255,255,0.02));
+        }
+        
+        .plan-info {
+          margin-bottom: 10px;
+        }
+        
+        .plan-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 5px 10px;
+          border-radius: 8px;
+          letter-spacing: 0.02em;
+        }
+        
+        .plan-badge.free {
+          background: rgba(255,255,255,0.06);
+          color: rgba(255,255,255,0.6);
+        }
+        
+        .plan-badge.pro {
+          background: linear-gradient(135deg, rgba(201,185,154,0.2) 0%, rgba(201,185,154,0.1) 100%);
+          color: #C9B99A;
+          border: 1px solid rgba(201,185,154,0.2);
+        }
+        
+        .plan-badge.pro svg {
+          color: #C9B99A;
+        }
+        
+        .plan-badge.enterprise {
+          background: linear-gradient(135deg, rgba(147,112,219,0.2) 0%, rgba(147,112,219,0.1) 100%);
+          color: #9370DB;
+          border: 1px solid rgba(147,112,219,0.2);
+        }
+        
+        .plan-badge.enterprise svg {
+          color: #9370DB;
+        }
+        
+        :global([data-theme="light"]) .plan-badge.free {
+          background: rgba(0,0,0,0.04);
+          color: rgba(0,0,0,0.5);
+        }
+        
+        :global([data-theme="light"]) .plan-badge.pro {
+          background: linear-gradient(135deg, rgba(201,185,154,0.15) 0%, rgba(201,185,154,0.08) 100%);
+          color: #8B7355;
+          border-color: rgba(201,185,154,0.25);
+        }
+        
+        /* Upgrade Button - State of the Art */
+        .upgrade-btn {
           width: 100%;
           display: flex;
           align-items: center;
           gap: 10px;
           padding: 10px 12px;
+          background: linear-gradient(135deg, #C9B99A 0%, #A89968 100%);
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .upgrade-btn::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%, rgba(255,255,255,0.1) 100%);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        
+        .upgrade-btn:hover::before {
+          opacity: 1;
+        }
+        
+        .upgrade-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(201, 185, 154, 0.4);
+        }
+        
+        .upgrade-btn:active {
+          transform: translateY(0) scale(0.98);
+        }
+        
+        .upgrade-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: rgba(0,0,0,0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #1a1a1a;
+          flex-shrink: 0;
+        }
+        
+        .upgrade-btn span {
+          flex: 1;
+          font-size: 13px;
+          font-weight: 600;
+          color: #1a1a1a;
+          text-align: left;
+        }
+        
+        .upgrade-btn .arrow {
+          color: rgba(0,0,0,0.4);
+          transition: transform 0.2s ease;
+        }
+        
+        .upgrade-btn:hover .arrow {
+          transform: translateX(3px);
+          color: rgba(0,0,0,0.6);
+        }
+        
+        /* Manage Button for Pro users */
+        .manage-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 12px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        
+        .manage-btn span {
+          font-size: 13px;
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+        }
+        
+        .manage-btn svg {
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          transition: transform 0.2s ease;
+        }
+        
+        .manage-btn:hover {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.12);
+        }
+        
+        .manage-btn:hover span {
+          color: var(--text-primary, #fff);
+        }
+        
+        .manage-btn:hover svg {
+          transform: translateX(3px);
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+        }
+        
+        /* Theme Section */
+        .theme-section {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+        }
+        
+        .theme-label {
+          font-size: 12px;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        
+        .theme-orbs-row {
+          display: flex;
+          gap: 10px;
+        }
+        
+        .theme-orb {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+        }
+        
+        .theme-orb.dark {
+          background: linear-gradient(145deg, #1a1a1a, #000);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.5);
+        }
+        .theme-orb.dark::after { content: ''; position: absolute; top: 4px; left: 5px; width: 5px; height: 5px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%); }
+        
+        .theme-orb.space {
+          background: linear-gradient(145deg, #48484A, #2C2C2E);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+        .theme-orb.space::after { content: ''; position: absolute; top: 4px; left: 5px; width: 5px; height: 5px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%); }
+        
+        .theme-orb.light {
+          background: linear-gradient(145deg, #fff, #e5e5e5);
+          box-shadow: inset 0 1px 0 #fff, 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+        .theme-orb.light::after { content: ''; position: absolute; top: 4px; left: 5px; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 60%); }
+        
+        .theme-orb.active { 
+          transform: scale(1.15); 
+          box-shadow: 0 0 0 2px rgba(201, 185, 154, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4); 
+        }
+        .theme-orb:hover:not(.active) { transform: scale(1.1); }
+        .theme-orb:active { transform: scale(0.95); transition: transform 0.1s ease; }
+        
+        .dropdown-divider { height: 1px; background: var(--border-subtle, rgba(255,255,255,0.06)); margin: 0; }
+        
+        .dropdown-item {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
           border: none;
           background: transparent;
-          border-radius: 10px;
           color: var(--text-secondary, rgba(255,255,255,0.7));
           font-size: 13px;
           cursor: pointer;
           transition: all 0.15s ease;
         }
         
-        .dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .dropdown-item:hover { background: var(--border-subtle, rgba(255,255,255,0.08)); color: var(--text-primary, #fff); }
+        .dropdown-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .dropdown-item:hover { background: var(--border-subtle, rgba(255,255,255,0.06)); color: var(--text-primary, #fff); }
         .dropdown-item.danger { color: #ef4444; }
         .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); color: #f87171; }
         
@@ -979,15 +1202,15 @@ const Sidebar = React.memo(function Sidebar({
         
         @media (max-width: 768px) {
           .user-panel {
-          contain: layout style;
-          will-change: transform; top: 16px; left: 16px; }
+            contain: layout style;
+            will-change: transform;
+            top: 16px;
+            left: 16px;
+          }
           .control-panel.left { left: 16px; }
-          .control-panel.right { right: 16px; }
           .icon-column { gap: 10px; }
           .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
           .icon-btn svg { width: 18px; height: 18px; }
-          .theme-column { padding: 10px 8px; border-radius: 16px; gap: 10px; }
-          .theme-orb { width: 24px; height: 24px; }
           
           .list-panel {
             left: 70px;
@@ -996,7 +1219,10 @@ const Sidebar = React.memo(function Sidebar({
             max-height: 60vh;
           }
           
-          .user-dropdown { min-width: 200px; }
+          .user-dropdown { 
+            min-width: 240px;
+            left: 54px;
+          }
         }
       `}</style>
     </>
