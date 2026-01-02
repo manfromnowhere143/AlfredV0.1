@@ -304,6 +304,7 @@ export const projects = pgTable(
     lastDeploymentId: varchar('last_deployment_id', { length: 255 }),
     lastDeploymentStatus: varchar('last_deployment_status', { length: 50 }),
     lastDeployedAt: timestamp('last_deployed_at', { withTimezone: true }),
+    screenshotUrl: varchar('screenshot_url', { length: 500 }),
 
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
