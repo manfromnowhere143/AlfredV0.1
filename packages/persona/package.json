@@ -1,0 +1,35 @@
+{
+  "name": "@alfred/persona",
+  "version": "0.1.0",
+  "description": "PersonaForge - AI character creation engine for Alfred",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./creation": {
+      "types": "./dist/creation/index.d.ts",
+      "import": "./dist/creation/index.js",
+      "require": "./dist/creation/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/creation/index.ts src/visual/index.ts src/voice/index.ts src/brain/index.ts src/realtime/index.ts --format cjs,esm --dts --clean",
+    "build:dts": "tsup src/index.ts src/creation/index.ts src/visual/index.ts src/voice/index.ts src/brain/index.ts src/realtime/index.ts --format cjs,esm --dts --clean",
+    "dev": "pnpm build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  }
+}
