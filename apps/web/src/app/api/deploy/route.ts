@@ -161,7 +161,7 @@ async function saveProjectToDatabase(
     const client = await getDb();
     
     // Extract domain from URL (remove https://)
-    const primaryDomain = result.url?.replace(/^https?:\/\//, '') || null;
+    const primaryDomain = `${projectName}.vercel.app`;
     
     // Check if project already exists for this user with same Vercel project
     const existingProjects = await client.db
