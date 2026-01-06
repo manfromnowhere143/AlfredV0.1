@@ -105,6 +105,8 @@ Rules:
 3. Complete, runnable code
 4. Newline then \`\`\` to close
 5. NEVER output raw HTML/JSX without code blocks
+6. ALWAYS complete code files fully - NEVER stop mid-file
+7. If generating a large component, finish it completely with all closing tags
 
 ██████████████████████████████████████████████████████████████████████████████
 `;
