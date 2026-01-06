@@ -4,6 +4,8 @@
 // + Usage tracking for billing/limits
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export const maxDuration = 300; // Vercel Pro: 5 min timeout for long generations
+
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
