@@ -12,6 +12,7 @@ import type { ModelId, Usage, CostEstimate, Message } from './types';
 // ============================================================================
 
 const PRICING: Record<ModelId, { inputPer1M: number; outputPer1M: number }> = {
+  'claude-sonnet-4-5-20250929': { inputPer1M: 3.00, outputPer1M: 15.00 },
   'claude-sonnet-4-20250514': { inputPer1M: 3.00, outputPer1M: 15.00 },
   'claude-3-5-sonnet-20241022': { inputPer1M: 3.00, outputPer1M: 15.00 },
   'claude-3-5-haiku-20241022': { inputPer1M: 0.80, outputPer1M: 4.00 },
@@ -145,6 +146,7 @@ export function estimateConversationTokens(
 // ============================================================================
 
 const CONTEXT_WINDOWS: Record<ModelId, number> = {
+  'claude-sonnet-4-5-20250929': 200000,
   'claude-sonnet-4-20250514': 200000,
   'claude-3-5-sonnet-20241022': 200000,
   'claude-3-5-haiku-20241022': 200000,
@@ -152,6 +154,7 @@ const CONTEXT_WINDOWS: Record<ModelId, number> = {
 };
 
 const MAX_OUTPUT: Record<ModelId, number> = {
+  'claude-sonnet-4-5-20250929': 16384,
   'claude-sonnet-4-20250514': 8192,
   'claude-3-5-sonnet-20241022': 8192,
   'claude-3-5-haiku-20241022': 8192,

@@ -48,7 +48,7 @@ export function createLLMClient(config: LLMConfig): LLMClient {
     maxRetries: 0, // We handle retries ourselves
   });
 
-  let currentModel: ModelId = config.model || 'claude-sonnet-4-20250514';
+  let currentModel: ModelId = config.model || 'claude-sonnet-4-5-20250929';
   const defaultMaxTokens = config.maxTokens || 4096;
   const defaultTemperature = config.temperature ?? 0.7;
 

@@ -22,6 +22,7 @@ export interface LLMConfig {
 }
 
 export type ModelId =
+  | 'claude-sonnet-4-5-20250929'
   | 'claude-sonnet-4-20250514'
   | 'claude-3-5-sonnet-20241022'
   | 'claude-3-5-haiku-20241022'
@@ -30,6 +31,13 @@ export type ModelId =
 export const DEFAULT_MODEL: ModelId = 'claude-sonnet-4-20250514';
 
 export const MODEL_INFO: Record<ModelId, ModelInfo> = {
+  'claude-sonnet-4-5-20250929': {
+    name: 'Claude Sonnet 4.5',
+    contextWindow: 200000,
+    maxOutput: 16384,
+    inputCostPer1M: 3.00,
+    outputCostPer1M: 15.00,
+  },
   'claude-sonnet-4-20250514': {
     name: 'Claude Sonnet 4',
     contextWindow: 200000,
@@ -280,3 +288,6 @@ export type LLMErrorType =
   | 'api_error'
   | 'timeout_error'
   | 'network_error';
+
+// Sonnet 4.5 - Added for better long output support
+export const SONNET_4_5: ModelId = 'claude-sonnet-4-5-20250929' as ModelId;

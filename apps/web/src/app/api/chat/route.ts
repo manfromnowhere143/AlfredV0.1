@@ -10,7 +10,7 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
-import { createLLMClient, type StreamOptions } from '@alfred/llm';
+import { createLLMClient, type StreamOptions, checkCodeCompleteness } from '@alfred/llm';
 import { db, conversations, messages, files, users, eq, asc, desc, sql } from '@alfred/database';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -109,6 +109,10 @@ Rules:
 5. NEVER output raw HTML/JSX without code blocks
 6. ALWAYS complete code files fully - NEVER stop mid-file
 7. If generating a large component, finish it completely with all closing tags
+8. STRING ESCAPING: When adding multilingual text (Hebrew, Arabic, French, etc):
+   - If a string contains apostrophes, use double quotes for that string
+   - Example: description: "הקונסיירז' שלנו" NOT description: 'הקונסיירז' שלנו'
+   - CRITICAL: Check all translated text for apostrophes to prevent syntax errors
 
 ██████████████████████████████████████████████████████████████████████████████
 `;
@@ -771,10 +775,38 @@ RULES:
             },
           };
 
-          await client.stream(
-            { system: systemPrompt, messages: llmMessages as any, maxTokens: 32768 },
-            streamOptions
-          );
+          // AUTO-CONTINUATION: Continues if code is incomplete
+          let currentMessages = llmMessages;
+          let continuationCount = 0;
+          const MAX_CONTINUATIONS = 5;
+
+          while (continuationCount <= MAX_CONTINUATIONS) {
+            await client.stream(
+              { system: systemPrompt, messages: currentMessages as any, maxTokens: 32768 },
+              streamOptions
+            );
+
+            if (detectedFacet !== 'code') break;
+            
+            const completeness = checkCodeCompleteness(fullResponse);
+            console.log('[Alfred] Completeness:', completeness.reason, Math.round(completeness.confidence * 100) + '%');
+
+            if (completeness.complete || continuationCount >= MAX_CONTINUATIONS) break;
+
+            continuationCount++;
+            console.log('[Alfred] Auto-continuing... attempt', continuationCount);
+            
+            controller.enqueue(encoder.encode('data: ' + JSON.stringify({ continuation: true, attempt: continuationCount }) + '\n\n'));
+
+            const lastLines = fullResponse.split('\n').slice(-50).join('\n');
+            currentMessages = [
+              ...llmMessages,
+              { role: 'assistant', content: fullResponse },
+              { role: 'user', content: 'CONTINUE exactly from where you stopped. Do NOT repeat any code. Just continue:\n\n' + lastLines }
+            ] as any;
+
+            await new Promise(r => setTimeout(r, 200));
+          }
 
           // Save response to DB (skip for artifact edits from preview modal)
           if (userId && convId && fullResponse && !isArtifactEdit) {
