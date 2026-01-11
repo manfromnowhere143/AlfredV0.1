@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 
 interface Persona {
@@ -10,47 +10,101 @@ interface Persona {
 }
 
 export default function AuroraPage() {
+  const scrollRef = useRef(0);
+  const rafRef = useRef<number>(0);
   const [scrollX, setScrollX] = useState(0);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "visible">("loading");
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PARALLEL IMAGE PRELOADER
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const preloadImages = useCallback((urls: string[]): Promise<void[]> => {
+    return Promise.all(
+      urls.map(
+        (url) =>
+          new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve(); // Don't block on failed images
+            img.src = url;
+          })
+      )
+    );
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SMOOTH RAF-BASED SCROLL ANIMATION
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const animate = useCallback(() => {
+    scrollRef.current = (scrollRef.current + 0.35) % 2000;
+    setScrollX(scrollRef.current);
+    rafRef.current = requestAnimationFrame(animate);
+  }, []);
 
   useEffect(() => {
-    // Fetch personas (only those with images)
-    fetch("/api/personas")
+    // Parallel fetch: personas + logo preload
+    const logoPreload = preloadImages(["/aurora-logo.png"]);
+
+    const personasFetch = fetch("/api/personas")
       .then((r) => r.json())
       .then((d) => {
-        // Filter to only personas with images
-        const withImages = (d.personas || []).filter((p: Persona) => p.imageUrl && p.imageUrl.length > 0);
-        setPersonas(withImages);
-        setTimeout(() => setIsLoaded(true), 100);
-        setTimeout(() => setIsVisible(true), 300);
+        const withImages = (d.personas || []).filter(
+          (p: Persona) => p.imageUrl && p.imageUrl.length > 0
+        );
+        return withImages;
       })
-      .catch(() => {
-        setIsLoaded(true);
-        setIsVisible(true);
+      .catch(() => []);
+
+    // Wait for both in parallel
+    Promise.all([logoPreload, personasFetch]).then(async ([, fetchedPersonas]) => {
+      setPersonas(fetchedPersonas);
+
+      // Preload persona images in parallel (first 20 for performance)
+      const imageUrls = fetchedPersonas
+        .slice(0, 20)
+        .map((p: Persona) => p.imageUrl)
+        .filter(Boolean) as string[];
+
+      await preloadImages(imageUrls);
+      setImagesLoaded(true);
+
+      // Staggered reveal - no jumps
+      setLoadState("ready");
+      requestAnimationFrame(() => {
+        setTimeout(() => setLoadState("visible"), 50);
       });
+    });
 
-    // Scroll animation
-    const interval = setInterval(() => {
-      setScrollX((p) => (p + 0.4) % 2000);
-    }, 16);
-
-    // Mouse tracking
+    // Smooth mouse tracking
     const onMove = (e: MouseEvent) => {
       setMousePos({
         x: (e.clientX / window.innerWidth - 0.5) * 12,
         y: (e.clientY / window.innerHeight - 0.5) * 12,
       });
     };
-    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mousemove", onMove, { passive: true });
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener("mousemove", onMove);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [preloadImages]);
+
+  // Start scroll animation only after visible
+  useEffect(() => {
+    if (loadState === "visible" && personas.length > 0) {
+      rafRef.current = requestAnimationFrame(animate);
+      return () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
+    }
+  }, [loadState, personas.length, animate]);
+
+  const isVisible = loadState === "visible";
+  const isReady = loadState !== "loading";
 
   return (
     <div
@@ -95,74 +149,71 @@ export default function AuroraPage() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* STATE OF THE ART LOADING                                            */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {!isLoaded && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 24,
-          }}
-        >
-          {/* Orbital loader */}
-          <div style={{ position: "relative", width: 60, height: 60 }}>
-            {/* Outer ring */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: "50%",
-                border: "2px solid rgba(102,126,234,0.1)",
-              }}
-            />
-            {/* Spinning gradient arc */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: "50%",
-                border: "2px solid transparent",
-                borderTopColor: "#667eea",
-                borderRightColor: "#764ba2",
-                animation: "spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite",
-              }}
-            />
-            {/* Inner pulse */}
-            <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #667eea, #764ba2)",
-                animation: "pulse 1.5s ease-in-out infinite",
-              }}
-            />
-          </div>
-          {/* Loading text */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 24,
+          opacity: isReady ? 0 : 1,
+          pointerEvents: isReady ? "none" : "auto",
+          transition: "opacity 0.5s ease",
+        }}
+      >
+        {/* Orbital loader */}
+        <div style={{ position: "relative", width: 60, height: 60 }}>
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 500,
-              letterSpacing: 4,
-              color: "#999",
-              textTransform: "uppercase",
-              animation: "fadeInOut 1.5s ease-in-out infinite",
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              border: "2px solid rgba(102,126,234,0.1)",
             }}
-          >
-            Loading
-          </div>
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              border: "2px solid transparent",
+              borderTopColor: "#667eea",
+              borderRightColor: "#764ba2",
+              animation: "spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #667eea, #764ba2)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
         </div>
-      )}
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: 4,
+            color: "#999",
+            textTransform: "uppercase",
+            animation: "fadeInOut 1.5s ease-in-out infinite",
+          }}
+        >
+          Loading
+        </div>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* HERO - Aurora Logo, Centered                                        */}
+      {/* HERO - Aurora Logo, Centered, NOT CLICKABLE                         */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <div
         style={{
@@ -175,6 +226,8 @@ export default function AuroraPage() {
           opacity: isVisible ? 1 : 0,
           transitionProperty: "transform, opacity",
           transitionDuration: "0.12s, 1s",
+          pointerEvents: "none", // Not clickable
+          userSelect: "none",
         }}
       >
         {/* Logo container */}
@@ -192,6 +245,7 @@ export default function AuroraPage() {
           <img
             src="/aurora-logo.png"
             alt="Aurora"
+            draggable={false}
             style={{
               width: "100%",
               height: "100%",
@@ -256,7 +310,6 @@ export default function AuroraPage() {
               position: "relative",
               width: 64,
               height: 64,
-              cursor: "not-allowed",
             }}
           >
             {/* Outer glow ring */}
@@ -288,7 +341,6 @@ export default function AuroraPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: 0.7,
-                transition: "all 0.4s ease",
               }}
             >
               {/* Inner icon - simple play/launch shape */}
@@ -319,7 +371,6 @@ export default function AuroraPage() {
                 inset: 0,
                 borderRadius: "50%",
                 border: "1px solid rgba(102,126,234,0.2)",
-                pointerEvents: "none",
               }}
             />
           </div>
@@ -342,9 +393,9 @@ export default function AuroraPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* PERSONAS BAR - Bottom                                               */}
+      {/* PERSONAS BAR - Bottom, NOT CLICKABLE                                */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {personas.length > 0 && (
+      {personas.length > 0 && imagesLoaded && (
         <div
           style={{
             position: "absolute",
@@ -356,9 +407,11 @@ export default function AuroraPage() {
             opacity: isVisible ? 1 : 0,
             transform: isVisible ? "translateY(0)" : "translateY(40px)",
             transition: "opacity 0.9s ease 0.4s, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.4s",
+            pointerEvents: "none", // Not clickable
+            userSelect: "none",
           }}
         >
-          {/* Scrolling container */}
+          {/* Scrolling container - GPU accelerated */}
           <div
             style={{
               display: "flex",
@@ -366,7 +419,7 @@ export default function AuroraPage() {
               height: "100%",
               paddingLeft: 24,
               paddingBottom: 20,
-              transform: `translateX(-${scrollX}px)`,
+              transform: `translate3d(-${scrollX}px, 0, 0)`,
               willChange: "transform",
             }}
           >
@@ -376,11 +429,7 @@ export default function AuroraPage() {
                 style={{
                   flexShrink: 0,
                   marginRight: 20,
-                  cursor: "pointer",
-                  transition: "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.12) translateY(-10px)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1) translateY(0)")}
               >
                 {/* Card */}
                 <div
@@ -405,6 +454,7 @@ export default function AuroraPage() {
                     <img
                       src={p.imageUrl}
                       alt={p.name}
+                      draggable={false}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -457,6 +507,7 @@ export default function AuroraPage() {
           opacity: isVisible ? 0.6 : 0,
           transition: "opacity 1.2s ease 0.8s",
           animation: isVisible ? "float 4s ease-in-out infinite" : "none",
+          pointerEvents: "none",
         }}
       />
       <div
@@ -471,6 +522,7 @@ export default function AuroraPage() {
           opacity: isVisible ? 0.5 : 0,
           transition: "opacity 1.2s ease 1s",
           animation: isVisible ? "float 5s ease-in-out infinite 1s" : "none",
+          pointerEvents: "none",
         }}
       />
       <div
@@ -485,6 +537,7 @@ export default function AuroraPage() {
           opacity: isVisible ? 0.4 : 0,
           transition: "opacity 1.2s ease 1.2s",
           animation: isVisible ? "float 6s ease-in-out infinite 2s" : "none",
+          pointerEvents: "none",
         }}
       />
 
