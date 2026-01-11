@@ -19,9 +19,16 @@ import { db, sessions, eq } from "@alfred/database";
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiClient: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.log(`[Transcribe] File: ${audioFile.name}, Size: ${audioFile.size} bytes, Type: ${audioFile.type}`);
 
     // Transcribe with Whisper
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await getOpenAI().audio.transcriptions.create({
       file: audioFile,
       model: "whisper-1",
       response_format: "verbose_json",
