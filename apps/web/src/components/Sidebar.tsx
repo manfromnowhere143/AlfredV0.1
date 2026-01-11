@@ -462,67 +462,49 @@ const Sidebar = React.memo(function Sidebar({
           z-index: 100;
           width: 50px;
           height: 50px;
-          border-radius: 14px;
+          border-radius: 0;
           border: none;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 0;
-          background: linear-gradient(145deg, #1a1a1a 0%, #0e0e0e 50%, #080808 100%);
-          box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+          background: transparent;
+          box-shadow: none;
           opacity: 0;
           transform: translateX(-120%);
           transition: all 0.5s cubic-bezier(0.32, 0.72, 0, 1);
-          overflow: hidden;
+          overflow: visible;
         }
 
         .aurora-btn.open { transform: translateX(0); opacity: 1; }
         .aurora-btn.closing { transform: translateX(-120%); opacity: 0; }
 
-        .aurora-btn::before {
-          content: '';
-          position: absolute;
-          inset: -0.5px;
-          border-radius: 14.5px;
-          padding: 0.5px;
-          background: linear-gradient(145deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.15));
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          pointer-events: none;
-          opacity: 0.6;
-        }
-
         .aurora-btn:hover {
-          transform: scale(1.08) translateY(-2px);
-          box-shadow: 0 0 0 0.5px rgba(139, 92, 246, 0.3), 0 0 25px rgba(139, 92, 246, 0.2), 0 8px 20px rgba(0, 0, 0, 0.5);
+          transform: scale(1.12) translateY(-2px);
         }
 
-        .aurora-btn:hover::before { opacity: 1; }
         .aurora-btn:active { transform: scale(0.95); transition: transform 0.1s ease; }
 
         .aurora-logo {
-          width: 34px;
-          height: 34px;
+          width: 46px;
+          height: 46px;
           object-fit: contain;
-          border-radius: 6px;
-          filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.3));
-          transition: filter 0.3s ease;
+          border-radius: 0;
+          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25)) drop-shadow(0 0 20px rgba(139, 92, 246, 0.15));
+          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         .aurora-btn:hover .aurora-logo {
-          filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.5));
+          filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.3)) drop-shadow(0 0 30px rgba(139, 92, 246, 0.4));
         }
 
-        :global([data-theme="light"]) .aurora-btn {
-          background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 50%, #ebebeb 100%);
-          box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+        :global([data-theme="light"]) .aurora-logo {
+          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15)) drop-shadow(0 0 20px rgba(139, 92, 246, 0.1));
         }
 
-        :global([data-theme="light"]) .aurora-btn:hover {
-          box-shadow: 0 0 0 0.5px rgba(139, 92, 246, 0.3), 0 0 25px rgba(139, 92, 246, 0.15), 0 12px 32px rgba(0, 0, 0, 0.12);
+        :global([data-theme="light"]) .aurora-btn:hover .aurora-logo {
+          filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.2)) drop-shadow(0 0 30px rgba(139, 92, 246, 0.3));
         }
 
         .user-panel {
@@ -1308,11 +1290,10 @@ const Sidebar = React.memo(function Sidebar({
             left: 16px;
             width: 44px;
             height: 44px;
-            border-radius: 12px;
           }
           .aurora-logo {
-            width: 28px;
-            height: 28px;
+            width: 40px;
+            height: 40px;
           }
           .control-panel.left { left: 16px; }
           .icon-column { gap: 10px; }
