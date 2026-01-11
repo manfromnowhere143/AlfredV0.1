@@ -7,6 +7,23 @@ import path from 'path';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECURITY: Allowed external hosts for redirects
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALLOWED_EXTERNAL_HOSTS = [
+  'blob.vercel-storage.com',
+  'public.blob.vercel-storage.com',
+];
+
+function isExternalUrlAllowed(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return ALLOWED_EXTERNAL_HOSTS.includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,26 +45,50 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // If URL is external (Vercel Blob, S3, etc), redirect
+    // If URL is external (Vercel Blob, S3, etc), validate and redirect
     if (fileRecord.url.startsWith('http')) {
+      // SECURITY: Only redirect to whitelisted hosts
+      if (!isExternalUrlAllowed(fileRecord.url)) {
+        console.error('[FileServe] SECURITY: Blocked redirect to non-whitelisted host:', fileRecord.url);
+        return NextResponse.json({ error: 'Invalid file URL' }, { status: 403 });
+      }
       return NextResponse.redirect(fileRecord.url);
     }
 
-    // For local files - serve from disk
-    const filepath = path.join(process.cwd(), 'public', fileRecord.url);
-    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECURITY: Path traversal protection for local files
+    // ═══════════════════════════════════════════════════════════════════════════
+    const publicDir = path.resolve(process.cwd(), 'public');
+
+    // Normalize the URL path and remove any leading slashes
+    const sanitizedUrl = fileRecord.url.replace(/^\/+/, '').replace(/\.\./g, '');
+    const filepath = path.resolve(publicDir, sanitizedUrl);
+
+    // CRITICAL: Verify resolved path is within public directory
+    if (!filepath.startsWith(publicDir + path.sep) && filepath !== publicDir) {
+      console.error('[FileServe] SECURITY: Path traversal attempt blocked:', fileRecord.url);
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     if (!existsSync(filepath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
     }
 
     const buffer = await readFile(filepath);
-    
+
+    // SECURITY: Restrict CORS to same origin in production
+    const origin = request.headers.get('origin');
+    const allowedOrigin = process.env.NODE_ENV === 'production'
+      ? (origin && origin.includes(process.env.NEXTAUTH_URL || '') ? origin : 'null')
+      : '*';
+
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': fileRecord.mimeType,
         'Content-Length': String(buffer.length),
         'Cache-Control': 'public, max-age=31536000',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'X-Content-Type-Options': 'nosniff',
       },
     });
 

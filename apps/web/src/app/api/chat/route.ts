@@ -296,19 +296,101 @@ function normalizeMimeType(type: string, filename: string): string {
   return mimeMap[ext || ''] || type;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECURITY: URL whitelist for remote file fetching (SSRF protection)
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALLOWED_REMOTE_HOSTS = [
+  'blob.vercel-storage.com',
+  'public.blob.vercel-storage.com',
+  // Add other trusted hosts here
+];
+
+const BLOCKED_IP_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^\[::1\]/,
+  /^\[fc/i,
+  /^\[fd/i,
+];
+
+function isUrlAllowed(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname.toLowerCase();
+
+    // Block internal IPs
+    for (const pattern of BLOCKED_IP_PATTERNS) {
+      if (pattern.test(hostname)) {
+        console.warn(`[Chat] SECURITY: Blocked internal URL: ${hostname}`);
+        return false;
+      }
+    }
+
+    // Only allow whitelisted hosts
+    if (!ALLOWED_REMOTE_HOSTS.includes(hostname)) {
+      console.warn(`[Chat] SECURITY: Blocked non-whitelisted host: ${hostname}`);
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readFileFromUrl(url: string): Promise<string | null> {
   try {
     if (url.startsWith('http')) {
+      // SECURITY: Validate URL before fetching
+      if (!isUrlAllowed(url)) {
+        console.error('[Chat] SECURITY: Remote URL fetch blocked');
+        return null;
+      }
+
       console.log('[Chat] Fetching remote file:', url);
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const buffer = Buffer.from(await response.arrayBuffer());
-      return buffer.toString('base64');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          redirect: 'error', // Don't follow redirects (SSRF protection)
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) return null;
+
+        // Limit response size to 10MB
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) {
+          console.error('[Chat] SECURITY: Remote file too large');
+          return null;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        return buffer.toString('base64');
+      } finally {
+        clearTimeout(timeout);
+      }
     }
   } catch (e) { console.error('[Chat] Remote fetch error:', e); }
-  
+
   try {
-    const filepath = path.join(process.cwd(), 'public', url);
+    // SECURITY: Normalize path and verify it's within public directory
+    const publicDir = path.resolve(process.cwd(), 'public');
+    const filepath = path.resolve(publicDir, url.replace(/^\/+/, ''));
+
+    // Verify path is within public directory (path traversal protection)
+    if (!filepath.startsWith(publicDir)) {
+      console.error('[Chat] SECURITY: Path traversal attempt blocked:', url);
+      return null;
+    }
+
     if (!existsSync(filepath)) {
       console.log(`[Chat] File not found on disk: ${filepath}`);
       return null;
