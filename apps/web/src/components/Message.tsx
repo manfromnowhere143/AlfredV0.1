@@ -333,8 +333,19 @@ function CodeBlock({ language, code, isStreaming = false, onPreview }: { languag
 
   const lines = code.split('\n');
 
+  // SECURITY: Escape HTML entities to prevent XSS before syntax highlighting
+  const escapeHtml = (text: string) => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   const highlightLine = (line: string) => {
-    return line
+    // First escape HTML to prevent XSS, then apply syntax highlighting
+    return escapeHtml(line)
       .replace(/\b(const|let|var|function|return|if|else|for|while|import|export|default|from|async|await|class|extends|new|this|try|catch|throw)\b/g, '<span class="kw">$1</span>')
       .replace(/\b(true|false|null|undefined)\b/g, '<span class="bool">$1</span>')
       .replace(/(["'`])(?:(?!\1)[^\\]|\\.)*?\1/g, '<span class="str">$&</span>')
