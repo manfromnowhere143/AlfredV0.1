@@ -280,7 +280,11 @@ export interface Persona {
   speakingStyle?: SpeakingStyle;
   knowledgeDomains?: KnowledgeDomain[];
 
-  // Visual
+  // Visual - The beautiful state-of-the-art images
+  imageUrl?: string;
+  primaryImageUrl?: string;
+  thumbnailUrl?: string;
+  expressionGrid?: Record<string, string>;
   visualStyle: PersonaVisualStyle;
   visualConfig?: VisualConfig;
   identityEmbedding?: IdentityEmbedding;

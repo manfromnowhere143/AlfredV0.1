@@ -194,21 +194,31 @@ const assetStorage = {
 
 /**
  * Initialize the Identity Lock Pipeline
- * Uses Replicate as primary provider (RunPod as fallback)
+ *
+ * Provider Priority (configurable):
+ * 1. RunPod ComfyUI — If RUNPOD_ENDPOINT_ID is set (your $30)
+ * 2. Replicate FLUX PuLID — If only REPLICATE_API_TOKEN is set
+ *
+ * "Design is not just what it looks like. Design is how it works." — Steve Jobs
  */
 function getIdentityPipeline(): IdentityLockPipeline {
   const replicateKey = process.env.REPLICATE_API_TOKEN;
   const runpodKey = process.env.RUNPOD_API_KEY;
-  
+  const runpodEndpoint = process.env.RUNPOD_ENDPOINT_ID;
+
   if (!replicateKey && !runpodKey) {
     throw new Error("No GPU provider API key configured (REPLICATE_API_TOKEN or RUNPOD_API_KEY)");
   }
-  
-  console.log(`[Pipeline] Initializing with ${replicateKey ? "Replicate" : "RunPod"}`);
-  
+
+  // Prefer RunPod if endpoint is configured (user has credits there)
+  const useRunPod = runpodKey && runpodEndpoint;
+  const provider = useRunPod ? `RunPod ComfyUI (${runpodEndpoint})` : "Replicate (FLUX PuLID)";
+  console.log(`[Pipeline] Initializing with ${provider} — State of the Art 2025`);
+
   return createIdentityLockPipeline({
-    replicateApiKey: replicateKey,
-    runpodApiKey: runpodKey,
+    runpodApiKey: useRunPod ? runpodKey : undefined,
+    runpodEndpointId: runpodEndpoint,
+    replicateApiKey: useRunPod ? undefined : replicateKey, // Only use Replicate if not using RunPod
     storage: assetStorage,
   });
 }
@@ -397,7 +407,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         
         console.log(`[Wizard] Generated ${variations.length} variations`);
         variations.forEach((v, i) => {
-          console.log(`   [${i}] ${v.imageUrl.substring(0, 50)}... (${v.generationTimeMs}ms, $${v.cost.toFixed(4)})`);
+          const urlPreview = v.imageUrl ? String(v.imageUrl).substring(0, 50) : '(no url)';
+          console.log(`   [${i}] ${urlPreview}... (${v.generationTimeMs}ms, $${v.cost?.toFixed(4) || '0.0000'})`);
         });
         
         result = {
@@ -419,18 +430,33 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       case "lock-identity": {
         console.log("[Wizard] Locking visual identity...");
         console.log(`[Wizard] Chosen index: ${data.chosenIndex}`);
-        
+
         const visualDNA = await wizard.lockVisualIdentity(sessionId, data.chosenIndex);
-        
+
         console.log(`[Wizard] Identity locked!`);
         console.log(`   Face embedding: ${visualDNA.faceEmbedding.vector.length} dimensions`);
         console.log(`   Confidence: ${visualDNA.faceEmbedding.confidence}`);
         console.log(`   Expressions: ${Object.keys(visualDNA.expressions).length} generated`);
-        
+
+        // IMPORTANT: Save image to database NOW, don't wait for finalize
+        // (finalize might fail if session is lost during hot reload)
+        const imageUrl = visualDNA.faceEmbedding.sourceImageUrl;
+        if (imageUrl) {
+          console.log(`[Wizard] Saving primaryImageUrl to database: ${imageUrl.substring(0, 50)}...`);
+          await db.update(schema.personas)
+            .set({
+              primaryImageUrl: imageUrl,
+              expressionGrid: visualDNA.expressions as any,
+              identityEmbedding: visualDNA.faceEmbedding.vector,
+            })
+            .where(eq(schema.personas.id, personaId));
+          console.log(`[Wizard] Image saved to database!`);
+        }
+
         result = {
           success: true,
           visualDNA: {
-            primaryImageUrl: visualDNA.faceEmbedding.sourceImageUrl,
+            primaryImageUrl: imageUrl,
             expressionCount: Object.keys(visualDNA.expressions).length,
             faceConfidence: visualDNA.faceEmbedding.confidence,
             locked: true,
@@ -536,26 +562,70 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // Save to database
         const repository = new PersonaRepository(db as any, schema);
         const service = new PersonaService(repository);
-        
+
+        // Map genome data to the correct database columns
+        // Note: Use only fields that properly map to DB columns
         await service.update({ userId, tier: "pro" }, personaId, {
           name: genome.metadata.name,
           tagline: genome.metadata.tagline,
-          traits: genome.mindDNA.traits,
-          visualConfig: genome.visualDNA as any,
-          voiceId: genome.voiceDNA?.voiceId,
-          voiceProvider: genome.voiceDNA?.identity.provider as "elevenlabs" | "coqui" | undefined,
+          traits: genome.mindDNA.traits || [],
+          // Voice DNA
+          voiceId: genome.voiceDNA?.voiceId || genome.voiceDNA?.identity?.voiceId,
+          voiceProvider: genome.voiceDNA?.identity?.provider as "elevenlabs" | "coqui" | undefined,
+          // Mind DNA - backstory is in identity object
+          backstory: genome.mindDNA?.identity?.backstory,
+          // Status
           status: "active",
         });
+
+        // Also store the complete genome and visual data directly
+        // These columns aren't in UpdatePersonaInput, so we update them directly
+        await db.update(schema.personas)
+          .set({
+            // Complete genome for full reconstruction
+            genome: {
+              version: genome.metadata.version,
+              visual: genome.visualDNA,
+              voice: genome.voiceDNA,
+              mind: genome.mindDNA,
+              metadata: genome.metadata,
+            },
+            // Visual data
+            visualStylePreset: genome.visualDNA?.stylePreset,
+            primaryImageUrl: genome.metadata.avatarUrl,
+            expressionGrid: genome.visualDNA?.expressions as any,
+            identityEmbedding: genome.visualDNA?.faceEmbedding?.vector,
+            referenceImages: genome.visualDNA?.faceEmbedding?.sourceImageUrl ? {
+              primary: genome.visualDNA.faceEmbedding.sourceImageUrl,
+            } : undefined,
+            // Mind data
+            systemPromptTemplate: genome.mindDNA?.systemPrompt,
+            personalityMatrix: genome.mindDNA?.personality as any,
+            speakingStyle: genome.voiceDNA?.speakingStyle as any,
+            knowledgeDomains: genome.mindDNA?.knowledgeDomains as any,
+            // Voice data
+            voiceProfile: genome.voiceDNA?.characteristics as any,
+            voiceIsCloned: genome.voiceDNA?.identity?.cloneSource ? true : false,
+            // Activation
+            activatedAt: new Date(),
+          })
+          .where(eq(schema.personas.id, personaId));
         
-        // Store primary image as asset
+        // Store primary image as asset (optional - may fail if DB migration pending)
         if (genome.metadata.avatarUrl) {
-          await service.addAsset({ userId, tier: "pro" }, personaId, {
-            type: "image",
-            purpose: "primary_portrait",
-            url: genome.metadata.avatarUrl,
-          });
+          try {
+            await service.addAsset({ userId, tier: "pro" }, personaId, {
+              type: "image",
+              subtype: "primary_portrait",
+              url: genome.metadata.avatarUrl,
+            });
+            console.log("[Wizard] Primary image asset stored");
+          } catch (assetError) {
+            // Non-fatal: asset storage can fail if migration pending
+            console.warn("[Wizard] Could not store asset (non-fatal):", (assetError as Error).message);
+          }
         }
-        
+
         console.log("[Wizard] Persona saved to database");
         
         // Cleanup session

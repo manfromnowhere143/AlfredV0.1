@@ -197,6 +197,14 @@ export class VoiceEngine {
   }
 
   /**
+   * Synthesize speech (simple interface for wizard)
+   */
+  async synthesize(text: string, voiceId: string): Promise<ArrayBuffer> {
+    const result = await this.speak({ text, voiceId });
+    return result.audio;
+  }
+
+  /**
    * List available voices
    */
   async listVoices() {

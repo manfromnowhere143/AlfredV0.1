@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@alfred/api": "workspace:^",
@@ -17,8 +19,13 @@
     "@alfred/deploy": "workspace:^",
     "@alfred/llm": "workspace:*",
     "@alfred/memory": "workspace:^",
+    "@alfred/persona": "workspace:^",
     "@alfred/rag": "workspace:^",
+    "@anthropic-ai/sdk": "^0.32.1",
     "@auth/drizzle-adapter": "^1.11.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/postprocessing": "^2.19.1",
     "@stripe/stripe-js": "^8.6.0",
     "@types/pg": "^8.16.0",
     "@types/three": "^0.182.0",
@@ -29,19 +36,24 @@
     "lucide-react": "^0.562.0",
     "next": "14.2.35",
     "next-auth": "^4.24.13",
+    "openai": "^6.16.0",
     "pg": "^8.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "replicate": "^1.4.0",
     "resend": "^6.6.0",
     "sharp": "^0.34.5",
     "stripe": "^20.1.0",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.14",
     "@types/react-dom": "^18.3.2",
     "@types/sharp": "^0.32.0",
-    "typescript": "^5.7.2"
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

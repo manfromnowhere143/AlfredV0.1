@@ -477,20 +477,18 @@ export class PersonaRepository {
       .values({
         personaId: input.personaId,
         type: input.type,
-        purpose: input.purpose,
-        name: input.name,
+        subtype: input.purpose,
         url: input.url,
         thumbnailUrl: input.thumbnailUrl,
-        storageProvider: input.storageProvider || 'vercel_blob',
-        storageKey: input.storageKey,
         mimeType: input.mimeType,
-        size: input.size,
+        sizeBytes: input.size,
         width: input.width,
         height: input.height,
-        duration: input.duration,
+        durationSeconds: input.duration,
         generationConfig: input.generationConfig,
-        generationCost: input.generationCost,
-        generationTimeMs: input.generationTimeMs,
+        generationCostUsd: input.generationCost,
+        seed: input.generationConfig?.seed as number | undefined,
+        prompt: input.generationConfig?.prompt as string | undefined,
       })
       .returning();
 
@@ -511,7 +509,7 @@ export class PersonaRepository {
     }
 
     if (options.purpose) {
-      conditions.push(eq(this.schema.personaAssets.purpose, options.purpose));
+      conditions.push(eq(this.schema.personaAssets.subtype, options.purpose));
     }
 
     const assets = await this.db
@@ -534,7 +532,7 @@ export class PersonaRepository {
         and(
           eq(this.schema.personaAssets.personaId, personaId),
           eq(this.schema.personaAssets.type, 'image'),
-          eq(this.schema.personaAssets.purpose, 'primary'),
+          eq(this.schema.personaAssets.isPrimary, true),
         ),
       )
       .limit(1);
@@ -656,13 +654,11 @@ export class PersonaRepository {
         outputTokens: input.outputTokens,
         durationSeconds: input.durationSeconds,
         latencyMs: input.latencyMs,
-        llmCost: input.llmCost,
-        ttsCost: input.ttsCost,
-        videoCost: input.videoCost,
-        totalCost: input.totalCost,
-        source: input.source || 'app',
-        referrer: input.referrer,
-        clientMetadata: input.clientMetadata,
+        llmCostUsd: input.llmCost,
+        ttsCostUsd: input.ttsCost,
+        videoCostUsd: input.videoCost,
+        totalCostUsd: input.totalCost,
+        conversationContext: input.clientMetadata,
       })
       .returning();
 
@@ -744,18 +740,16 @@ export class PersonaRepository {
       .insert(this.schema.personaEmbeds)
       .values({
         personaId: input.personaId,
-        domain: input.domain,
-        allowedOrigins: input.allowedOrigins || [],
-        theme: input.theme || 'dark',
-        position: input.position || 'bottom-right',
-        size: input.size || 'medium',
-        customCss: input.customCss,
-        branding: input.branding,
-        requireAuth: input.requireAuth || false,
-        customGreeting: input.customGreeting,
-        allowedModes: input.allowedModes || ['chat'],
-        dailyLimitPerVisitor: input.dailyLimitPerVisitor || 20,
-        dailyLimitTotal: input.dailyLimitTotal || 1000,
+        embedKey: input.domain,
+        allowedDomains: input.allowedOrigins || [],
+        config: {
+          theme: input.theme || 'dark',
+          position: input.position || 'bottom-right',
+          size: input.size || 'medium',
+          customCss: input.customCss,
+          greeting: input.customGreeting,
+          allowedDomains: input.allowedOrigins,
+        },
       })
       .returning();
 
@@ -772,7 +766,7 @@ export class PersonaRepository {
       .where(
         and(
           eq(this.schema.personaEmbeds.personaId, personaId),
-          eq(this.schema.personaEmbeds.domain, domain),
+          eq(this.schema.personaEmbeds.embedKey, domain),
         ),
       )
       .limit(1);
@@ -803,13 +797,13 @@ export class PersonaRepository {
     const updates: Record<string, unknown> = {};
 
     if (stats.impressions) {
-      updates.totalImpressions = sql`${this.schema.personaEmbeds.totalImpressions} + ${stats.impressions}`;
+      updates.totalLoads = sql`${this.schema.personaEmbeds.totalLoads} + ${stats.impressions}`;
     }
     if (stats.interactions) {
       updates.totalInteractions = sql`${this.schema.personaEmbeds.totalInteractions} + ${stats.interactions}`;
     }
     if (stats.visitors) {
-      updates.uniqueVisitors = sql`${this.schema.personaEmbeds.uniqueVisitors} + ${stats.visitors}`;
+      updates.uniqueUsers = sql`${this.schema.personaEmbeds.uniqueUsers} + ${stats.visitors}`;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -951,7 +945,7 @@ export class PersonaRepository {
   private mapToPersona(row: any): Persona {
     return {
       id: row.id,
-      userId: row.user_id,
+      userId: row.userId,
       name: row.name,
       slug: row.slug,
       archetype: row.archetype,
@@ -959,153 +953,158 @@ export class PersonaRepository {
       backstory: row.backstory,
       traits: row.traits || [],
       temperament: row.temperament,
-      communicationStyle: row.communication_style,
-      emotionalRange: row.emotional_range,
-      speakingStyle: row.speaking_style,
-      knowledgeDomains: row.knowledge_domains,
-      visualStyle: row.visual_style,
-      visualConfig: row.visual_config,
-      identityEmbedding: row.identity_embedding,
-      voiceProvider: row.voice_provider,
-      voiceId: row.voice_id,
-      voiceConfig: row.voice_config,
-      motionStyle: row.motion_style,
-      motionConfig: row.motion_config,
-      cameraAngle: row.camera_angle,
+      communicationStyle: row.communicationStyle,
+      emotionalRange: row.emotionalRange,
+      speakingStyle: row.speakingStyle,
+      knowledgeDomains: row.knowledgeDomains,
+      // Image URLs - the beautiful state-of-the-art images!
+      imageUrl: row.primaryImageUrl,
+      primaryImageUrl: row.primaryImageUrl,
+      thumbnailUrl: row.thumbnailUrl,
+      expressionGrid: row.expressionGrid,
+      visualStyle: row.visualStylePreset,
+      visualConfig: row.visualConfig,
+      identityEmbedding: row.identityEmbedding,
+      voiceProvider: row.voiceProvider,
+      voiceId: row.voiceId,
+      voiceConfig: row.voiceProfile,
+      motionStyle: row.motionStylePreset,
+      motionConfig: row.motionConfig,
+      cameraAngle: row.cameraAngle,
       status: row.status,
-      isPublic: row.is_public,
-      allowEmbed: row.allow_embed,
-      allowVoice: row.allow_voice,
-      allowVideo: row.allow_video,
-      customGreeting: row.custom_greeting,
-      currentMood: row.current_mood,
-      energyLevel: row.energy_level,
-      relationshipLevel: row.relationship_level,
-      totalInteractions: row.total_interactions,
-      totalChatMessages: row.total_chat_messages,
-      totalVoiceMinutes: row.total_voice_minutes,
-      totalVideoMinutes: row.total_video_minutes,
-      createdAt: row.created_at?.toISOString(),
-      updatedAt: row.updated_at?.toISOString(),
-      lastInteractionAt: row.last_interaction_at?.toISOString(),
-      deletedAt: row.deleted_at?.toISOString(),
+      isPublic: row.isPublic,
+      allowEmbed: row.allowEmbed,
+      allowVoice: row.allowVoice,
+      allowVideo: row.allowVideo,
+      customGreeting: row.customGreeting,
+      currentMood: row.currentMood,
+      energyLevel: row.energyLevel,
+      relationshipLevel: row.relationshipLevel,
+      totalInteractions: row.totalInteractions,
+      totalChatMessages: row.totalChatMessages,
+      totalVoiceMinutes: row.totalVoiceMinutes,
+      totalVideoMinutes: row.totalVideoMinutes,
+      createdAt: row.createdAt?.toISOString(),
+      updatedAt: row.updatedAt?.toISOString(),
+      lastInteractionAt: row.lastInteractionAt?.toISOString(),
+      deletedAt: row.deletedAt?.toISOString(),
     };
   }
 
   private mapToAsset(row: any): PersonaAsset {
     return {
       id: row.id,
-      personaId: row.persona_id,
+      personaId: row.personaId,
       type: row.type,
-      purpose: row.purpose,
+      purpose: row.subtype,
       name: row.name,
       url: row.url,
-      thumbnailUrl: row.thumbnail_url,
-      storageProvider: row.storage_provider,
-      storageKey: row.storage_key,
-      mimeType: row.mime_type,
-      size: row.size,
+      thumbnailUrl: row.thumbnailUrl,
+      storageProvider: row.storageProvider,
+      storageKey: row.storageKey,
+      mimeType: row.mimeType,
+      size: row.sizeBytes,
       width: row.width,
       height: row.height,
-      duration: row.duration,
-      generationConfig: row.generation_config,
-      generationCost: row.generation_cost,
-      generationTimeMs: row.generation_time_ms,
-      createdAt: row.created_at?.toISOString(),
-      updatedAt: row.updated_at?.toISOString(),
+      duration: row.durationSeconds,
+      generationConfig: row.generationConfig,
+      generationCost: row.generationCostUsd,
+      generationTimeMs: row.generationTimeMs,
+      createdAt: row.createdAt?.toISOString(),
+      updatedAt: row.updatedAt?.toISOString(),
     };
   }
 
   private mapToMemory(row: any): PersonaMemory {
     return {
       id: row.id,
-      personaId: row.persona_id,
+      personaId: row.personaId,
       content: row.content,
       type: row.type,
       category: row.category,
       summary: row.summary,
       embedding: row.embedding,
-      embeddingModel: row.embedding_model,
+      embeddingModel: row.embeddingModel,
       importance: row.importance,
       confidence: row.confidence,
-      accessCount: row.access_count,
-      decayRate: row.decay_rate,
-      sourceInteractionId: row.source_interaction_id,
-      sourceUserId: row.source_user_id,
-      lastAccessedAt: row.last_accessed_at?.toISOString(),
-      createdAt: row.created_at?.toISOString(),
-      expiresAt: row.expires_at?.toISOString(),
+      accessCount: row.accessCount,
+      decayRate: row.decayRate,
+      sourceInteractionId: row.sourceInteractionId,
+      sourceUserId: row.sourceUserId,
+      lastAccessedAt: row.lastAccessedAt?.toISOString(),
+      createdAt: row.createdAt?.toISOString(),
+      expiresAt: row.expiresAt?.toISOString(),
     };
   }
 
   private mapToInteraction(row: any): PersonaInteraction {
     return {
       id: row.id,
-      personaId: row.persona_id,
-      userId: row.user_id,
-      sessionId: row.session_id,
+      personaId: row.personaId,
+      userId: row.userId,
+      sessionId: row.sessionId,
       mode: row.mode,
-      userMessage: row.user_message,
-      personaResponse: row.persona_response,
-      userEmotionDetected: row.user_emotion_detected,
-      personaEmotionExpressed: row.persona_emotion_expressed,
-      inputTokens: row.input_tokens,
-      outputTokens: row.output_tokens,
-      durationSeconds: row.duration_seconds,
-      latencyMs: row.latency_ms,
-      wasHelpful: row.was_helpful,
-      userRating: row.user_rating,
-      userFeedback: row.user_feedback,
-      llmCost: row.llm_cost,
-      ttsCost: row.tts_cost,
-      videoCost: row.video_cost,
-      totalCost: row.total_cost,
+      userMessage: row.userMessage,
+      personaResponse: row.personaResponse,
+      userEmotionDetected: row.userEmotionDetected,
+      personaEmotionExpressed: row.personaEmotionExpressed,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      durationSeconds: row.durationSeconds,
+      latencyMs: row.latencyMs,
+      wasHelpful: row.wasHelpful,
+      userRating: row.rating,
+      userFeedback: row.feedback,
+      llmCost: row.llmCostUsd,
+      ttsCost: row.ttsCostUsd,
+      videoCost: row.videoCostUsd,
+      totalCost: row.totalCostUsd,
       source: row.source,
       referrer: row.referrer,
-      clientMetadata: row.client_metadata,
-      createdAt: row.created_at?.toISOString(),
+      clientMetadata: row.conversationContext,
+      createdAt: row.createdAt?.toISOString(),
     };
   }
 
   private mapToEmbed(row: any): PersonaEmbed {
     return {
       id: row.id,
-      personaId: row.persona_id,
-      domain: row.domain,
-      allowedOrigins: row.allowed_origins || [],
-      theme: row.theme,
-      position: row.position,
-      size: row.size,
-      customCss: row.custom_css,
-      branding: row.branding,
-      isActive: row.is_active,
-      requireAuth: row.require_auth,
-      customGreeting: row.custom_greeting,
-      allowedModes: row.allowed_modes || ['chat'],
-      dailyLimitPerVisitor: row.daily_limit_per_visitor,
-      dailyLimitTotal: row.daily_limit_total,
-      totalImpressions: row.total_impressions,
-      totalInteractions: row.total_interactions,
-      uniqueVisitors: row.unique_visitors,
-      createdAt: row.created_at?.toISOString(),
-      updatedAt: row.updated_at?.toISOString(),
+      personaId: row.personaId,
+      domain: row.embedKey,
+      allowedOrigins: row.allowedDomains || [],
+      theme: row.config?.theme,
+      position: row.config?.position,
+      size: row.config?.size,
+      customCss: row.config?.customCss,
+      branding: row.config,
+      isActive: row.isActive,
+      requireAuth: row.config?.requireAuth,
+      customGreeting: row.config?.greeting,
+      allowedModes: row.config?.allowedModes || ['chat'],
+      dailyLimitPerVisitor: row.dailyLimitPerVisitor,
+      dailyLimitTotal: row.dailyLimitTotal,
+      totalImpressions: row.totalLoads,
+      totalInteractions: row.totalInteractions,
+      uniqueVisitors: row.uniqueUsers,
+      createdAt: row.createdAt?.toISOString(),
+      updatedAt: row.updatedAt?.toISOString(),
     };
   }
 
   private mapToSession(row: any): PersonaSession {
     return {
       id: row.id,
-      personaId: row.persona_id,
-      userId: row.user_id,
-      visitorId: row.visitor_id,
-      currentMood: row.current_mood,
-      contextSummary: row.context_summary,
-      sessionFacts: row.session_facts || [],
-      messageCount: row.message_count,
-      tokenCount: row.token_count,
-      startedAt: row.started_at?.toISOString(),
-      lastActivityAt: row.last_activity_at?.toISOString(),
-      endedAt: row.ended_at?.toISOString(),
+      personaId: row.personaId,
+      userId: row.userId,
+      visitorId: row.visitorId,
+      currentMood: row.currentEmotion,
+      contextSummary: row.contextSummary,
+      sessionFacts: row.sessionFacts || [],
+      messageCount: row.messageCount,
+      tokenCount: row.tokenCount,
+      startedAt: row.createdAt?.toISOString(),
+      lastActivityAt: row.updatedAt?.toISOString(),
+      endedAt: row.endedAt?.toISOString(),
     };
   }
 }

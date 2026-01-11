@@ -29,7 +29,7 @@ import type {
       allowCustomVoice: false,
     },
     pro: {
-      maxPersonas: 5,
+      maxPersonas: 100,  // Increased for development
       maxChatMessagesPerDay: 200,
       maxVoiceMinutesPerMonth: 60,
       maxVideoMinutesPerMonth: 15,

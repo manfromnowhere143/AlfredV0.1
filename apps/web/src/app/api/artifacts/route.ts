@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, artifacts, projects, eq } from '@alfred/database';
+import { db, artifacts, projects, sessions, eq } from '@alfred/database';
 
-function getUserId(req: NextRequest): string {
-  return req.headers.get('x-user-id') || 'demo-user-id';
+async function getUserId(req: NextRequest): Promise<string | null> {
+  const sessionToken = req.cookies.get('next-auth.session-token')?.value
+    || req.cookies.get('__Secure-next-auth.session-token')?.value;
+
+  if (!sessionToken) return null;
+
+  const [session] = await db
+    .select({ userId: sessions.userId })
+    .from(sessions)
+    .where(eq(sessions.sessionToken, sessionToken))
+    .limit(1);
+
+  return session?.userId || null;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = getUserId(req);
+    const userId = await getUserId(req);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
     const { title, code, language, projectId, conversationId } = await req.json();
     const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
     if (!project || project.userId !== userId) {

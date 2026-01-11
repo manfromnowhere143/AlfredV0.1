@@ -17,6 +17,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from "framer-motion";
+import { PersonaEnvironment, type PersonaArchetype } from "@/components/PersonaEnvironment";
+import type { EmotionState } from "@/components/LivePersona";
+import { LiveAvatar3DStaged } from "@/components/LiveAvatar3DStaged";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS — Refined for Immersion
@@ -847,55 +850,260 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
   const [textInput, setTextInput] = useState("");
   const [currentResponse, setCurrentResponse] = useState("");
   const [isListening, setIsListening] = useState(false);
-  
+  const [currentEmotion, setCurrentEmotion] = useState<EmotionState>("neutral");
+  const [audioData, setAudioData] = useState<string | undefined>();
+
   const audioLevels = useAudioVisualizer(isListening);
-  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   // Get aura colors for this persona
   const auraColors = AURA_COLORS[persona.archetype] || AURA_COLORS.default;
-  
-  // Handle voice input
-  const handleVoiceStart = useCallback(() => {
-    setIsListening(true);
-    setState("listening");
-    setCurrentResponse("");
+
+  // Unlock AudioContext on first user interaction
+  const unlockAudio = useCallback(async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+      console.log("[EngageView] Created AudioContext");
+    }
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+      console.log("[EngageView] AudioContext unlocked:", audioContextRef.current.state);
+    }
   }, []);
-  
-  const handleVoiceEnd = useCallback(async () => {
-    setIsListening(false);
+
+  // Extract emotion from response text
+  const extractEmotion = (text: string): EmotionState => {
+    const match = text.match(/\[EMOTION:(\w+)\]/i);
+    if (match) {
+      const emotion = match[1].toLowerCase();
+      const validEmotions: EmotionState[] = [
+        "neutral", "happy", "sad", "angry", "surprised",
+        "thoughtful", "excited", "calm", "confident", "curious", "concerned"
+      ];
+      if (validEmotions.includes(emotion as EmotionState)) {
+        return emotion as EmotionState;
+      }
+    }
+    return "neutral";
+  };
+
+  // Clean text of emotion/action tags
+  const cleanText = (text: string): string => {
+    return text
+      .replace(/\[EMOTION:\w+\]/gi, "")
+      .replace(/\[ACTION:\w+\]/gi, "")
+      .trim();
+  };
+
+  // Process a message through chat API and TTS
+  const processMessage = useCallback(async (message: string) => {
     setState("thinking");
-    
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1500));
-    
-    setState("speaking");
-    setCurrentResponse("I understand what you're seeking. Let me share my thoughts with you...");
-    
-    // Simulate speaking duration
-    await new Promise(r => setTimeout(r, 3000));
-    
+    setCurrentEmotion("thoughtful");
+    setCurrentResponse("");
+
+    try {
+      // 1. Call chat API with streaming
+      const chatResponse = await fetch(`/api/personas/${persona.id}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      if (!chatResponse.ok) throw new Error("Chat failed");
+
+      const reader = chatResponse.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+      let detectedEmotion: EmotionState = "neutral";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === "text") {
+                  fullResponse += data.text;
+                  const emotion = extractEmotion(fullResponse);
+                  if (emotion !== detectedEmotion) {
+                    detectedEmotion = emotion;
+                    setCurrentEmotion(emotion);
+                  }
+                  setCurrentResponse(cleanText(fullResponse));
+                } else if (data.type === "done") {
+                  detectedEmotion = data.emotion || extractEmotion(fullResponse);
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      }
+
+      const cleanedResponse = cleanText(fullResponse);
+      setCurrentResponse(cleanedResponse);
+      setCurrentEmotion(detectedEmotion);
+
+      // 2. Generate speech
+      if (cleanedResponse) {
+        setState("speaking");
+
+        console.log("[EngageView] Calling speak API for:", cleanedResponse.substring(0, 50) + "...");
+
+        try {
+          const speakResponse = await fetch(`/api/personas/${persona.id}/speak`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: cleanedResponse,
+              emotion: detectedEmotion,
+            }),
+          });
+
+          console.log("[EngageView] Speak response status:", speakResponse.status);
+
+          if (speakResponse.ok) {
+            const speakData = await speakResponse.json();
+            console.log("[EngageView] Speak data:", speakData.audio ? "has audio" : "no audio", speakData.message || "");
+
+            if (speakData.audio) {
+              // Pass audio to LiveAvatar3D - it handles playback and lip-sync
+              setAudioData(speakData.audio);
+              return; // Don't set idle here, wait for audio end callback
+            }
+          } else {
+            const errorText = await speakResponse.text();
+            console.error("[EngageView] Speak API error:", speakResponse.status, errorText);
+          }
+        } catch (speakError) {
+          console.error("[EngageView] Speak fetch error:", speakError);
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setCurrentEmotion("concerned");
+      setCurrentResponse("I apologize, but I'm having trouble responding right now.");
+    }
+
     setState("idle");
-  }, []);
-  
+  }, [persona.id]);
+
+  // Handle voice input - Start recording
+  const handleVoiceStart = useCallback(async () => {
+    // Unlock AudioContext for lip-sync
+    await unlockAudio();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4',
+      });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(100);
+      setIsListening(true);
+      setState("listening");
+      setCurrentResponse("");
+    } catch (error) {
+      console.error("Microphone error:", error);
+    }
+  }, [unlockAudio]);
+
+  // Handle voice input - Stop recording and transcribe
+  const handleVoiceEnd = useCallback(async () => {
+    if (!mediaRecorderRef.current || !isListening) return;
+
+    setIsListening(false);
+
+    const mediaRecorder = mediaRecorderRef.current;
+    const stream = mediaRecorder.stream;
+
+    // Stop and get audio
+    await new Promise<void>((resolve) => {
+      mediaRecorder.onstop = () => resolve();
+      mediaRecorder.stop();
+    });
+
+    // Stop all tracks
+    stream.getTracks().forEach((track) => track.stop());
+
+    // Create audio blob
+    const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+
+    if (audioBlob.size === 0) {
+      setState("idle");
+      return;
+    }
+
+    // Transcribe
+    setState("thinking");
+    setCurrentResponse("Processing your voice...");
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      const transcribeResponse = await fetch(`/api/personas/${persona.id}/transcribe`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (transcribeResponse.ok) {
+        const data = await transcribeResponse.json();
+        if (data.text && data.text.trim()) {
+          setCurrentResponse(`You said: "${data.text}"`);
+          await new Promise(r => setTimeout(r, 500)); // Brief pause to show transcript
+          await processMessage(data.text.trim());
+          return;
+        }
+      }
+
+      // Fallback if transcription failed
+      setCurrentResponse("I couldn't understand that. Please try again.");
+      await new Promise(r => setTimeout(r, 1500));
+      setState("idle");
+    } catch (error) {
+      console.error("Transcription error:", error);
+      setCurrentResponse("Voice recognition failed. Please try again.");
+      await new Promise(r => setTimeout(r, 1500));
+      setState("idle");
+    }
+  }, [isListening, persona.id, processMessage]);
+
   // Handle text input
   const handleTextSend = useCallback(async () => {
     if (!textInput.trim()) return;
-    
+
+    // Unlock AudioContext for lip-sync
+    await unlockAudio();
+
     const message = textInput;
     setTextInput("");
-    setState("thinking");
-    setCurrentResponse("");
-    
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1500));
-    
-    setState("speaking");
-    setCurrentResponse(`You asked about "${message}". Here is my response to that...`);
-    
-    // Simulate speaking duration
-    await new Promise(r => setTimeout(r, 3000));
-    
-    setState("idle");
-  }, [textInput]);
+    await processMessage(message);
+  }, [textInput, processMessage, unlockAudio]);
   
   return (
     <motion.div
@@ -913,17 +1121,21 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
         overflow: "hidden",
       }}
     >
-      {/* Particle background */}
-      <ParticleField color={auraColors.primary} count={25} />
-      
-      {/* Gradient overlay */}
+      {/* Immersive Environment Background */}
+      <PersonaEnvironment
+        archetype={(persona.archetype as PersonaArchetype) || "sage"}
+        emotion={currentEmotion}
+        isActive={true}
+      />
+
+      {/* Additional gradient overlay for persona focus */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background: `
             radial-gradient(ellipse 100% 100% at 50% 100%, ${auraColors.glow} 0%, transparent 50%),
-            radial-gradient(ellipse 80% 50% at 50% 0%, ${COLORS.surface} 0%, transparent 50%)
+            radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,0,0,0.3) 0%, transparent 50%)
           `,
           pointerEvents: "none",
         }}
@@ -932,23 +1144,16 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
       {/* Header */}
       <Header persona={persona} onClose={onClose} />
       
-      {/* Main content - Avatar */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          paddingTop: 80,
-          paddingBottom: 200,
+      {/* FULL SCREEN AVATAR - Takes entire viewport */}
+      <LiveAvatar3DStaged
+        imageUrl={persona.imageUrl}
+        name={persona.name}
+        audioData={audioData}
+        onAudioEnd={() => {
+          setState("idle");
+          setAudioData(undefined);
         }}
-      >
-        <PersonaAvatar
-          persona={persona}
-          state={state}
-          auraColors={auraColors}
-        />
-      </div>
+      />
       
       {/* Response caption */}
       <ResponseCaption
@@ -972,6 +1177,7 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
           flexDirection: "column",
           alignItems: "center",
           gap: 16,
+          zIndex: 50,
         }}
       >
         {/* Mode toggle */}

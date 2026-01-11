@@ -1,0 +1,1 @@
+ALTER TABLE "personas" ADD COLUMN "model_url" text;
