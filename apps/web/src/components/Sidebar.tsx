@@ -125,6 +125,18 @@ const Sidebar = React.memo(function Sidebar({
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* AURORA BUTTON - Top Left, Below User                                    */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <button
+        className={`aurora-btn ${isOpen ? 'open' : 'closing'}`}
+        onClick={() => { router.push('/aurora'); onClose(); }}
+        title="Aurora"
+        aria-label="Open Aurora"
+      >
+        <img src="/aurora-logo.png" alt="Aurora" className="aurora-logo" />
+      </button>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* USER BUTTON - Top Left                                                  */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <div className={`user-panel ${isOpen ? 'open' : 'closing'}`} ref={userMenuRef}>
@@ -437,6 +449,82 @@ const Sidebar = React.memo(function Sidebar({
         /* USER PANEL                                                                      */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* AURORA BUTTON                                                                    */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+
+        .aurora-btn {
+          contain: layout style;
+          will-change: transform;
+          position: fixed;
+          top: 90px;
+          left: 24px;
+          z-index: 100;
+          width: 50px;
+          height: 50px;
+          border-radius: 14px;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          background: linear-gradient(145deg, #1a1a1a 0%, #0e0e0e 50%, #080808 100%);
+          box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+          opacity: 0;
+          transform: translateX(-120%);
+          transition: all 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+          overflow: hidden;
+        }
+
+        .aurora-btn.open { transform: translateX(0); opacity: 1; }
+        .aurora-btn.closing { transform: translateX(-120%); opacity: 0; }
+
+        .aurora-btn::before {
+          content: '';
+          position: absolute;
+          inset: -0.5px;
+          border-radius: 14.5px;
+          padding: 0.5px;
+          background: linear-gradient(145deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.15));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+          opacity: 0.6;
+        }
+
+        .aurora-btn:hover {
+          transform: scale(1.08) translateY(-2px);
+          box-shadow: 0 0 0 0.5px rgba(139, 92, 246, 0.3), 0 0 25px rgba(139, 92, 246, 0.2), 0 8px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .aurora-btn:hover::before { opacity: 1; }
+        .aurora-btn:active { transform: scale(0.95); transition: transform 0.1s ease; }
+
+        .aurora-logo {
+          width: 34px;
+          height: 34px;
+          object-fit: contain;
+          border-radius: 6px;
+          filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.3));
+          transition: filter 0.3s ease;
+        }
+
+        .aurora-btn:hover .aurora-logo {
+          filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.5));
+        }
+
+        :global([data-theme="light"]) .aurora-btn {
+          background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 50%, #ebebeb 100%);
+          box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+        }
+
+        :global([data-theme="light"]) .aurora-btn:hover {
+          box-shadow: 0 0 0 0.5px rgba(139, 92, 246, 0.3), 0 0 25px rgba(139, 92, 246, 0.15), 0 12px 32px rgba(0, 0, 0, 0.12);
+        }
+
         .user-panel {
           contain: layout style;
           will-change: transform;
@@ -448,7 +536,7 @@ const Sidebar = React.memo(function Sidebar({
           transform: translateX(-120%);
           transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
         }
-        
+
         .user-panel.open { transform: translateX(0); opacity: 1; }
         .user-panel.closing { transform: translateX(-120%); opacity: 0; }
         
@@ -1214,6 +1302,17 @@ const Sidebar = React.memo(function Sidebar({
             will-change: transform;
             top: 16px;
             left: 16px;
+          }
+          .aurora-btn {
+            top: 76px;
+            left: 16px;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+          }
+          .aurora-logo {
+            width: 28px;
+            height: 28px;
           }
           .control-panel.left { left: 16px; }
           .icon-column { gap: 10px; }
