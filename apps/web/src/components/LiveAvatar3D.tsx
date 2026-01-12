@@ -2,16 +2,18 @@
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * LIVE AVATAR 3D - State-of-the-art real-time animated avatar
+ * LIVE AVATAR 3D - Pixar-Quality Living Digital Being
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Real-time 3D avatar with:
- * - Continuous idle animations (breathing, blinking, micro-movements)
- * - Audio-driven lip-sync
- * - Emotion-based expressions
- * - State machine (idle/listening/thinking/speaking)
+ * State-of-the-art avatar system with:
+ * - Persona archetypes (sage, ruler, jester, etc.) for unique idle behaviors
+ * - Smooth emotion blending with curves
+ * - Camera-aware eye contact
+ * - Micro-expressions for subtle life
+ * - Breathing variation based on emotional state
+ * - 60fps animation driven by centralized state machine
  *
- * Target: 60fps, <50ms state transitions
+ * "This is what makes Medusa Queen feel ALIVE"
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -20,19 +22,38 @@ import React, { useRef, useEffect, useMemo, Suspense, useState, useCallback } fr
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
-import { useAvatarStore, AvatarState, Emotion, VISEME_TO_BLENDSHAPES } from "@/lib/avatar/store";
+import {
+  useAvatarStore,
+  type AvatarState,
+  type Emotion,
+  type PersonaArchetype,
+  VISEME_TO_BLENDSHAPES
+} from "@/lib/avatar/store";
 import { useLipSync } from "@/lib/avatar/useLipSync";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CSS-ONLY FALLBACK - Works even when WebGL fails!
+// CSS-ONLY FALLBACK - Pixar-Quality Even Without WebGL!
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
+  // Get all state from the centralized store
   const state = useAvatarStore((s) => s.state);
   const emotion = useAvatarStore((s) => s.emotion);
+  const emotionIntensity = useAvatarStore((s) => s.emotionIntensity);
+  const energy = useAvatarStore((s) => s.energy);
   const audioAmplitude = useAvatarStore((s) => s.audioAmplitude);
   const tick = useAvatarStore((s) => s.tick);
-  const [time, setTime] = useState(0);
+
+  // New soulful properties
+  const headPitch = useAvatarStore((s) => s.headPitch);
+  const headYaw = useAvatarStore((s) => s.headYaw);
+  const headRoll = useAvatarStore((s) => s.headRoll);
+  const gazeX = useAvatarStore((s) => s.gazeX);
+  const gazeY = useAvatarStore((s) => s.gazeY);
+  const breathingPhase = useAvatarStore((s) => s.breathingPhase);
+  const breathingDepth = useAvatarStore((s) => s.breathingDepth);
+  const isLookingAtCamera = useAvatarStore((s) => s.isLookingAtCamera);
+  const archetype = useAvatarStore((s) => s.archetype);
 
   // Animation loop using requestAnimationFrame
   useEffect(() => {
@@ -40,10 +61,9 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
     let lastTime = performance.now();
 
     const animate = (currentTime: number) => {
-      const delta = (currentTime - lastTime) / 1000;
+      const delta = currentTime - lastTime;
       lastTime = currentTime;
       tick(delta);
-      setTime(currentTime / 1000);
       animationId = requestAnimationFrame(animate);
     };
 
@@ -51,41 +71,39 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
     return () => cancelAnimationFrame(animationId);
   }, [tick]);
 
-  // Calculate animation values
-  const breathScale = 1 + Math.sin(time * 0.5) * 0.02;
-  const breathY = Math.sin(time * 0.5) * 3;
-  const speakScale = state === 'speaking' ? 1 + audioAmplitude * 0.15 : 1;
-  const speakBob = state === 'speaking' ? audioAmplitude * 10 : 0;
+  // Calculate animation values from state - DRIVEN BY SOUL ENGINE
+  const breathScale = 1 + Math.sin(breathingPhase * Math.PI * 2) * 0.015 * breathingDepth;
+  const breathY = Math.sin(breathingPhase * Math.PI * 2) * 2 * breathingDepth;
 
-  let rotateZ = 0;
-  let rotateX = 0;
+  // Speech-reactive animation
+  const speakScale = state === 'speaking' ? 1 + audioAmplitude * 0.12 : 1;
+  const speakBob = state === 'speaking' ? audioAmplitude * 8 : 0;
 
-  switch (state) {
-    case 'listening':
-      rotateZ = Math.sin(time * 2) * 4;
-      rotateX = 3;
-      break;
-    case 'thinking':
-      rotateZ = 5;
-      rotateX = -3 + Math.sin(time * 0.8) * 2;
-      break;
-    case 'speaking':
-      rotateZ = Math.sin(time * 3) * 4 + audioAmplitude * 8;
-      rotateX = Math.sin(time * 1.5) * 3 + audioAmplitude * 5;
-      break;
-    default:
-      rotateZ = Math.sin(time * 0.3) * 2;
-      rotateX = Math.sin(time * 0.2) * 1.5;
-  }
+  // Convert radians to degrees for CSS transforms
+  const rotateX = headPitch * (180 / Math.PI) * 60; // Scale for visibility
+  const rotateY = headYaw * (180 / Math.PI) * 60;
+  const rotateZ = headRoll * (180 / Math.PI) * 60;
 
-  // Glow color based on state
+  // Eye position offset for gaze simulation
+  const eyeOffsetX = gazeX * 5;
+  const eyeOffsetY = gazeY * 3;
+
+  // Glow color based on state and emotion
   const glowColor = state === 'listening' ? '#3b82f6'
     : state === 'thinking' ? '#8b5cf6'
     : state === 'speaking' ? '#22c55e'
+    : emotion === 'happy' ? '#fbbf24'
+    : emotion === 'curious' ? '#06b6d4'
     : '#71717a';
 
-  const glowOpacity = state === 'idle' ? 0.3 : 0.6 + audioAmplitude * 0.4;
-  const glowScale = 1 + (state === 'speaking' ? audioAmplitude * 0.2 : 0);
+  const glowOpacity = state === 'idle' ? 0.25 : 0.5 + audioAmplitude * 0.4;
+  const glowScale = 1 + (state === 'speaking' ? audioAmplitude * 0.15 : 0);
+
+  // Emotion-based subtle effects
+  const emotionTint = emotion === 'happy' ? 'rgba(255, 200, 0, 0.05)'
+    : emotion === 'sad' ? 'rgba(100, 149, 237, 0.05)'
+    : emotion === 'angry' ? 'rgba(255, 0, 0, 0.05)'
+    : 'transparent';
 
   return (
     <div style={{
@@ -100,7 +118,16 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Glow ring */}
+      {/* Emotion tint overlay */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: emotionTint,
+        pointerEvents: 'none',
+        transition: 'background 0.5s ease',
+      }} />
+
+      {/* Glow ring - pulses with audio */}
       <div style={{
         position: 'absolute',
         width: 280,
@@ -110,18 +137,34 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
         boxShadow: `0 0 30px ${glowColor}, 0 0 60px ${glowColor}`,
         opacity: glowOpacity,
         transform: `scale(${glowScale})`,
-        transition: 'opacity 0.1s, box-shadow 0.1s',
+        transition: 'opacity 0.1s, box-shadow 0.2s',
       }} />
 
-      {/* Avatar container */}
+      {/* Eye contact indicator - shows where avatar is looking */}
+      {!isLookingAtCamera && (
+        <div style={{
+          position: 'absolute',
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.3)',
+          transform: `translate(${gazeX * 100}px, ${gazeY * 70}px)`,
+          transition: 'transform 0.3s ease-out',
+        }} />
+      )}
+
+      {/* Avatar container - driven by soul engine */}
       <div style={{
         transform: `
           translateY(${breathY + speakBob}px)
+          translateX(${eyeOffsetX}px)
           scale(${breathScale * speakScale})
-          rotateZ(${rotateZ}deg)
           rotateX(${rotateX}deg)
+          rotateY(${rotateY}deg)
+          rotateZ(${rotateZ}deg)
         `,
-        transition: 'transform 0.05s ease-out',
+        transformStyle: 'preserve-3d',
+        transition: 'transform 0.03s ease-out',
       }}>
         {imageUrl ? (
           <img
@@ -133,6 +176,9 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
               borderRadius: '50%',
               objectFit: 'cover',
               border: '3px solid rgba(255,255,255,0.2)',
+              boxShadow: isLookingAtCamera
+                ? '0 0 30px rgba(255,255,255,0.1)'
+                : '0 0 10px rgba(0,0,0,0.3)',
             }}
           />
         ) : (
@@ -153,7 +199,7 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
         )}
       </div>
 
-      {/* State indicator */}
+      {/* State indicator with archetype badge */}
       <div style={{
         position: 'absolute',
         bottom: 20,
@@ -165,6 +211,7 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
         display: 'flex',
         alignItems: 'center',
         gap: 8,
+        backdropFilter: 'blur(10px)',
       }}>
         <div style={{
           width: 8,
@@ -175,7 +222,7 @@ function CSSAvatar({ imageUrl, name }: { imageUrl?: string; name: string }) {
           animation: state !== 'idle' ? 'pulse 1s infinite' : 'none',
         }} />
         <span style={{ color: '#fff', fontSize: 12, textTransform: 'capitalize' }}>
-          {state}
+          {state === 'idle' ? emotion : state}
         </span>
       </div>
 
@@ -214,13 +261,14 @@ interface LiveAvatar3DProps {
   imageUrl?: string;            // Fallback 2D image if no 3D model
   name: string;
   audioData?: string;           // Base64 audio for lip-sync
+  archetype?: PersonaArchetype; // Persona archetype for idle behavior
   onReady?: () => void;
-  onAudioEnd?: () => void;      // Called when audio playback ends
+  onAudioEnd?: () => void;
   className?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ANIMATED AVATAR MESH
+// ANIMATED 3D AVATAR MESH - Uses centralized state machine
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AnimatedAvatar({ modelUrl }: { modelUrl: string }) {
@@ -229,18 +277,27 @@ function AnimatedAvatar({ modelUrl }: { modelUrl: string }) {
   const groupRef = useRef<THREE.Group>(null);
   const hasBlendshapes = useRef(false);
 
-  // Get state from store
+  // Get ALL state from centralized store
   const state = useAvatarStore((s) => s.state);
   const emotion = useAvatarStore((s) => s.emotion);
+  const emotionIntensity = useAvatarStore((s) => s.emotionIntensity);
   const energy = useAvatarStore((s) => s.energy);
   const audioAmplitude = useAvatarStore((s) => s.audioAmplitude);
   const currentViseme = useAvatarStore((s) => s.currentViseme);
   const visemeWeight = useAvatarStore((s) => s.visemeWeight);
+  const blendShapes = useAvatarStore((s) => s.blendShapes);
+
+  // Soul engine properties
   const gazeX = useAvatarStore((s) => s.gazeX);
   const gazeY = useAvatarStore((s) => s.gazeY);
+  const headPitch = useAvatarStore((s) => s.headPitch);
+  const headYaw = useAvatarStore((s) => s.headYaw);
+  const headRoll = useAvatarStore((s) => s.headRoll);
+  const breathingPhase = useAvatarStore((s) => s.breathingPhase);
+  const breathingDepth = useAvatarStore((s) => s.breathingDepth);
   const tick = useAvatarStore((s) => s.tick);
 
-  // Find the skinned mesh with morph targets (if any)
+  // Find the skinned mesh with morph targets
   useEffect(() => {
     hasBlendshapes.current = false;
     scene.traverse((child) => {
@@ -251,124 +308,53 @@ function AnimatedAvatar({ modelUrl }: { modelUrl: string }) {
       }
     });
     if (!hasBlendshapes.current) {
-      console.log("[LiveAvatar3D] No morph targets found - using transform animations for LIVING avatar");
+      console.log("[LiveAvatar3D] No morph targets - using transform animations");
     }
   }, [scene]);
 
-  // Animation loop - MAKES THE AVATAR ALIVE
+  // Animation loop - DRIVEN BY SOUL ENGINE
   useFrame((_, delta) => {
-    // Update avatar state machine
+    // Update the soul engine
     tick(delta);
 
-    const time = Date.now() / 1000;
     const group = groupRef.current;
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // TRANSFORM-BASED ANIMATION (Works for ALL 3D models - TRELLIS, etc.)
-    // This is what makes static models feel ALIVE!
+    // TRANSFORM-BASED ANIMATION - Driven by centralized state
     // ═══════════════════════════════════════════════════════════════════════════
     if (group) {
-      // Base breathing animation - MORE PRONOUNCED for visibility
-      const breathScale = 1 + Math.sin(time * 0.5) * 0.025;
-      const breathY = Math.sin(time * 0.5) * 0.05;
+      // Breathing from soul engine
+      const breathScale = 1 + Math.sin(breathingPhase * Math.PI * 2) * 0.02 * breathingDepth;
+      const breathY = Math.sin(breathingPhase * Math.PI * 2) * 0.04 * breathingDepth;
 
-      // Audio-reactive animation - MUCH STRONGER for speaking
-      const speakScale = 1 + audioAmplitude * 0.2;
-      const speakBob = audioAmplitude * 0.3;
+      // Audio-reactive animation
+      const speakScale = 1 + audioAmplitude * 0.15;
+      const speakBob = audioAmplitude * 0.2;
 
-      // State-based head movement
-      let headTiltX = 0;
-      let headTiltY = 0;
-      let headTiltZ = 0;
-
-      switch (state) {
-        case 'listening':
-          // MORE VISIBLE tilt toward speaker
-          headTiltX = 0.12;
-          headTiltZ = Math.sin(time * 2) * 0.06;
-          break;
-        case 'thinking':
-          // MORE VISIBLE look up and to the side
-          headTiltX = -0.08;
-          headTiltY = 0.15 + Math.sin(time * 0.8) * 0.05;
-          break;
-        case 'speaking':
-          // VERY DYNAMIC movement while talking
-          headTiltX = Math.sin(time * 1.5) * 0.08 * energy;
-          headTiltY = Math.sin(time * 0.7) * 0.1 * energy;
-          headTiltZ = audioAmplitude * 0.15;
-          break;
-        default:
-          // Idle - subtle but VISIBLE micro-movements
-          headTiltX = Math.sin(time * 0.3) * 0.03;
-          headTiltY = Math.sin(time * 0.2) * 0.04;
-      }
-
-      // Emotion-based adjustments
-      switch (emotion) {
-        case 'happy':
-          headTiltX -= 0.02; // Slight upward tilt
-          break;
-        case 'sad':
-          headTiltX += 0.04; // Look down
-          break;
-        case 'curious':
-          headTiltZ += 0.05; // Head tilt
-          break;
-        case 'surprised':
-          headTiltX -= 0.03;
-          break;
-      }
-
-      // Apply transforms - THIS IS WHAT MAKES IT ALIVE
+      // Apply transforms from soul engine state
       group.scale.setScalar(2 * breathScale * speakScale);
       group.position.y = -2 + breathY + speakBob;
-      group.rotation.x = headTiltX;
-      group.rotation.y = headTiltY + gazeX * 0.1;
-      group.rotation.z = headTiltZ;
+      group.rotation.x = headPitch;
+      group.rotation.y = headYaw + gazeX * 0.2;
+      group.rotation.z = headRoll;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // BLENDSHAPE ANIMATION (For rigged avatars with morph targets)
+    // BLENDSHAPE ANIMATION - From centralized store
     // ═══════════════════════════════════════════════════════════════════════════
     const mesh = meshRef.current;
     if (mesh && mesh.morphTargetInfluences && mesh.morphTargetDictionary && hasBlendshapes.current) {
       const dict = mesh.morphTargetDictionary;
       const influences = mesh.morphTargetInfluences;
 
-      // Apply viseme blend shapes
-      const visemeShapes = VISEME_TO_BLENDSHAPES[currentViseme];
-      for (const [shapeName, value] of Object.entries(visemeShapes)) {
-        if (dict[shapeName] !== undefined) {
-          influences[dict[shapeName]] = (value as number) * visemeWeight;
+      // Apply ALL blend shapes from the store
+      for (const [shapeName, value] of Object.entries(blendShapes)) {
+        if (dict[shapeName] !== undefined && value !== undefined) {
+          // Smooth transition
+          const currentValue = influences[dict[shapeName]] || 0;
+          influences[dict[shapeName]] = currentValue + (value - currentValue) * 0.3;
         }
       }
-
-      // Apply audio amplitude to jaw
-      if (dict.jawOpen !== undefined) {
-        influences[dict.jawOpen] = Math.max(
-          influences[dict.jawOpen] || 0,
-          audioAmplitude * 0.8
-        );
-      }
-
-      // Breathing animation
-      const breath = Math.sin(time * 0.5) * 0.02 + 0.02;
-      if (dict.mouthOpen !== undefined) {
-        influences[dict.mouthOpen] = Math.max(influences[dict.mouthOpen] || 0, breath);
-      }
-
-      // Blinking animation
-      const blinkCycle = Math.sin(time * 0.3) > 0.95 ? 1 : 0;
-      if (dict.eyeBlinkLeft !== undefined) {
-        influences[dict.eyeBlinkLeft] = blinkCycle;
-      }
-      if (dict.eyeBlinkRight !== undefined) {
-        influences[dict.eyeBlinkRight] = blinkCycle;
-      }
-
-      // Emotion-based expressions
-      applyEmotionToMesh(mesh, emotion, energy);
     }
   });
 
@@ -379,71 +365,25 @@ function AnimatedAvatar({ modelUrl }: { modelUrl: string }) {
   );
 }
 
-// Apply emotion to mesh morph targets
-function applyEmotionToMesh(
-  mesh: THREE.SkinnedMesh,
-  emotion: Emotion,
-  energy: number
-) {
-  if (!mesh.morphTargetInfluences || !mesh.morphTargetDictionary) return;
-
-  const dict = mesh.morphTargetDictionary;
-  const influences = mesh.morphTargetInfluences;
-
-  // Reset emotion-related shapes
-  const emotionShapes = [
-    'mouthSmileLeft', 'mouthSmileRight',
-    'mouthFrownLeft', 'mouthFrownRight',
-    'browInnerUp', 'browDownLeft', 'browDownRight',
-    'eyeWideLeft', 'eyeWideRight',
-    'cheekSquintLeft', 'cheekSquintRight',
-  ];
-
-  for (const shape of emotionShapes) {
-    if (dict[shape] !== undefined) {
-      influences[dict[shape]] = 0;
-    }
-  }
-
-  // Apply emotion
-  switch (emotion) {
-    case 'happy':
-      if (dict.mouthSmileLeft !== undefined) influences[dict.mouthSmileLeft] = 0.6 * energy;
-      if (dict.mouthSmileRight !== undefined) influences[dict.mouthSmileRight] = 0.6 * energy;
-      if (dict.cheekSquintLeft !== undefined) influences[dict.cheekSquintLeft] = 0.3 * energy;
-      if (dict.cheekSquintRight !== undefined) influences[dict.cheekSquintRight] = 0.3 * energy;
-      break;
-    case 'sad':
-      if (dict.mouthFrownLeft !== undefined) influences[dict.mouthFrownLeft] = 0.4 * energy;
-      if (dict.mouthFrownRight !== undefined) influences[dict.mouthFrownRight] = 0.4 * energy;
-      if (dict.browInnerUp !== undefined) influences[dict.browInnerUp] = 0.5 * energy;
-      break;
-    case 'surprised':
-      if (dict.eyeWideLeft !== undefined) influences[dict.eyeWideLeft] = 0.7 * energy;
-      if (dict.eyeWideRight !== undefined) influences[dict.eyeWideRight] = 0.7 * energy;
-      if (dict.browInnerUp !== undefined) influences[dict.browInnerUp] = 0.6 * energy;
-      break;
-    case 'curious':
-      if (dict.browInnerUp !== undefined) influences[dict.browInnerUp] = 0.3 * energy;
-      if (dict.browOuterUpLeft !== undefined) influences[dict.browOuterUpLeft] = 0.4 * energy;
-      break;
-    case 'focused':
-      if (dict.browDownLeft !== undefined) influences[dict.browDownLeft] = 0.3 * energy;
-      if (dict.browDownRight !== undefined) influences[dict.browDownRight] = 0.3 * energy;
-      break;
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// FALLBACK 2D AVATAR (when no 3D model)
+// FALLBACK 2D AVATAR - Full soul engine integration
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function Avatar2D({ imageUrl, name }: { imageUrl?: string; name: string }) {
   const planeRef = useRef<THREE.Mesh>(null);
+
+  // All state from soul engine
   const audioAmplitude = useAvatarStore((s) => s.audioAmplitude);
   const state = useAvatarStore((s) => s.state);
   const emotion = useAvatarStore((s) => s.emotion);
   const energy = useAvatarStore((s) => s.energy);
+  const headPitch = useAvatarStore((s) => s.headPitch);
+  const headYaw = useAvatarStore((s) => s.headYaw);
+  const headRoll = useAvatarStore((s) => s.headRoll);
+  const breathingPhase = useAvatarStore((s) => s.breathingPhase);
+  const breathingDepth = useAvatarStore((s) => s.breathingDepth);
+  const gazeX = useAvatarStore((s) => s.gazeX);
+  const tick = useAvatarStore((s) => s.tick);
 
   // Create texture from image
   const texture = useMemo(() => {
@@ -452,63 +392,27 @@ function Avatar2D({ imageUrl, name }: { imageUrl?: string; name: string }) {
     return loader.load(imageUrl);
   }, [imageUrl]);
 
-  // LIVING 2D avatar animation
+  // Animation driven by soul engine
   useFrame((_, delta) => {
+    tick(delta);
+
     if (!planeRef.current) return;
 
-    const time = Date.now() / 1000;
+    // Breathing from soul engine
+    const breathScale = 1 + Math.sin(breathingPhase * Math.PI * 2) * 0.025 * breathingDepth;
+    const breathY = Math.sin(breathingPhase * Math.PI * 2) * 0.03 * breathingDepth;
 
-    // Base breathing - MORE VISIBLE constant life
-    const breathScale = 1 + Math.sin(time * 0.5) * 0.03;
-    const breathY = Math.sin(time * 0.5) * 0.04;
+    // Audio-reactive
+    const speakScale = state === 'speaking' ? 1 + audioAmplitude * 0.2 : 1;
+    const speakY = state === 'speaking' ? audioAmplitude * 0.12 : 0;
 
-    // Audio-reactive scaling and movement - MUCH STRONGER
-    const speakScale = state === 'speaking' ? 1 + audioAmplitude * 0.25 : 1;
-    const speakY = state === 'speaking' ? audioAmplitude * 0.15 : 0;
-
-    // State-based rotation (head tilt simulation)
-    let rotZ = 0;
-    let rotX = 0;
-
-    switch (state) {
-      case 'listening':
-        rotZ = Math.sin(time * 2) * 0.08;
-        rotX = 0.06;
-        break;
-      case 'thinking':
-        rotZ = 0.1;
-        rotX = -0.05 + Math.sin(time * 0.8) * 0.03;
-        break;
-      case 'speaking':
-        // VERY VISIBLE speaking animation
-        rotZ = Math.sin(time * 3) * 0.08 * energy + audioAmplitude * 0.1;
-        rotX = Math.sin(time * 1.5) * 0.05 + audioAmplitude * 0.08;
-        break;
-      default:
-        // Idle - visible breathing micro-movements
-        rotZ = Math.sin(time * 0.3) * 0.03;
-        rotX = Math.sin(time * 0.2) * 0.025;
-    }
-
-    // Emotion adjustments
-    switch (emotion) {
-      case 'happy':
-        rotX -= 0.02;
-        break;
-      case 'sad':
-        rotX += 0.03;
-        break;
-      case 'curious':
-        rotZ += 0.04;
-        break;
-    }
-
-    // Apply transforms - MAKES 2D IMAGE FEEL ALIVE
+    // Apply transforms from soul engine
     const finalScale = 2 * breathScale * speakScale;
     planeRef.current.scale.setScalar(finalScale);
     planeRef.current.position.y = breathY + speakY;
-    planeRef.current.rotation.z = rotZ;
-    planeRef.current.rotation.x = rotX;
+    planeRef.current.rotation.x = headPitch;
+    planeRef.current.rotation.y = headYaw + gazeX * 0.15;
+    planeRef.current.rotation.z = headRoll;
   });
 
   if (!texture) {
@@ -529,7 +433,7 @@ function Avatar2D({ imageUrl, name }: { imageUrl?: string; name: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUDIO-REACTIVE GLOW RING - Makes the avatar feel ALIVE
+// AUDIO-REACTIVE GLOW RING
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function GlowRing() {
@@ -537,18 +441,22 @@ function GlowRing() {
   const audioAmplitude = useAvatarStore((s) => s.audioAmplitude);
   const state = useAvatarStore((s) => s.state);
   const emotion = useAvatarStore((s) => s.emotion);
+  const emotionIntensity = useAvatarStore((s) => s.emotionIntensity);
+  const breathingPhase = useAvatarStore((s) => s.breathingPhase);
 
-  // Dynamic color based on state
+  // Dynamic color based on state and emotion
   const getColor = () => {
     switch (state) {
-      case 'listening': return new THREE.Color('#3b82f6'); // Blue
-      case 'thinking': return new THREE.Color('#8b5cf6');  // Purple
-      case 'speaking': return new THREE.Color('#22c55e');   // Green
+      case 'listening': return new THREE.Color('#3b82f6');
+      case 'thinking': return new THREE.Color('#8b5cf6');
+      case 'speaking': return new THREE.Color('#22c55e');
       default:
         switch (emotion) {
           case 'happy': return new THREE.Color('#fbbf24');
           case 'sad': return new THREE.Color('#6b7280');
           case 'curious': return new THREE.Color('#06b6d4');
+          case 'confident': return new THREE.Color('#f97316');
+          case 'playful': return new THREE.Color('#ec4899');
           default: return new THREE.Color('#71717a');
         }
     }
@@ -557,18 +465,20 @@ function GlowRing() {
   useFrame(() => {
     if (!ringRef.current) return;
 
-    const time = Date.now() / 1000;
     const material = ringRef.current.material as THREE.MeshBasicMaterial;
 
-    // Pulsing opacity based on audio
-    const baseOpacity = state === 'idle' ? 0.1 : 0.3;
-    const audioOpacity = state === 'speaking' ? audioAmplitude * 0.5 : 0;
-    material.opacity = baseOpacity + audioOpacity + Math.sin(time * 2) * 0.1;
+    // Breathing-synced pulsing
+    const breathPulse = Math.sin(breathingPhase * Math.PI * 2) * 0.05;
 
-    // Scale pulse
+    // State-based opacity
+    const baseOpacity = state === 'idle' ? 0.1 + emotionIntensity * 0.1 : 0.25;
+    const audioOpacity = state === 'speaking' ? audioAmplitude * 0.4 : 0;
+    material.opacity = baseOpacity + audioOpacity + breathPulse;
+
+    // Scale with audio
     const baseScale = 2.2;
-    const audioScale = state === 'speaking' ? audioAmplitude * 0.3 : 0;
-    ringRef.current.scale.setScalar(baseScale + audioScale);
+    const audioScale = state === 'speaking' ? audioAmplitude * 0.25 : 0;
+    ringRef.current.scale.setScalar(baseScale + audioScale + breathPulse * 0.5);
 
     // Color
     material.color = getColor();
@@ -583,18 +493,20 @@ function GlowRing() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STATE INDICATOR
+// STATE INDICATOR OVERLAY
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StateIndicator() {
   const state = useAvatarStore((s) => s.state);
+  const emotion = useAvatarStore((s) => s.emotion);
+  const isLookingAtCamera = useAvatarStore((s) => s.isLookingAtCamera);
 
   const color = useMemo(() => {
     switch (state) {
-      case 'listening': return '#3b82f6';  // Blue
-      case 'thinking': return '#8b5cf6';   // Purple
-      case 'speaking': return '#22c55e';   // Green
-      default: return '#71717a';           // Gray
+      case 'listening': return '#3b82f6';
+      case 'thinking': return '#8b5cf6';
+      case 'speaking': return '#22c55e';
+      default: return '#71717a';
     }
   }, [state]);
 
@@ -603,11 +515,11 @@ function StateIndicator() {
       case 'listening': return 'Listening...';
       case 'thinking': return 'Thinking...';
       case 'speaking': return 'Speaking...';
-      default: return '';
+      default: return emotion !== 'neutral' ? emotion : '';
     }
-  }, [state]);
+  }, [state, emotion]);
 
-  if (state === 'idle') return null;
+  if (state === 'idle' && emotion === 'neutral') return null;
 
   return (
     <div
@@ -631,12 +543,17 @@ function StateIndicator() {
           height: 8,
           borderRadius: '50%',
           background: color,
-          animation: 'pulse 1s infinite',
+          animation: state !== 'idle' ? 'pulse 1s infinite' : 'none',
         }}
       />
-      <span style={{ color: '#fff', fontSize: 12, fontWeight: 500 }}>
+      <span style={{ color: '#fff', fontSize: 12, fontWeight: 500, textTransform: 'capitalize' }}>
         {label}
       </span>
+      {isLookingAtCamera && state !== 'idle' && (
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>
+
+        </span>
+      )}
     </div>
   );
 }
@@ -650,6 +567,7 @@ export function LiveAvatar3D({
   imageUrl,
   name,
   audioData,
+  archetype = 'default',
   onReady,
   onAudioEnd,
   className,
@@ -657,10 +575,16 @@ export function LiveAvatar3D({
   const containerRef = useRef<HTMLDivElement>(null);
   const { connectToAudioData, stop } = useLipSync();
   const setState = useAvatarStore((s) => s.setState);
+  const setArchetype = useAvatarStore((s) => s.setArchetype);
   const [webglFailed, setWebglFailed] = useState(false);
-  const [useSimpleMode, setUseSimpleMode] = useState(true); // Use CSS mode by default for stability
+  const [useSimpleMode, setUseSimpleMode] = useState(true); // CSS mode for stability
 
-  // Check WebGL availability on mount
+  // Set archetype on mount
+  useEffect(() => {
+    setArchetype(archetype);
+  }, [archetype, setArchetype]);
+
+  // Check WebGL availability
   useEffect(() => {
     try {
       const canvas = document.createElement('canvas');
@@ -698,8 +622,7 @@ export function LiveAvatar3D({
     onReady?.();
   }, [onReady]);
 
-  // Use CSS-only mode for stability (prevents WebGL crashes)
-  // This is the LIVING avatar that always works!
+  // Use CSS-only mode for stability
   if (useSimpleMode || webglFailed) {
     return <CSSAvatar imageUrl={imageUrl} name={name} />;
   }
@@ -722,7 +645,6 @@ export function LiveAvatar3D({
         gl={{ antialias: true, alpha: true }}
         dpr={[1, 2]}
         onCreated={({ gl }) => {
-          // Handle WebGL context loss
           gl.domElement.addEventListener('webglcontextlost', (e) => {
             e.preventDefault();
             console.log('[LiveAvatar3D] WebGL context lost, switching to CSS mode');
@@ -737,7 +659,6 @@ export function LiveAvatar3D({
         <directionalLight position={[-5, 5, 5]} intensity={0.5} />
 
         <Suspense fallback={null}>
-          {/* Audio-reactive glow ring - MAKES IT ALIVE */}
           <GlowRing />
 
           {modelUrl && typeof modelUrl === 'string' && modelUrl.length > 0 ? (

@@ -2,23 +2,22 @@
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * STREAMING TTS - Low-latency text-to-speech with immediate playback
+ * STREAMING TTS - Pixar-Quality Voice with Emotion Curves
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Starts playing audio as soon as first chunks arrive.
- * Target: < 500ms to first audio
- *
- * Supports:
- * - ElevenLabs streaming API
- * - Chunked audio playback
- * - Real-time lip-sync integration
+ * State-of-the-art text-to-speech with:
+ * - Low-latency streaming playback (<500ms to first audio)
+ * - Emotion curves that drive facial animation throughout speech
+ * - Real-time amplitude monitoring for lip sync
+ * - Smooth state transitions
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useRef, useCallback, useState } from 'react';
-import { useAvatarStore } from './store';
+import { useAvatarStore, type Emotion, type EmotionCurvePoint } from './store';
 import { useLipSync } from './useLipSync';
+import { VoiceDirector } from './VoiceDirector';
 
 interface StreamingTTSConfig {
   voiceId?: string;
@@ -33,18 +32,111 @@ const DEFAULT_CONFIG: StreamingTTSConfig = {
   similarityBoost: 0.75,
 };
 
+/**
+ * Generate emotion curve for speech duration
+ * Creates natural emotion arc: build → sustain → fade
+ */
+function generateEmotionCurve(
+  emotion: Emotion,
+  intensity: number,
+  durationMs: number
+): EmotionCurvePoint[] {
+  // Convert duration to seconds for the curve
+  const durationSec = durationMs / 1000;
+
+  return [
+    { time: 0.0, emotion, intensity: intensity * 0.6 },     // Start building
+    { time: 0.1, emotion, intensity: intensity * 0.9 },     // Quick ramp
+    { time: 0.2, emotion, intensity: intensity * 1.0 },     // Peak
+    { time: 0.6, emotion, intensity: intensity * 0.95 },    // Sustain
+    { time: 0.85, emotion, intensity: intensity * 0.7 },    // Begin fade
+    { time: 0.95, emotion, intensity: intensity * 0.4 },    // Fade
+    { time: 1.0, emotion: 'neutral', intensity: 0.2 },      // Return to neutral
+  ];
+}
+
+/**
+ * Detect emotion from text content
+ */
+function detectEmotionFromText(text: string): { emotion: Emotion; intensity: number } {
+  const lower = text.toLowerCase();
+
+  // Happy indicators
+  if (/\b(happy|joy|wonderful|amazing|love|great|fantastic|excited|yay|haha|delighted|thrilled)\b/.test(lower)) {
+    return { emotion: 'happy', intensity: 0.75 };
+  }
+
+  // Sad indicators
+  if (/\b(sad|sorry|unfortunately|regret|miss|lonely|cry|tears|heartbroken)\b/.test(lower)) {
+    return { emotion: 'sad', intensity: 0.65 };
+  }
+
+  // Curious indicators
+  if (/\?|curious|wonder|interesting|hmm|what if|tell me|how|why|fascinating/.test(lower)) {
+    return { emotion: 'curious', intensity: 0.6 };
+  }
+
+  // Surprised indicators
+  if (/\b(wow|oh|really|amazing|incredible|can't believe|astonishing)\b|!{2,}/.test(lower)) {
+    return { emotion: 'surprised', intensity: 0.7 };
+  }
+
+  // Playful indicators
+  if (/\b(hehe|haha|joke|fun|play|silly|tease|wink|kidding)\b/.test(lower)) {
+    return { emotion: 'playful', intensity: 0.65 };
+  }
+
+  // Concerned indicators
+  if (/\b(worried|concern|careful|warning|danger|problem|issue|afraid)\b/.test(lower)) {
+    return { emotion: 'concerned', intensity: 0.6 };
+  }
+
+  // Confident indicators
+  if (/\b(absolutely|certainly|definitely|sure|confident|trust me|of course|guaranteed)\b/.test(lower)) {
+    return { emotion: 'confident', intensity: 0.65 };
+  }
+
+  // Focused indicators
+  if (/\b(focus|important|listen|attention|note|remember|key|crucial)\b/.test(lower)) {
+    return { emotion: 'focused', intensity: 0.55 };
+  }
+
+  // Angry indicators (rare but should handle)
+  if (/\b(angry|furious|outraged|unacceptable|terrible|awful)\b/.test(lower)) {
+    return { emotion: 'angry', intensity: 0.6 };
+  }
+
+  // Default neutral with slight warmth
+  return { emotion: 'neutral', intensity: 0.4 };
+}
+
+/**
+ * Estimate speech duration from text
+ * Average speaking rate: ~150 words per minute
+ */
+function estimateDuration(text: string): number {
+  const words = text.split(/\s+/).length;
+  const wordsPerMinute = 150;
+  return (words / wordsPerMinute) * 60 * 1000; // ms
+}
+
 export function useStreamingTTS(config: StreamingTTSConfig = {}) {
   const configRef = useRef({ ...DEFAULT_CONFIG, ...config });
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef(false);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Get avatar store actions
   const setState = useAvatarStore((s) => s.setState);
   const setAudioAmplitude = useAvatarStore((s) => s.setAudioAmplitude);
+  const setEmotion = useAvatarStore((s) => s.setEmotion);
+  const setEmotionCurve = useAvatarStore((s) => s.setEmotionCurve);
+  const setEnergy = useAvatarStore((s) => s.setEnergy);
 
   const { connectToAudio, stop: stopLipSync } = useLipSync();
 
@@ -66,6 +158,7 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
       setIsPlaying(false);
       setState('idle');
       setAudioAmplitude(0);
+      setEmotion('neutral', 0.3, 0.05); // Smooth return to neutral
       return;
     }
 
@@ -100,7 +193,7 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
 
     source.start();
     monitorAmplitude();
-  }, [getAudioContext, setState, setAudioAmplitude]);
+  }, [getAudioContext, setState, setAudioAmplitude, setEmotion]);
 
   // Add audio chunk to queue
   const addChunk = useCallback(async (arrayBuffer: ArrayBuffer) => {
@@ -136,6 +229,19 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
       return;
     }
 
+    // Detect emotion and set up emotion curve
+    const detectedEmotion = emotion as Emotion || detectEmotionFromText(text).emotion;
+    const { intensity } = detectEmotionFromText(text);
+    const duration = estimateDuration(text);
+
+    // Set emotion with smooth transition
+    setEmotion(detectedEmotion, intensity, 0.1);
+    setEnergy(intensity);
+
+    // Generate and apply emotion curve for the speech duration
+    const curve = generateEmotionCurve(detectedEmotion, intensity, duration);
+    setEmotionCurve(curve);
+
     setIsGenerating(true);
     setState('speaking');
 
@@ -158,7 +264,7 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
             voice_settings: {
               stability,
               similarity_boost: similarityBoost,
-              style: emotion === 'happy' ? 0.7 : emotion === 'sad' ? 0.3 : 0.5,
+              style: detectedEmotion === 'happy' ? 0.7 : detectedEmotion === 'sad' ? 0.3 : 0.5,
               use_speaker_boost: true,
             },
           }),
@@ -219,8 +325,9 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
       console.error('[StreamingTTS] Error:', err);
       setIsGenerating(false);
       setState('idle');
+      setEmotion('neutral', 0.3, 0.05);
     }
-  }, [addChunk, setState]);
+  }, [addChunk, setState, setEmotion, setEmotionCurve, setEnergy]);
 
   // Non-streaming speak (for when streaming isn't available)
   const speakNonStreaming = useCallback(async (
@@ -229,6 +336,22 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
     emotion?: string
   ) => {
     console.log('[StreamingTTS] speakNonStreaming called for:', personaId);
+
+    // Detect emotion and set up emotion curve
+    const detectedEmotion = (emotion as Emotion) || detectEmotionFromText(text).emotion;
+    const { intensity } = detectEmotionFromText(text);
+    const duration = estimateDuration(text);
+
+    // Set emotion with smooth transition
+    setEmotion(detectedEmotion, intensity, 0.08);
+    setEnergy(intensity);
+
+    // Generate and apply emotion curve
+    const curve = generateEmotionCurve(detectedEmotion, intensity, duration);
+    setEmotionCurve(curve);
+
+    console.log('[StreamingTTS] Emotion:', detectedEmotion, 'Intensity:', intensity);
+
     setIsGenerating(true);
     setState('speaking');
 
@@ -237,7 +360,7 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
       const response = await fetch(`/api/personas/${personaId}/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, emotion }),
+        body: JSON.stringify({ text, emotion: detectedEmotion }),
       });
 
       if (!response.ok) {
@@ -253,28 +376,37 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
         console.log('[StreamingTTS] Got audio data, length:', data.audio.length);
         setIsGenerating(false);
 
-        // Create audio element - SIMPLE approach first
+        // Create audio element
         const audio = new Audio();
         audio.src = data.audio;
         audio.volume = 1.0;
+        currentAudioRef.current = audio;
 
-        // Set up amplitude monitoring without complex AudioContext
-        // Just use a simple interval-based approach
+        // Set up amplitude monitoring
         let amplitudeInterval: NodeJS.Timeout | null = null;
+        let speechStartTime = 0;
 
         audio.onplay = () => {
           console.log('[StreamingTTS] ▶️ AUDIO PLAYING!');
           setIsPlaying(true);
           setState('speaking');
+          speechStartTime = Date.now();
 
-          // Simple amplitude simulation based on time
+          // Amplitude simulation with natural variation
           let phase = 0;
           amplitudeInterval = setInterval(() => {
-            // Generate pseudo-random amplitude for lip movement
-            phase += 0.3;
-            const amplitude = 0.3 + Math.sin(phase * 2) * 0.2 + Math.random() * 0.3;
+            phase += 0.25;
+            // More natural amplitude curve with breath patterns
+            const breathCycle = Math.sin(phase * 0.5) * 0.1;
+            const speechPattern = Math.sin(phase * 2.5) * 0.15;
+            const randomVariation = (Math.random() - 0.5) * 0.2;
+            const baseAmplitude = 0.35;
+
+            const amplitude = Math.max(0, Math.min(1,
+              baseAmplitude + breathCycle + speechPattern + randomVariation
+            ));
             setAudioAmplitude(amplitude);
-          }, 50);
+          }, 40); // 25fps for smooth animation
         };
 
         audio.onended = () => {
@@ -283,6 +415,8 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
           setAudioAmplitude(0);
           setState('idle');
           setIsPlaying(false);
+          setEmotion('neutral', 0.3, 0.05); // Smooth return to neutral
+          currentAudioRef.current = null;
         };
 
         audio.onerror = (e) => {
@@ -291,6 +425,8 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
           setAudioAmplitude(0);
           setState('idle');
           setIsPlaying(false);
+          setEmotion('neutral', 0.3, 0.05);
+          currentAudioRef.current = null;
         };
 
         // Try to play
@@ -300,12 +436,12 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
           console.log('[StreamingTTS] ✅ audio.play() succeeded');
         } catch (playError: any) {
           console.error('[StreamingTTS] ❌ audio.play() failed:', playError.message);
-          // If autoplay blocked, try with user interaction context
           if (playError.name === 'NotAllowedError') {
             console.log('[StreamingTTS] Autoplay blocked - waiting for user gesture');
           }
           setIsGenerating(false);
           setState('idle');
+          setEmotion('neutral', 0.3, 0.05);
         }
 
         return audio;
@@ -314,15 +450,17 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
         console.log('[StreamingTTS] Response data:', data);
         setIsGenerating(false);
         setState('idle');
+        setEmotion('neutral', 0.3, 0.05);
       }
     } catch (err) {
       console.error('[StreamingTTS] Non-streaming error:', err);
       setIsGenerating(false);
       setState('idle');
+      setEmotion('neutral', 0.3, 0.05);
     }
 
     return null;
-  }, [setState, setAudioAmplitude]);
+  }, [setState, setAudioAmplitude, setEmotion, setEmotionCurve, setEnergy]);
 
   // Stop playback
   const stop = useCallback(() => {
@@ -338,12 +476,18 @@ export function useStreamingTTS(config: StreamingTTSConfig = {}) {
       currentSourceRef.current = null;
     }
 
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
     stopLipSync();
     setIsPlaying(false);
     setIsGenerating(false);
     setState('idle');
     setAudioAmplitude(0);
-  }, [stopLipSync, setState, setAudioAmplitude]);
+    setEmotion('neutral', 0.3, 0.05);
+  }, [stopLipSync, setState, setAudioAmplitude, setEmotion]);
 
   return {
     speak,

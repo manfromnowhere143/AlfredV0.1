@@ -20,7 +20,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-// State management
+// State management - The Soul of the Avatar
 export {
   useAvatarStore,
   VISEME_TO_BLENDSHAPES,
@@ -30,6 +30,9 @@ export {
   type Viseme,
   type BlendShapes,
   type AvatarPerformance,
+  type PersonaArchetype,
+  type EmotionCurvePoint,
+  type MicroExpression,
 } from './store';
 
 // Lip-sync
