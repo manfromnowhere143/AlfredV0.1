@@ -6,7 +6,9 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
@@ -17,6 +19,7 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
+    "@types/uuid": "^11.0.0",
     "tsup": "^8.3.5",
     "vitest": "^2.1.8"
   }

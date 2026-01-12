@@ -16,6 +16,15 @@ import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { extractCodeFromResponse, saveArtifact, loadLatestArtifact } from '@/lib/artifacts';
+import {
+  orchestrate,
+  withLLMResilience,
+  getCircuitBreakerStatus,
+  serializeContext,
+  deserializeContext,
+  type OrchestratorMetadata,
+} from '@/lib/chat-orchestrator';
+import { generateRequestId, addBreadcrumb, captureError } from '@/lib/observability';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -115,6 +124,208 @@ Rules:
    - CRITICAL: Check all translated text for apostrophes to prevent syntax errors
 
 ██████████████████████████████████████████████████████████████████████████████
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUILDER MODE PROMPT - Multi-file project generation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BUILDER_MODE_PROMPT = `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ALFRED BUILDER MODE - Multi-File React Project Generation                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+You are generating a complete, runnable React project. Use the STREAMING PROTOCOL below.
+
+═══════════════════════════════════════════════════════════════════════════════
+STREAMING PROTOCOL - Follow EXACTLY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Start with project declaration:
+   <<<PROJECT_START>>> ProjectName react
+   Optional description on next line
+
+2. Declare dependencies (one per line):
+   <<<DEPENDENCY: react@^18.2.0>>>
+   <<<DEPENDENCY: react-dom@^18.2.0>>>
+   <<<DEPENDENCY: lucide-react@^0.300.0>>>
+
+3. For each file, use this exact format:
+   <<<FILE: /src/App.tsx tsx component entry>>>
+   // File content here...
+   <<<END_FILE>>>
+
+   File markers explained:
+   - /src/App.tsx = file path from project root
+   - tsx = language (tsx, ts, css, json, html)
+   - component = file type (component, page, style, config, script)
+   - entry = marks this as entry point (only one file should have this)
+
+4. End with:
+   <<<PROJECT_END>>>
+
+═══════════════════════════════════════════════════════════════════════════════
+EXAMPLE OUTPUT
+═══════════════════════════════════════════════════════════════════════════════
+
+<<<PROJECT_START>>> TodoApp react
+A beautiful todo application with local storage
+
+<<<DEPENDENCY: react@^18.2.0>>>
+<<<DEPENDENCY: react-dom@^18.2.0>>>
+<<<DEPENDENCY: lucide-react@^0.300.0>>>
+
+<<<FILE: /src/main.tsx tsx component entry>>>
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+<<<END_FILE>>>
+
+<<<FILE: /src/App.tsx tsx component>>>
+import { useState } from 'react';
+import { Plus, Trash2, Check } from 'lucide-react';
+
+interface Todo {
+  id: number;
+  text: string;
+  completed: boolean;
+}
+
+export default function App() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [input, setInput] = useState('');
+
+  const addTodo = () => {
+    if (!input.trim()) return;
+    setTodos([...todos, { id: Date.now(), text: input, completed: false }]);
+    setInput('');
+  };
+
+  return (
+    <div className="app">
+      <h1>Todo App</h1>
+      <div className="input-group">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Add a todo..."
+          onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+        />
+        <button onClick={addTodo}><Plus size={20} /></button>
+      </div>
+      <ul>
+        {todos.map(todo => (
+          <li key={todo.id} className={todo.completed ? 'completed' : ''}>
+            <span onClick={() => setTodos(todos.map(t =>
+              t.id === todo.id ? {...t, completed: !t.completed} : t
+            ))}>
+              {todo.completed && <Check size={16} />}
+              {todo.text}
+            </span>
+            <button onClick={() => setTodos(todos.filter(t => t.id !== todo.id))}>
+              <Trash2 size={16} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+<<<END_FILE>>>
+
+<<<FILE: /src/index.css css style>>>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app {
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  width: 100%;
+  max-width: 400px;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+
+input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+button {
+  padding: 12px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+ul {
+  list-style: none;
+}
+
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+li.completed span {
+  text-decoration: line-through;
+  color: #999;
+}
+<<<END_FILE>>>
+
+<<<PROJECT_END>>>
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL RULES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ALWAYS use the protocol markers exactly as shown
+2. ALWAYS include a main.tsx or index.tsx as entry point
+3. ALWAYS include necessary CSS for styling
+4. Use modern React patterns (hooks, functional components)
+5. Make the UI visually appealing with proper styling
+6. Include proper TypeScript types
+7. Complete every file fully - never leave code incomplete
+8. Keep imports relative (./Component not absolute paths)
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -553,28 +764,44 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
+  const requestId = generateRequestId();
+
+  // Breadcrumb for request tracing
+  addBreadcrumb('Chat request received', 'http', { requestId });
+
   try {
     const client = getLLMClient();
+
+    // Check circuit breaker status before proceeding
+    const cbStatus = getCircuitBreakerStatus();
+    if (!cbStatus.healthy) {
+      console.warn(`[Alfred] Circuit breaker is ${cbStatus.state}, request may fail`);
+      addBreadcrumb('Circuit breaker unhealthy', 'http', { state: cbStatus.state, failures: cbStatus.failures });
+    }
     
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     
     const body = await request.json();
-    const { 
-      message = '', 
-      files: incomingFiles = [], 
+    const {
+      message = '',
+      files: incomingFiles = [],
       conversationId: existingConvId,
       // ═══════════════════════════════════════════════════════════════════════
       // NEW: Artifact modification params from preview modal
       // ═══════════════════════════════════════════════════════════════════════
       artifactCode,
       artifactTitle,
+      // ═══════════════════════════════════════════════════════════════════════
+      // Builder mode for multi-file project generation
+      // ═══════════════════════════════════════════════════════════════════════
+      mode,
     } = body;
 
     const hasMessage = message?.trim()?.length > 0;
     const hasFiles = incomingFiles?.length > 0;
     const isArtifactEdit = !!artifactCode;
+    const isBuilderMode = mode === 'builder';
 
     if (!hasMessage && !hasFiles) {
       return new Response(
@@ -610,22 +837,58 @@ export async function POST(request: NextRequest) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // ORCHESTRATOR: State Machine Integration
+    // ─────────────────────────────────────────────────────────────────────────
+    let orchestratorMetadata: OrchestratorMetadata | null = null;
+    let orchestratorPromptAdditions = '';
+
+    if (!isArtifactEdit) {
+      // Run orchestration for non-artifact-edit requests
+      const orchestratorResult = orchestrate({
+        message: message || '',
+        conversationId: existingConvId || '',
+        userId: userId || 'anonymous',
+        mode: undefined, // Let orchestrator infer from message
+        existingContext: undefined, // TODO: Load from conversation record
+      });
+
+      orchestratorMetadata = orchestratorResult.metadata;
+      orchestratorPromptAdditions = orchestratorResult.systemPromptAdditions;
+
+      console.log(`[Alfred] 🧠 Orchestrator: ${orchestratorMetadata.stateTransition.from} → ${orchestratorMetadata.stateTransition.to}`);
+      console.log(`[Alfred] 📊 Task: ${orchestratorMetadata.taskAnalysis.complexity} | Confidence: ${(orchestratorMetadata.taskAnalysis.confidence * 100).toFixed(0)}%`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Context Detection & System Prompt
     // ─────────────────────────────────────────────────────────────────────────
     const detectedFacet = isArtifactEdit ? 'code' : detectFacet(message || 'analyze');
     const skillLevel = coreInferSkillLevel([message || 'analyze image']);
-    
+
     const baseSystemPrompt = buildSystemPrompt({ skillLevel });
     let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
+
+    // Add orchestrator state to system prompt
+    if (orchestratorPromptAdditions) {
+      systemPrompt += '\n' + orchestratorPromptAdditions;
+    }
     
     // ═══════════════════════════════════════════════════════════════════════════
     // ARTIFACT MODIFICATION: Inject current code into system prompt
     // ═══════════════════════════════════════════════════════════════════════════
     if (isArtifactEdit) {
       systemPrompt += '\n\n' + buildArtifactModificationPrompt(
-        artifactCode, 
+        artifactCode,
         artifactTitle || 'Component'
       );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILDER MODE: Multi-file project generation
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (isBuilderMode) {
+      console.log('[Alfred] 🏗️ BUILDER MODE: Multi-file project generation');
+      systemPrompt = BUILDER_MODE_PROMPT + '\n\n' + baseSystemPrompt;
     }
 
     // Load history files if continuing a conversation
@@ -863,9 +1126,15 @@ RULES:
           const MAX_CONTINUATIONS = 5;
 
           while (continuationCount <= MAX_CONTINUATIONS) {
-            await client.stream(
-              { system: systemPrompt, messages: currentMessages as any, maxTokens: 32768 },
-              streamOptions
+            // Wrap LLM call with circuit breaker + retry for resilience
+            await withLLMResilience(
+              async () => {
+                await client.stream(
+                  { system: systemPrompt, messages: currentMessages as any, maxTokens: 32768 },
+                  streamOptions
+                );
+              },
+              { requestId, operation: `stream_${continuationCount}` }
             );
 
             if (detectedFacet !== 'code') break;
@@ -944,14 +1213,40 @@ RULES:
         'X-Alfred-Skill': skillLevel,
         'X-Alfred-Conversation': convId || '',
         'X-Alfred-Artifact-Edit': isArtifactEdit ? 'true' : 'false',
+        'X-Alfred-Builder-Mode': isBuilderMode ? 'true' : 'false',
+        'X-Alfred-Request-Id': requestId,
+        'X-Alfred-Orchestrator-State': orchestratorMetadata?.stateTransition.to || 'N/A',
+        'X-Alfred-Circuit-Breaker': getCircuitBreakerStatus().state,
       },
     });
     
   } catch (error) {
     console.error('[Alfred] Fatal error:', error);
+
+    // Capture to Sentry with full context
+    if (error instanceof Error) {
+      captureError(error, {
+        requestId,
+        tags: {
+          endpoint: '/api/chat',
+          circuitState: getCircuitBreakerStatus().state,
+        },
+      });
+    }
+
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }), 
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        error: 'Internal server error',
+        requestId,
+        circuitBreakerState: getCircuitBreakerStatus().state,
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Alfred-Request-Id': requestId,
+        },
+      }
     );
   }
 }

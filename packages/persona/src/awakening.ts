@@ -498,7 +498,7 @@ export class AwakeningCeremony {
     const qualityMap = { preview: 'draft', standard: 'standard', cinematic: 'high' } as const;
     
     return await this.config.animationEngine.animate({
-      sourceImageUrl: primaryImage,
+      sourceImageUrl: sourceImageUrl,
       motionPreset: 'cinematic_slow',
       duration: 3,
       quality: qualityMap[quality],

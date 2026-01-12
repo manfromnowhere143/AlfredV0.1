@@ -47,6 +47,7 @@ import { generateSlug, generateUniqueSlug } from './utils';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Database schema type - will be imported from @alfred/database */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Schema = {
   personas: any;
   personaAssets: any;
@@ -56,7 +57,162 @@ type Schema = {
   personaSessions: any;
 };
 
-type DB = PostgresJsDatabase<Schema>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DB = PostgresJsDatabase<any>;
+
+/** Database row types for mappers */
+interface PersonaRow {
+  id: string;
+  userId: string;
+  name: string;
+  slug: string;
+  archetype: string | null;
+  tagline: string | null;
+  backstory: string | null;
+  traits: string[] | null;
+  temperament: string | null;
+  communicationStyle: string | null;
+  emotionalRange: Record<string, unknown> | null;
+  speakingStyle: Record<string, unknown> | null;
+  knowledgeDomains: Array<{ domain: string; level: string }> | null;
+  primaryImageUrl: string | null;
+  thumbnailUrl: string | null;
+  expressionGrid: Record<string, { imageUrl: string; thumbnailUrl?: string; seed?: number }> | null;
+  visualStylePreset: string | null;
+  visualConfig: Record<string, unknown> | null;
+  identityEmbedding: Record<string, unknown> | null;
+  voiceProvider: string | null;
+  voiceId: string | null;
+  voiceProfile: Record<string, unknown> | null;
+  motionStylePreset: string | null;
+  motionConfig: Record<string, unknown> | null;
+  cameraAngle: string | null;
+  status: string;
+  isPublic: boolean;
+  allowEmbed: boolean;
+  allowVoice: boolean;
+  allowVideo: boolean;
+  customGreeting: string | null;
+  currentMood: string | null;
+  energyLevel: number | null;
+  relationshipLevel: number | null;
+  totalInteractions: number | null;
+  totalChatMessages: number | null;
+  totalVoiceMinutes: number | null;
+  totalVideoMinutes: number | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  lastInteractionAt: Date | null;
+  deletedAt: Date | null;
+}
+
+interface AssetRow {
+  id: string;
+  personaId: string;
+  type: string;
+  subtype: string | null;
+  name: string | null;
+  url: string;
+  thumbnailUrl: string | null;
+  storageProvider: string | null;
+  storageKey: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  generationConfig: Record<string, unknown> | null;
+  generationCostUsd: number | null;
+  generationTimeMs: number | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
+interface MemoryRow {
+  id: string;
+  personaId: string;
+  content: string;
+  type: string;
+  category: string | null;
+  summary: string | null;
+  embedding: number[] | null;
+  embeddingModel: string | null;
+  importance: number | null;
+  confidence: number | null;
+  accessCount: number | null;
+  decayRate: number | null;
+  sourceInteractionId: string | null;
+  sourceUserId: string | null;
+  lastAccessedAt: Date | null;
+  createdAt: Date | null;
+  expiresAt: Date | null;
+}
+
+interface InteractionRow {
+  id: string;
+  personaId: string;
+  userId: string | null;
+  sessionId: string | null;
+  mode: string;
+  userMessage: string | null;
+  personaResponse: string | null;
+  userEmotionDetected: string | null;
+  personaEmotionExpressed: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationSeconds: number | null;
+  latencyMs: number | null;
+  wasHelpful: boolean | null;
+  rating: number | null;
+  feedback: string | null;
+  llmCostUsd: number | null;
+  ttsCostUsd: number | null;
+  videoCostUsd: number | null;
+  totalCostUsd: number | null;
+  source: string | null;
+  referrer: string | null;
+  conversationContext: Record<string, unknown> | null;
+  createdAt: Date | null;
+}
+
+interface EmbedRow {
+  id: string;
+  personaId: string;
+  embedKey: string;
+  allowedDomains: string[] | null;
+  config: {
+    theme?: string;
+    position?: string;
+    size?: string;
+    customCss?: string;
+    greeting?: string;
+    requireAuth?: boolean;
+    allowedModes?: string[];
+  } | null;
+  isActive: boolean;
+  dailyLimitPerVisitor: number | null;
+  dailyLimitTotal: number | null;
+  totalLoads: number | null;
+  totalInteractions: number | null;
+  uniqueUsers: number | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
+interface SessionRow {
+  id: string;
+  personaId: string;
+  userId: string | null;
+  visitorId: string | null;
+  currentEmotion: string | null;
+  contextSummary: string | null;
+  sessionFacts: string[] | null;
+  messageCount: number | null;
+  tokenCount: number | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  endedAt: Date | null;
+}
 
 /** Create persona input */
 export interface CreatePersonaInput {
@@ -942,6 +1098,7 @@ export class PersonaRepository {
   // MAPPERS (DB row to domain entity)
   // ─────────────────────────────────────────────────────────────────────────────
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToPersona(row: any): Persona {
     return {
       id: row.id,
@@ -991,6 +1148,7 @@ export class PersonaRepository {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToAsset(row: any): PersonaAsset {
     return {
       id: row.id,
@@ -1015,6 +1173,7 @@ export class PersonaRepository {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToMemory(row: any): PersonaMemory {
     return {
       id: row.id,
@@ -1037,6 +1196,7 @@ export class PersonaRepository {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToInteraction(row: any): PersonaInteraction {
     return {
       id: row.id,
@@ -1066,6 +1226,7 @@ export class PersonaRepository {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToEmbed(row: any): PersonaEmbed {
     return {
       id: row.id,
@@ -1091,6 +1252,7 @@ export class PersonaRepository {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapToSession(row: any): PersonaSession {
     return {
       id: row.id,

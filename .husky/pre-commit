@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged
+npx lint-staged
+
+# Check for secrets (basic patterns)
+if git diff --cached --name-only | xargs grep -l -E "(sk-[a-zA-Z0-9]{32,}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36})" 2>/dev/null; then
+  echo "ERROR: Potential secrets detected in staged files!"
+  echo "Please remove sensitive data before committing."
+  exit 1
+fi

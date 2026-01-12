@@ -12,4 +12,5 @@ export * from './contracts';
 
 export * from './orchestrator';
 export * from './dna';
+export * from './builder';
 export type { UserSkillLevel as SkillLevel } from './types';

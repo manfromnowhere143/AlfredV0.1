@@ -310,14 +310,14 @@ import {
       activatedAt: timestamp('activated_at', { withTimezone: true }),
       deletedAt: timestamp('deleted_at', { withTimezone: true }),
     },
-    (table) => [
-      index('personas_user_id_idx').on(table.userId),
-      index('personas_slug_idx').on(table.slug),
-      index('personas_status_idx').on(table.status),
-      index('personas_is_public_idx').on(table.isPublic),
-      index('personas_archetype_idx').on(table.archetype),
-      uniqueIndex('personas_user_slug_unique').on(table.userId, table.slug),
-    ]
+    (table) => ({
+      personas_user_id_idx: index('personas_user_id_idx').on(table.userId),
+      personas_slug_idx: index('personas_slug_idx').on(table.slug),
+      personas_status_idx: index('personas_status_idx').on(table.status),
+      personas_is_public_idx: index('personas_is_public_idx').on(table.isPublic),
+      personas_archetype_idx: index('personas_archetype_idx').on(table.archetype),
+      personas_user_slug_unique: uniqueIndex('personas_user_slug_unique').on(table.userId, table.slug),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -359,11 +359,11 @@ import {
       createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       deletedAt: timestamp('deleted_at', { withTimezone: true }),
     },
-    (table) => [
-      index('persona_assets_persona_id_idx').on(table.personaId),
-      index('persona_assets_type_idx').on(table.type),
-      index('persona_assets_subtype_idx').on(table.subtype),
-    ]
+    (table) => ({
+      persona_assets_persona_id_idx: index('persona_assets_persona_id_idx').on(table.personaId),
+      persona_assets_type_idx: index('persona_assets_type_idx').on(table.type),
+      persona_assets_subtype_idx: index('persona_assets_subtype_idx').on(table.subtype),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -404,13 +404,13 @@ import {
       expiresAt: timestamp('expires_at', { withTimezone: true }),
       deletedAt: timestamp('deleted_at', { withTimezone: true }),
     },
-    (table) => [
-      index('persona_memories_persona_id_idx').on(table.personaId),
-      index('persona_memories_type_idx').on(table.type),
-      index('persona_memories_category_idx').on(table.category),
-      index('persona_memories_importance_idx').on(table.importance),
-      index('persona_memories_source_user_idx').on(table.sourceUserId),
-    ]
+    (table) => ({
+      persona_memories_persona_id_idx: index('persona_memories_persona_id_idx').on(table.personaId),
+      persona_memories_type_idx: index('persona_memories_type_idx').on(table.type),
+      persona_memories_category_idx: index('persona_memories_category_idx').on(table.category),
+      persona_memories_importance_idx: index('persona_memories_importance_idx').on(table.importance),
+      persona_memories_source_user_idx: index('persona_memories_source_user_idx').on(table.sourceUserId),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -461,13 +461,13 @@ import {
       // Timestamps
       createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    (table) => [
-      index('persona_interactions_persona_id_idx').on(table.personaId),
-      index('persona_interactions_user_id_idx').on(table.userId),
-      index('persona_interactions_session_id_idx').on(table.sessionId),
-      index('persona_interactions_mode_idx').on(table.mode),
-      index('persona_interactions_created_at_idx').on(table.createdAt),
-    ]
+    (table) => ({
+      persona_interactions_persona_id_idx: index('persona_interactions_persona_id_idx').on(table.personaId),
+      persona_interactions_user_id_idx: index('persona_interactions_user_id_idx').on(table.userId),
+      persona_interactions_session_id_idx: index('persona_interactions_session_id_idx').on(table.sessionId),
+      persona_interactions_mode_idx: index('persona_interactions_mode_idx').on(table.mode),
+      persona_interactions_created_at_idx: index('persona_interactions_created_at_idx').on(table.createdAt),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -510,11 +510,11 @@ import {
       updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
       lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     },
-    (table) => [
-      index('persona_embeds_persona_id_idx').on(table.personaId),
-      index('persona_embeds_embed_key_idx').on(table.embedKey),
-      index('persona_embeds_is_active_idx').on(table.isActive),
-    ]
+    (table) => ({
+      persona_embeds_persona_id_idx: index('persona_embeds_persona_id_idx').on(table.personaId),
+      persona_embeds_embed_key_idx: index('persona_embeds_embed_key_idx').on(table.embedKey),
+      persona_embeds_is_active_idx: index('persona_embeds_is_active_idx').on(table.isActive),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -560,13 +560,13 @@ import {
       endedAt: timestamp('ended_at', { withTimezone: true }),
       expiresAt: timestamp('expires_at', { withTimezone: true }),
     },
-    (table) => [
-      index('persona_sessions_persona_id_idx').on(table.personaId),
-      index('persona_sessions_user_id_idx').on(table.userId),
-      index('persona_sessions_embed_id_idx').on(table.embedId),
-      index('persona_sessions_is_active_idx').on(table.isActive),
-      index('persona_sessions_created_at_idx').on(table.createdAt),
-    ]
+    (table) => ({
+      persona_sessions_persona_id_idx: index('persona_sessions_persona_id_idx').on(table.personaId),
+      persona_sessions_user_id_idx: index('persona_sessions_user_id_idx').on(table.userId),
+      persona_sessions_embed_id_idx: index('persona_sessions_embed_id_idx').on(table.embedId),
+      persona_sessions_is_active_idx: index('persona_sessions_is_active_idx').on(table.isActive),
+      persona_sessions_created_at_idx: index('persona_sessions_created_at_idx').on(table.createdAt),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -627,11 +627,11 @@ import {
       expiresAt: timestamp('expires_at', { withTimezone: true }),
       completedAt: timestamp('completed_at', { withTimezone: true }),
     },
-    (table) => [
-      index('persona_wizard_sessions_user_id_idx').on(table.userId),
-      index('persona_wizard_sessions_persona_id_idx').on(table.personaId),
-      index('persona_wizard_sessions_current_step_idx').on(table.currentStep),
-    ]
+    (table) => ({
+      persona_wizard_sessions_user_id_idx: index('persona_wizard_sessions_user_id_idx').on(table.userId),
+      persona_wizard_sessions_persona_id_idx: index('persona_wizard_sessions_persona_id_idx').on(table.personaId),
+      persona_wizard_sessions_current_step_idx: index('persona_wizard_sessions_current_step_idx').on(table.currentStep),
+    })
   );
   
   // ═══════════════════════════════════════════════════════════════════════════════

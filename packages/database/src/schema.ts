@@ -120,6 +120,61 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'paused',
 ]);
 
+// ============================================================================
+// ALFRED BUILDER - Multi-File Project Enums
+// ============================================================================
+
+export const projectFrameworkEnum = pgEnum('project_framework', [
+  'react',
+  'vue',
+  'svelte',
+  'nextjs',
+  'python',
+  'node',
+  'agent',
+  'workflow',
+  'static',
+  'custom',
+]);
+
+export const projectFileTypeEnum = pgEnum('project_file_type', [
+  'component',      // React/Vue/Svelte components
+  'page',           // Page/Route components
+  'style',          // CSS/SCSS/Tailwind
+  'config',         // Config files (tsconfig, vite, etc.)
+  'script',         // JS/TS utility scripts
+  'python',         // Python files
+  'data',           // JSON/YAML/CSV data files
+  'asset',          // Images, fonts, etc.
+  'test',           // Test files
+  'agent',          // AI agent definitions
+  'workflow',       // Workflow/pipeline definitions
+  'documentation',  // Markdown, README
+  'other',
+]);
+
+export const previewEngineEnum = pgEnum('preview_engine', [
+  'esbuild',        // ESBuild-WASM for React/JS
+  'sandpack',       // CodeSandbox Sandpack
+  'webcontainer',   // StackBlitz WebContainer
+  'pyodide',        // Python in browser
+  'reactflow',      // Agent/workflow visualization
+  'mermaid',        // Diagram visualization
+  'markdown',       // Markdown preview
+  'json',           // JSON tree viewer
+  'iframe',         // Simple HTML iframe
+  'terminal',       // Terminal output
+  'none',           // No preview available
+]);
+
+export const fileStatusBuildEnum = pgEnum('file_status_build', [
+  'pristine',       // No changes since last snapshot
+  'modified',       // Has unsaved changes
+  'error',          // Has syntax/type errors
+  'building',       // Currently being bundled
+  'ready',          // Built and ready for preview
+]);
+
 // Video Studio enums
 export const videoJobStatusEnum = pgEnum('video_job_status', [
   'pending',
@@ -442,6 +497,302 @@ export const artifacts = pgTable(
     index('artifacts_conversation_id_idx').on(table.conversationId),
     index('artifacts_created_at_idx').on(table.createdAt),
   ],
+);
+
+// ============================================================================
+// ALFRED BUILDER - Multi-File Projects (State-of-the-Art Preview System)
+// ============================================================================
+
+/**
+ * alfredProjects - Multi-file project container
+ *
+ * This is the foundation of Alfred's next-gen builder system:
+ * - Stores complete multi-file project structures
+ * - Supports multiple frameworks (React, Python, Agents, etc.)
+ * - Tracks preview engine and build state
+ * - Links to conversation for context
+ */
+export const alfredProjects = pgTable(
+  'alfred_projects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    // Ownership & Context
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+
+    // Identity
+    name: varchar('name', { length: 255 }).notNull(),
+    description: text('description'),
+
+    // Framework & Configuration
+    framework: projectFrameworkEnum('framework').notNull().default('react'),
+    entryPoint: varchar('entry_point', { length: 255 }).notNull().default('/src/App.tsx'),
+    previewEngine: previewEngineEnum('preview_engine').notNull().default('esbuild'),
+
+    // Dependencies (npm/pip/etc.)
+    dependencies: jsonb('dependencies').$type<Record<string, string>>().default({}),
+    devDependencies: jsonb('dev_dependencies').$type<Record<string, string>>().default({}),
+
+    // Build Configuration
+    buildConfig: jsonb('build_config').$type<{
+      target?: string;          // 'es2020', 'esnext', etc.
+      jsx?: string;             // 'react-jsx', 'preserve', etc.
+      minify?: boolean;
+      sourcemap?: boolean;
+      externals?: string[];     // Packages to load from CDN
+      importMap?: Record<string, string>;  // Import map overrides
+    }>(),
+
+    // Preview Configuration
+    previewConfig: jsonb('preview_config').$type<{
+      autoRefresh?: boolean;    // HMR-like behavior
+      consoleEnabled?: boolean;
+      networkEnabled?: boolean;
+      customHead?: string;      // Custom <head> content
+      sandbox?: string[];       // iframe sandbox permissions
+    }>(),
+
+    // Template used to generate this project
+    templateId: varchar('template_id', { length: 100 }),
+    templateVersion: varchar('template_version', { length: 50 }),
+
+    // State
+    fileCount: integer('file_count').notNull().default(0),
+    totalSize: integer('total_size').notNull().default(0), // bytes
+    lastBuildAt: timestamp('last_build_at', { withTimezone: true }),
+    lastBuildStatus: varchar('last_build_status', { length: 20 }), // 'success' | 'error'
+    lastBuildError: text('last_build_error'),
+
+    // Versioning
+    version: integer('version').notNull().default(1),
+    snapshotCount: integer('snapshot_count').notNull().default(0),
+
+    // Deployment (links to existing Vercel integration)
+    deployedUrl: varchar('deployed_url', { length: 500 }),
+    lastDeployedAt: timestamp('last_deployed_at', { withTimezone: true }),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<{
+      llmModel?: string;
+      generationPrompt?: string;
+      tags?: string[];
+      isPublic?: boolean;
+      forkCount?: number;
+      starCount?: number;
+    }>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    userIdIdx: index('alfred_projects_user_id_idx').on(table.userId),
+    conversationIdIdx: index('alfred_projects_conversation_id_idx').on(table.conversationId),
+    frameworkIdx: index('alfred_projects_framework_idx').on(table.framework),
+    createdAtIdx: index('alfred_projects_created_at_idx').on(table.createdAt),
+    nameSearchIdx: index('alfred_projects_name_idx').on(table.name),
+  })
+);
+
+/**
+ * alfredProjectFiles - Individual files within a project
+ *
+ * Stores each file with:
+ * - Full path (e.g., '/src/components/Header.tsx')
+ * - Content with version tracking
+ * - File type for smart preview routing
+ * - Build status for error highlighting
+ */
+export const alfredProjectFiles = pgTable(
+  'alfred_project_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    alfredProjectId: uuid('alfred_project_id').notNull().references(() => alfredProjects.id, { onDelete: 'cascade' }),
+
+    // File Identity
+    path: varchar('path', { length: 500 }).notNull(), // e.g., '/src/components/Header.tsx'
+    name: varchar('name', { length: 255 }).notNull(), // e.g., 'Header.tsx'
+
+    // Content
+    content: text('content').notNull(),
+    language: varchar('language', { length: 50 }).notNull(), // tsx, ts, py, json, md, etc.
+    fileType: projectFileTypeEnum('file_type').notNull().default('component'),
+
+    // Size & Metrics
+    size: integer('size').notNull().default(0), // bytes
+    lineCount: integer('line_count').notNull().default(0),
+
+    // Build Status
+    status: fileStatusBuildEnum('status').notNull().default('pristine'),
+    errors: jsonb('errors').$type<Array<{
+      line: number;
+      column: number;
+      message: string;
+      severity: 'error' | 'warning' | 'info';
+    }>>(),
+
+    // Entry Point Flag
+    isEntryPoint: boolean('is_entry_point').notNull().default(false),
+
+    // Preview Configuration (per-file overrides)
+    previewEngine: previewEngineEnum('preview_engine'), // Override project default
+    previewConfig: jsonb('preview_config').$type<{
+      showLineNumbers?: boolean;
+      highlightLines?: number[];
+      theme?: string;
+    }>(),
+
+    // Exports/Imports Analysis (for dependency graph)
+    exports: jsonb('exports').$type<string[]>(), // ['Header', 'HeaderProps']
+    imports: jsonb('imports').$type<Array<{
+      source: string;         // './Button' or 'react'
+      specifiers: string[];   // ['useState', 'useEffect']
+      isRelative: boolean;
+    }>>(),
+
+    // Versioning (per-file)
+    version: integer('version').notNull().default(1),
+
+    // Generation Metadata
+    generatedBy: varchar('generated_by', { length: 50 }), // 'llm' | 'user' | 'template'
+    generationPrompt: text('generation_prompt'),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    projectIdIdx: index('alfred_project_files_project_id_idx').on(table.alfredProjectId),
+    pathIdx: index('alfred_project_files_path_idx').on(table.path),
+    fileTypeIdx: index('alfred_project_files_file_type_idx').on(table.fileType),
+    statusIdx: index('alfred_project_files_status_idx').on(table.status),
+    // Unique constraint: one path per project
+    uniquePathIdx: uniqueIndex('alfred_project_files_unique_path').on(table.alfredProjectId, table.path),
+  })
+);
+
+/**
+ * alfredProjectSnapshots - Project version snapshots
+ *
+ * Full point-in-time snapshots for:
+ * - Version history
+ * - Undo/redo support
+ * - Deployment rollback
+ * - Collaboration branching
+ */
+export const alfredProjectSnapshots = pgTable(
+  'alfred_project_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    alfredProjectId: uuid('alfred_project_id').notNull().references(() => alfredProjects.id, { onDelete: 'cascade' }),
+
+    // Snapshot Identity
+    version: integer('version').notNull(),
+    name: varchar('name', { length: 255 }), // Optional human-readable name
+    description: text('description'),
+
+    // Complete File State (denormalized for fast restore)
+    files: jsonb('files').$type<Array<{
+      path: string;
+      content: string;
+      language: string;
+      fileType: string;
+    }>>().notNull(),
+
+    // Dependencies at snapshot time
+    dependencies: jsonb('dependencies').$type<Record<string, string>>(),
+    devDependencies: jsonb('dev_dependencies').$type<Record<string, string>>(),
+
+    // Build Configuration at snapshot time
+    buildConfig: jsonb('build_config').$type<Record<string, unknown>>(),
+
+    // Metrics
+    fileCount: integer('file_count').notNull(),
+    totalSize: integer('total_size').notNull(),
+
+    // Source
+    triggeredBy: varchar('triggered_by', { length: 50 }).notNull(), // 'user' | 'auto' | 'deploy' | 'llm'
+    messageId: uuid('message_id'), // LLM message that created this snapshot
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdIdx: index('alfred_project_snapshots_project_id_idx').on(table.alfredProjectId),
+    versionIdx: index('alfred_project_snapshots_version_idx').on(table.version),
+    createdAtIdx: index('alfred_project_snapshots_created_at_idx').on(table.createdAt),
+    // Unique version per project
+    uniqueVersionIdx: uniqueIndex('alfred_project_snapshots_unique_version').on(table.alfredProjectId, table.version),
+  })
+);
+
+/**
+ * alfredProjectTemplates - Reusable project templates
+ *
+ * State-of-the-art templates for quick project scaffolding:
+ * - Pre-configured frameworks
+ * - Best-practice file structures
+ * - Curated dependencies
+ */
+export const alfredProjectTemplates = pgTable(
+  'alfred_project_templates',
+  {
+    id: varchar('id', { length: 100 }).primaryKey(), // e.g., 'react-tailwind-starter'
+
+    // Identity
+    name: varchar('name', { length: 255 }).notNull(),
+    description: text('description'),
+    category: varchar('category', { length: 50 }).notNull(), // 'web', 'python', 'agent', etc.
+
+    // Framework & Configuration
+    framework: projectFrameworkEnum('framework').notNull(),
+    previewEngine: previewEngineEnum('preview_engine').notNull(),
+
+    // Template Files
+    files: jsonb('files').$type<Array<{
+      path: string;
+      content: string;
+      language: string;
+      fileType: string;
+    }>>().notNull(),
+
+    // Dependencies
+    dependencies: jsonb('dependencies').$type<Record<string, string>>().notNull(),
+    devDependencies: jsonb('dev_dependencies').$type<Record<string, string>>().notNull(),
+
+    // Build Configuration
+    buildConfig: jsonb('build_config').$type<Record<string, unknown>>(),
+
+    // Display
+    thumbnailUrl: text('thumbnail_url'),
+    showcaseUrl: text('showcase_url'),
+    tags: jsonb('tags').$type<string[]>().default([]),
+
+    // Metrics
+    usageCount: integer('usage_count').notNull().default(0),
+    starCount: integer('star_count').notNull().default(0),
+
+    // Status
+    isPublic: boolean('is_public').notNull().default(true),
+    isFeatured: boolean('is_featured').notNull().default(false),
+
+    // Versioning
+    version: varchar('version', { length: 50 }).notNull().default('1.0.0'),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    frameworkIdx: index('alfred_project_templates_framework_idx').on(table.framework),
+    categoryIdx: index('alfred_project_templates_category_idx').on(table.category),
+    isPublicIdx: index('alfred_project_templates_is_public_idx').on(table.isPublic),
+    isFeaturedIdx: index('alfred_project_templates_is_featured_idx').on(table.isFeatured),
+  })
 );
 
 // ============================================================================
@@ -1353,6 +1704,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   usageRecords: many(usageRecords),
   files: many(files),
   personas: many(personas),
+  alfredProjects: many(alfredProjects),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -1471,6 +1823,23 @@ export const videoJobsRelations = relations(videoJobs, ({ one }) => ({
   user: one(users, { fields: [videoJobs.userId], references: [users.id] }),
 }));
 
+// Alfred Builder relations
+export const alfredProjectsRelations = relations(alfredProjects, ({ one, many }) => ({
+  user: one(users, { fields: [alfredProjects.userId], references: [users.id] }),
+  conversation: one(conversations, { fields: [alfredProjects.conversationId], references: [conversations.id] }),
+  project: one(projects, { fields: [alfredProjects.projectId], references: [projects.id] }),
+  files: many(alfredProjectFiles),
+  snapshots: many(alfredProjectSnapshots),
+}));
+
+export const alfredProjectFilesRelations = relations(alfredProjectFiles, ({ one }) => ({
+  alfredProject: one(alfredProjects, { fields: [alfredProjectFiles.alfredProjectId], references: [alfredProjects.id] }),
+}));
+
+export const alfredProjectSnapshotsRelations = relations(alfredProjectSnapshots, ({ one }) => ({
+  alfredProject: one(alfredProjects, { fields: [alfredProjectSnapshots.alfredProjectId], references: [alfredProjects.id] }),
+}));
+
 // ============================================================================
 // TYPE EXPORTS
 // ============================================================================
@@ -1545,3 +1914,16 @@ export type NewPersonaWizardSession = typeof personaWizardSessions.$inferInsert;
 // Video Studio types
 export type VideoJob = typeof videoJobs.$inferSelect;
 export type NewVideoJob = typeof videoJobs.$inferInsert;
+
+// Alfred Builder types
+export type AlfredProject = typeof alfredProjects.$inferSelect;
+export type NewAlfredProject = typeof alfredProjects.$inferInsert;
+
+export type AlfredProjectFile = typeof alfredProjectFiles.$inferSelect;
+export type NewAlfredProjectFile = typeof alfredProjectFiles.$inferInsert;
+
+export type AlfredProjectSnapshot = typeof alfredProjectSnapshots.$inferSelect;
+export type NewAlfredProjectSnapshot = typeof alfredProjectSnapshots.$inferInsert;
+
+export type AlfredProjectTemplate = typeof alfredProjectTemplates.$inferSelect;
+export type NewAlfredProjectTemplate = typeof alfredProjectTemplates.$inferInsert;

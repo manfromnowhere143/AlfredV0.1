@@ -307,6 +307,17 @@ const Sidebar = React.memo(function Sidebar({
               <rect x="18" y="18" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
             </svg>
           </button>
+
+          <button
+            className="icon-btn"
+            onClick={() => { router.push('/builder'); onClose(); }}
+            title="Builder"
+          >
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <path d="M12 10l-6 6 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M20 10l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
       </aside>
 

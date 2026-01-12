@@ -1,7 +1,15 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@alfred/core', '@alfred/llm', '@alfred/database', '@alfred/persona'],
+
+  // Enable instrumentation for Sentry
+  experimental: {
+    instrumentationHook: true,
+  },
+
   typescript: {
     // TODO: Remove once persona database schema is merged
     ignoreBuildErrors: true,
@@ -63,8 +71,8 @@ const nextConfig = {
               "img-src 'self' data: blob: https: http:",
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com data:",
-              // Connect: API calls and WebSocket
-              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://*.vercel-storage.com wss://*.vercel.app",
+              // Connect: API calls, WebSocket, and Sentry
+              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://*.vercel-storage.com wss://*.vercel.app https://*.sentry.io https://*.ingest.sentry.io",
               // Media: self + blob + Vercel Blob storage
               "media-src 'self' blob: https://*.vercel-storage.com https://*.blob.vercel-storage.com",
               // Frame: allow iframes for preview
@@ -101,4 +109,32 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Sentry configuration options
+const sentryWebpackPluginOptions = {
+  // Suppresses source map uploading logs during build
+  silent: true,
+
+  // Organization and project from Sentry
+  org: process.env.SENTRY_ORG || 'alfred',
+  project: process.env.SENTRY_PROJECT || 'alfred-web',
+
+  // Upload source maps for better error tracking
+  widenClientFileUpload: true,
+
+  // Routes browser requests to Sentry through Next.js (hides DSN)
+  tunnelRoute: '/monitoring',
+
+  // Hides source maps from generated client bundles
+  hideSourceMaps: true,
+
+  // Automatically tree-shake Sentry logger statements
+  disableLogger: true,
+
+  // Enables automatic instrumentation of Vercel Cron Monitors
+  automaticVercelMonitors: true,
+};
+
+// Wrap with Sentry only if DSN is configured
+module.exports = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+  : nextConfig;

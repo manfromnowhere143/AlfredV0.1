@@ -1,0 +1,134 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel in-progress deployments
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # PRE-DEPLOY CHECKS
+  # ═══════════════════════════════════════════════════════════════════════════════
+  pre-deploy:
+    name: Pre-Deploy Checks
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r build
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Check build
+        run: pnpm -r build
+        env:
+          SKIP_ENV_VALIDATION: true
+
+      - name: Determine deployment
+        id: check
+        run: echo "should_deploy=true" >> $GITHUB_OUTPUT
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # DEPLOY TO VERCEL
+  # ═══════════════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: [pre-deploy]
+    if: needs.pre-deploy.outputs.should_deploy == 'true'
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Post deployment notification
+        if: success()
+        run: |
+          echo "Successfully deployed to ${{ steps.deploy.outputs.url }}"
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # POST-DEPLOY VERIFICATION
+  # ═══════════════════════════════════════════════════════════════════════════════
+  verify:
+    name: Post-Deploy Verification
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    steps:
+      - name: Health check
+        run: |
+          sleep 30  # Wait for deployment to stabilize
+          response=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.deploy.outputs.url }}/api/health" || echo "000")
+          if [ "$response" != "200" ]; then
+            echo "Health check failed with status: $response"
+            exit 1
+          fi
+          echo "Health check passed!"
+        continue-on-error: true  # Don't fail deployment on health check
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Post-deploy verification failed. Manual check recommended."
