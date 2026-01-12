@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         backstory: persona.backstory || undefined,
         traits: persona.traits || [],
         temperament: persona.temperament || undefined,
-        communicationStyle: persona.communicationStyle || undefined,
+        communicationStyle: (persona.communicationStyle as 'formal' | 'casual' | 'professional' | 'friendly' | 'authoritative' | 'nurturing' | 'playful') || undefined,
         speakingStyle: persona.speakingStyle as any || undefined,
       },
       memories: [], // TODO: Fetch relevant memories

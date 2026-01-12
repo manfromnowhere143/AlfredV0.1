@@ -50,11 +50,12 @@ export function AvatarDiagnosticsOverlay({
   const audioContextState = useAvatarStore((s) => s.audioContextState);
   const analyserConnected = useAvatarStore((s) => s.analyserConnected);
 
-  // Local state for FPS counter
+  // Local state for FPS counter and tick tracking
   const [fps, setFps] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
   const [lastFpsUpdate, setLastFpsUpdate] = useState(Date.now());
   const [blinkCountdown, setBlinkCountdown] = useState(0);
+  const [tickCount, setTickCount] = useState(0);
 
   // FPS counter
   useEffect(() => {
@@ -82,7 +83,7 @@ export function AvatarDiagnosticsOverlay({
     return () => cancelAnimationFrame(animationId);
   }, [lastFpsUpdate]);
 
-  // Blink countdown timer
+  // Blink countdown timer + tick counter
   useEffect(() => {
     const interval = setInterval(() => {
       const elapsed = Date.now() - lastBlinkTime;
@@ -90,6 +91,8 @@ export function AvatarDiagnosticsOverlay({
       const targetInterval = 4000;
       const remaining = Math.max(0, targetInterval - elapsed);
       setBlinkCountdown(remaining / 1000);
+      // Increment tick counter to show loop is alive
+      setTickCount((prev) => prev + 1);
     }, 100);
 
     return () => clearInterval(interval);
@@ -155,6 +158,9 @@ export function AvatarDiagnosticsOverlay({
           }}
         >
           {fps}
+        </span>
+        <span className="ml-2 text-white/40 text-[10px]">
+          (tick #{tickCount})
         </span>
       </div>
 
