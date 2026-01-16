@@ -304,6 +304,34 @@ export default function BuilderPage() {
     onStreamEvent: handleStreamEvent,
   });
 
+  // DEBUG: Log state changes
+  useEffect(() => {
+    console.log('[Builder Page] 🔍 State:', {
+      isStreaming,
+      'builder.isBuilding': builder.isBuilding,
+      'builder.files.length': builder.files.length,
+      'builder.selectedFile': builder.selectedFile?.path || 'none',
+      'builder.previewResult': builder.previewResult ? `success:${builder.previewResult.success}, html:${builder.previewResult.html?.length || 0}` : 'null',
+    });
+  }, [isStreaming, builder.isBuilding, builder.files.length, builder.selectedFile, builder.previewResult]);
+
+  // SAFETY: Force reset stuck states after stream completes
+  // If we have files but isBuilding is stuck true for 5 seconds, force reset
+  useEffect(() => {
+    if (builder.files.length > 0 && (isStreaming || builder.isBuilding)) {
+      const timeout = setTimeout(() => {
+        console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 5s');
+        setIsStreaming(false);
+        // Force a rebuild to ensure preview updates
+        if (builder.files.length > 0 && !builder.previewResult?.html) {
+          console.log('[Builder Page] 🔄 Forcing rebuild after timeout...');
+          builder.rebuild?.();
+        }
+      }, 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [builder.files.length, isStreaming, builder.isBuilding, builder.previewResult?.html, builder.rebuild]);
+
   // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -848,6 +876,12 @@ export default function BuilderPage() {
           )}
           {(viewMode === 'preview' || viewMode === 'split') && (
             <div className={`preview-panel ${viewMode === 'split' ? 'split' : 'full'}`}>
+              {/* DEBUG: Show state values */}
+              {process.env.NODE_ENV === 'development' && (
+                <div style={{position:'absolute',top:4,right:4,zIndex:9999,fontSize:10,background:'rgba(0,0,0,0.8)',color:'#0f0',padding:'4px 8px',borderRadius:4,fontFamily:'monospace'}}>
+                  streaming:{String(isStreaming)} | building:{String(builder.isBuilding)} | files:{builder.files.length} | selected:{builder.selectedFile?.path || 'none'}
+                </div>
+              )}
               <BuilderPreview
                 preview={builder.previewResult}
                 isBuilding={isStreaming || builder.isBuilding}
