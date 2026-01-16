@@ -5,6 +5,7 @@
  * ║               ALFRED PRO PREVIEW - STATE OF THE ART                          ║
  * ╠═══════════════════════════════════════════════════════════════════════════════╣
  * ║  Premium live preview with:                                                   ║
+ * ║  • Beautiful crafting animation (matches Alfred Regular)                      ║
  * ║  • Device frame simulation                                                    ║
  * ║  • Integrated console panel                                                   ║
  * ║  • Smooth loading transitions                                                 ║
@@ -29,6 +30,245 @@ export interface BuilderPreviewProps {
 
 type DeviceType = 'desktop' | 'tablet' | 'mobile';
 type PanelTab = 'preview' | 'console';
+
+// ============================================================================
+// CRAFTING ANIMATION - State of the Art (from Alfred Regular)
+// ============================================================================
+
+const CraftingAnimation = memo(function CraftingAnimation() {
+  return (
+    <div className="crafting-overlay">
+      <div className="crafting-container">
+        {/* Orbital rings */}
+        <div className="orbit orbit-1">
+          <div className="orbit-dot" />
+          <div className="orbit-dot" style={{ animationDelay: '-2s' }} />
+        </div>
+        <div className="orbit orbit-2">
+          <div className="orbit-dot" />
+          <div className="orbit-dot" style={{ animationDelay: '-1.5s' }} />
+        </div>
+        <div className="orbit orbit-3">
+          <div className="orbit-dot" />
+        </div>
+
+        {/* Central morphing cube */}
+        <div className="morph-cube">
+          <div className="cube-face face-front" />
+          <div className="cube-face face-back" />
+          <div className="cube-face face-left" />
+          <div className="cube-face face-right" />
+          <div className="cube-face face-top" />
+          <div className="cube-face face-bottom" />
+        </div>
+
+        {/* Pulsing glow */}
+        <div className="pulse-ring pulse-1" />
+        <div className="pulse-ring pulse-2" />
+        <div className="pulse-ring pulse-3" />
+
+        {/* Floating code particles */}
+        <div className="particles">
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className="particle"
+              style={{
+                '--delay': `${i * 0.3}s`,
+                '--angle': `${i * 30}deg`,
+                '--distance': `${60 + (i % 3) * 25}px`,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Crafting text */}
+      <div className="crafting-text">
+        <span className="crafting-label">Alfred is crafting</span>
+        <div className="crafting-dots">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
+      </div>
+
+      <style jsx>{`
+        .crafting-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(180deg, #0f0f14 0%, #0a0a0e 100%);
+          z-index: 10;
+          animation: craftingFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes craftingFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .crafting-container {
+          position: relative;
+          width: 200px;
+          height: 200px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        /* Orbital rings */
+        .orbit {
+          position: absolute;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 50%;
+          animation: orbitSpin 8s linear infinite;
+        }
+        .orbit-1 { width: 120px; height: 120px; animation-duration: 6s; }
+        .orbit-2 { width: 160px; height: 160px; animation-duration: 10s; animation-direction: reverse; }
+        .orbit-3 { width: 190px; height: 190px; animation-duration: 14s; opacity: 0.5; }
+
+        @keyframes orbitSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .orbit-dot {
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.8), rgba(99, 102, 241, 0.6));
+          border-radius: 50%;
+          top: -4px;
+          left: calc(50% - 4px);
+          box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
+          animation: dotPulse 2s ease-in-out infinite;
+        }
+        @keyframes dotPulse {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.3); opacity: 1; }
+        }
+
+        /* Morphing cube - the centerpiece */
+        .morph-cube {
+          position: relative;
+          width: 40px;
+          height: 40px;
+          transform-style: preserve-3d;
+          animation: cubeFloat 4s ease-in-out infinite, cubeMorph 8s ease-in-out infinite;
+        }
+        @keyframes cubeFloat {
+          0%, 100% { transform: rotateX(-20deg) rotateY(0deg) translateY(0); }
+          50% { transform: rotateX(-20deg) rotateY(180deg) translateY(-8px); }
+        }
+        @keyframes cubeMorph {
+          0%, 100% { border-radius: 4px; }
+          50% { border-radius: 50%; }
+        }
+
+        .cube-face {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          backdrop-filter: blur(4px);
+        }
+
+        .face-front { transform: translateZ(20px); }
+        .face-back { transform: translateZ(-20px) rotateY(180deg); }
+        .face-left { transform: translateX(-20px) rotateY(-90deg); }
+        .face-right { transform: translateX(20px) rotateY(90deg); }
+        .face-top { transform: translateY(-20px) rotateX(90deg); }
+        .face-bottom { transform: translateY(20px) rotateX(-90deg); }
+
+        /* Pulse rings */
+        .pulse-ring {
+          position: absolute;
+          border-radius: 50%;
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          animation: pulseExpand 3s ease-out infinite;
+        }
+        .pulse-1 { width: 60px; height: 60px; }
+        .pulse-2 { width: 60px; height: 60px; animation-delay: 1s; }
+        .pulse-3 { width: 60px; height: 60px; animation-delay: 2s; }
+
+        @keyframes pulseExpand {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(3.5); opacity: 0; }
+        }
+
+        /* Floating particles */
+        .particles {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+        }
+        .particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: rgba(139, 92, 246, 0.6);
+          border-radius: 50%;
+          top: 50%;
+          left: 50%;
+          animation: particleFloat 4s ease-in-out infinite;
+          animation-delay: var(--delay);
+        }
+        @keyframes particleFloat {
+          0%, 100% {
+            transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance)) scale(1);
+            opacity: 0.3;
+          }
+          50% {
+            transform: translate(-50%, -50%) rotate(calc(var(--angle) + 180deg)) translateX(calc(var(--distance) * 1.3)) scale(1.5);
+            opacity: 0.7;
+          }
+        }
+
+        /* Crafting text */
+        .crafting-text {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 32px;
+          font-size: 13px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.5);
+          letter-spacing: 0.02em;
+        }
+        .crafting-label {
+          animation: textShimmer 2s ease-in-out infinite;
+        }
+        @keyframes textShimmer {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+
+        .crafting-dots {
+          display: flex;
+          gap: 3px;
+          padding-left: 2px;
+        }
+        .crafting-dots .dot {
+          width: 4px;
+          height: 4px;
+          background: rgba(139, 92, 246, 0.6);
+          border-radius: 50%;
+          animation: dotBounce 1.4s ease-in-out infinite;
+        }
+        .crafting-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+        .crafting-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+      `}</style>
+    </div>
+  );
+});
 
 // ============================================================================
 // PREVIEW HEADER - Device Controls
@@ -445,6 +685,15 @@ export function BuilderPreview({
   className = '',
   showLoading = true,
 }: BuilderPreviewProps) {
+  // DEBUG: Log state on every render to diagnose stuck states
+  console.log('[BuilderPreview] 🔍 Render:', {
+    isBuilding,
+    hasPreview: !!preview,
+    htmlLength: preview?.html?.length || 0,
+    success: preview?.success,
+    errors: preview?.errors?.length || 0,
+  });
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -493,10 +742,18 @@ export function BuilderPreview({
 
   const handleClearConsole = useCallback(() => setConsoleEntries([]), []);
 
-  const hasErrors = preview?.errors && preview.errors.length > 0;
-  const firstError = hasErrors && preview.errors ? preview.errors[0] : null;
+  // Only show errors when NOT building - building state takes priority
+  const hasErrors = !isBuilding && preview?.errors && preview.errors.length > 0;
+  const firstError = hasErrors && preview?.errors ? preview.errors[0] : null;
 
-  const deviceWidths = { desktop: '100%', tablet: '768px', mobile: '375px' };
+  // Has valid preview HTML
+  const hasPreviewContent = !!preview?.html && preview.html.length > 100;
+
+  const deviceWidths: Record<DeviceType, string> = {
+    desktop: '100%',
+    tablet: '768px',
+    mobile: '375px',
+  };
 
   return (
     <div className={`builder-preview-container ${className}`}>
@@ -517,36 +774,13 @@ export function BuilderPreview({
               className={`device-frame ${device}`}
               style={{ width: deviceWidths[device], maxWidth: '100%' }}
             >
-              {/* Loading State */}
-              {showLoading && (isBuilding || !isLoaded) && !hasErrors && (
-                <div className="preview-loading">
-                  <div className="loading-orb">
-                    <div className="orb-ring" />
-                    <div className="orb-core" />
-                  </div>
-                  <span className="loading-text">
-                    {isBuilding ? 'Building Project' : 'Rendering'}
-                  </span>
-                </div>
+              {/* PRIORITY 1: Crafting Animation - Shows during building/streaming */}
+              {isBuilding && (
+                <CraftingAnimation />
               )}
 
-              {/* Empty State - No Preview Yet */}
-              {!preview && !isBuilding && !hasErrors && (
-                <div className="preview-empty">
-                  <div className="empty-icon">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                      <polyline points="2 17 12 22 22 17" />
-                      <polyline points="2 12 12 17 22 12" />
-                    </svg>
-                  </div>
-                  <div className="empty-title">Ready to Build</div>
-                  <div className="empty-message">Describe what you want to create and Alfred will generate the code.</div>
-                </div>
-              )}
-
-              {/* Error State */}
-              {hasErrors && (
+              {/* PRIORITY 2: Error State - Only when NOT building AND has errors */}
+              {!isBuilding && hasErrors && (
                 <div className="preview-error">
                   <div className="error-glow" />
                   <div className="error-icon">
@@ -566,6 +800,32 @@ export function BuilderPreview({
                 </div>
               )}
 
+              {/* PRIORITY 3: Empty State - Idle, waiting for user input */}
+              {!isBuilding && !hasErrors && !hasPreviewContent && (
+                <div className="preview-empty">
+                  <div className="empty-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                      <polyline points="2 17 12 22 22 17" />
+                      <polyline points="2 12 12 17 22 12" />
+                    </svg>
+                  </div>
+                  <div className="empty-title">Ready to Build</div>
+                  <div className="empty-message">Describe what you want to create and Alfred will generate the code.</div>
+                </div>
+              )}
+
+              {/* PRIORITY 4: Loading - Preview content exists but iframe not loaded */}
+              {!isBuilding && hasPreviewContent && !isLoaded && !hasErrors && (
+                <div className="preview-loading">
+                  <div className="loading-orb">
+                    <div className="orb-ring" />
+                    <div className="orb-core" />
+                  </div>
+                  <span className="loading-text">Rendering</span>
+                </div>
+              )}
+
               {/* Runtime Error */}
               {error && (
                 <div className="preview-error">
@@ -581,11 +841,11 @@ export function BuilderPreview({
                 </div>
               )}
 
-              {/* Iframe */}
+              {/* Iframe - Always rendered, visibility controlled by CSS */}
               <iframe
                 ref={iframeRef}
                 key={refreshKey}
-                className={`preview-iframe ${isLoaded && !hasErrors ? 'loaded' : ''}`}
+                className={`preview-iframe ${isLoaded && !hasErrors && !isBuilding ? 'loaded' : ''}`}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                 onLoad={handleLoad}
                 onError={handleError}
@@ -594,7 +854,7 @@ export function BuilderPreview({
             </div>
 
             {/* Build Metrics */}
-            {preview?.buildTime && isLoaded && (
+            {preview?.buildTime && isLoaded && !isBuilding && (
               <div className="build-metrics">
                 <div className="metric">
                   <span className="metric-icon">

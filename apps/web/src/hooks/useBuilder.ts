@@ -181,9 +181,30 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
   }, [autoRefresh, debounceMs]); // onStreamEvent accessed via ref to prevent recreation
 
   // Derive selected file from path
+  // CRITICAL: Read from manager as fallback to handle React async state timing
+  // The files array might not be updated yet when selectedPath changes
   const selectedFile = useMemo(() => {
     if (!selectedPath) return null;
-    return files.find((f) => f.path === selectedPath) || null;
+
+    // First try from React state (fast path)
+    const fromState = files.find((f) => f.path === selectedPath);
+    if (fromState) {
+      console.log('[useBuilder] 📄 Selected file from state:', selectedPath);
+      return fromState;
+    }
+
+    // Fallback: read directly from manager (handles async timing)
+    const manager = managerRef.current;
+    if (manager) {
+      const fromManager = manager.getFile(selectedPath);
+      if (fromManager) {
+        console.log('[useBuilder] 📄 Selected file from manager (fallback):', selectedPath);
+        return fromManager;
+      }
+    }
+
+    console.log('[useBuilder] ⚠️ Selected file not found:', selectedPath);
+    return null;
   }, [selectedPath, files]);
 
   // -------------------------------------------------------------------------
