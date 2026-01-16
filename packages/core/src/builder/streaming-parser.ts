@@ -536,7 +536,18 @@ export class MultiFileStreamingParser {
   private closeCurrentFile(): void {
     if (!this.state.currentFile) return;
 
-    const content = this.state.currentFile.chunks.join('').trim();
+    // Join chunks and STRIP any streaming markers that might have leaked through
+    const rawContent = this.state.currentFile.chunks.join('');
+    const content = rawContent
+      .replace(/<<<\s*END_FILE\s*>>>/gi, '')
+      .replace(/<<<FILE:[^>]+>>>/gi, '')
+      .replace(/<<<\s*PROJECT_START\s*>>>/gi, '')
+      .replace(/<<<\s*PROJECT_END\s*>>>/gi, '')
+      .replace(/<<<DEPENDENCY:[^>]+>>>/gi, '')
+      .replace(/<<<ENTRY:[^>]+>>>/gi, '')
+      .trim();
+
+    console.log('[Parser] 🧹 Content cleaned:', rawContent.length, '->', content.length, 'bytes');
     const detection = detectLanguage(this.state.currentFile.path);
 
     const file: VirtualFile = {
