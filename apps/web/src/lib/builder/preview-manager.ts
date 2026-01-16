@@ -186,6 +186,29 @@ export class PreviewManager {
    * Trigger a preview rebuild
    */
   async rebuild(): Promise<PreviewResult> {
+    // CRITICAL FIX: Ensure files are synced from parser before building
+    // This fixes the "No files to build" error when fileSystem is out of sync
+    const parserFiles = this.parser.getFiles();
+    const fsFiles = this.fileSystem.getAllFiles();
+
+    console.log('[PreviewManager] 🔍 Pre-rebuild check: Parser files:', parserFiles.length, '| FileSystem files:', fsFiles.length);
+
+    // If parser has files but fileSystem doesn't, sync them now
+    if (parserFiles.length > 0 && fsFiles.length === 0) {
+      console.log('[PreviewManager] ⚠️ FileSystem empty but parser has files! Syncing...');
+      for (const pFile of parserFiles) {
+        this.fileSystem.createFile({
+          path: pFile.path,
+          content: pFile.content,
+          language: pFile.language,
+          fileType: pFile.fileType,
+          isEntryPoint: pFile.isEntryPoint,
+          generatedBy: 'llm',
+        });
+        console.log('[PreviewManager] ✅ Emergency synced:', pFile.path);
+      }
+    }
+
     const adapter = getEsbuildAdapter();
     const project = this.createProject();
 
@@ -196,6 +219,8 @@ export class PreviewManager {
     if (project.fileCount > 0) {
       const filePaths = Array.from(project.files.keys());
       console.log('[PreviewManager] Files:', filePaths.join(', '));
+    } else {
+      console.warn('[PreviewManager] ⚠️ Still no files after sync! Parser:', parserFiles.length, '| FS:', this.fileSystem.getAllFiles().length);
     }
 
     const result = await adapter.preview(project);

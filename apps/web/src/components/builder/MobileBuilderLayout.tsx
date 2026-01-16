@@ -929,10 +929,25 @@ function MobileCodeEditor({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const codeContainerRef = useRef<HTMLDivElement>(null);
 
   const displayPath = streamingFile || file?.path || '';
-  const displayContent = streamingFile && isStreaming ? streamingCode : file?.content || '';
+  // Strip any leftover streaming markers from content
+  const rawContent = streamingFile && isStreaming ? streamingCode : file?.content || '';
+  const displayContent = rawContent
+    .replace(/<<<\s*END_FILE\s*>>>/gi, '')
+    .replace(/<<<FILE:[^>]+>>>/gi, '')
+    .replace(/<<<PROJECT_START>>>/gi, '')
+    .replace(/<<<PROJECT_END>>>/gi, '')
+    .trim();
   const displayName = displayPath.split('/').pop() || 'Select a file';
+
+  // Auto-scroll to bottom when streaming
+  useEffect(() => {
+    if (isStreaming && codeContainerRef.current) {
+      codeContainerRef.current.scrollTop = codeContainerRef.current.scrollHeight;
+    }
+  }, [isStreaming, displayContent]);
 
   const codeKeys = ['Tab', '{', '}', '(', ')', '[', ']', ';', ':', '"', "'", '<', '>'];
 
@@ -988,16 +1003,23 @@ function MobileCodeEditor({
     <div className="mobile-code-editor">
       <MobileHeader
         title={displayName}
-        subtitle={isStreaming ? 'Generating...' : undefined}
+        subtitle={isStreaming ? 'Generating...' : file ? `${displayContent.split('\n').length} lines` : undefined}
         rightAction={!isStreaming && file && (
           <button className={`edit-toggle ${isEditing ? 'active' : ''}`} onClick={() => setIsEditing(!isEditing)}>
             {Icons.edit}
           </button>
         )}
       />
-      <div className="code-container">
+      <div className="code-container" ref={codeContainerRef}>
         {isStreaming ? (
-          <pre className="code-display streaming"><code>{displayContent}</code><span className="cursor" /></pre>
+          <div className="code-wrapper">
+            <div className="line-numbers">
+              {displayContent.split('\n').map((_, i) => (
+                <span key={i}>{i + 1}</span>
+              ))}
+            </div>
+            <pre className="code-display streaming"><code>{displayContent}</code><span className="cursor" /></pre>
+          </div>
         ) : isEditing ? (
           <textarea
             ref={textareaRef}
@@ -1009,7 +1031,14 @@ function MobileCodeEditor({
             autoCorrect="off"
           />
         ) : (
-          <pre className="code-display"><code>{displayContent}</code></pre>
+          <div className="code-wrapper">
+            <div className="line-numbers">
+              {displayContent.split('\n').map((_, i) => (
+                <span key={i}>{i + 1}</span>
+              ))}
+            </div>
+            <pre className="code-display"><code>{displayContent}</code></pre>
+          </div>
         )}
       </div>
       {isEditing && !isStreaming && (
@@ -1020,7 +1049,12 @@ function MobileCodeEditor({
         </div>
       )}
       <style jsx>{`
-        .mobile-code-editor { display: flex; flex-direction: column; height: 100%; background: #0a0a0c; }
+        .mobile-code-editor {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          background: linear-gradient(180deg, #0d0d12 0%, #0a0a0c 100%);
+        }
         .edit-toggle {
           width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
@@ -1032,19 +1066,64 @@ function MobileCodeEditor({
           transition: all 0.2s;
         }
         .edit-toggle.active { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: #f59e0b; }
-        .code-container { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding-bottom: 100px; }
+        .code-container {
+          flex: 1;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+          padding-bottom: 100px;
+          background: linear-gradient(180deg, #0d0d12 0%, #0a0a0c 100%);
+        }
+        .code-wrapper {
+          display: flex;
+          min-height: 100%;
+        }
+        .line-numbers {
+          display: flex;
+          flex-direction: column;
+          padding: 20px 0;
+          min-width: 44px;
+          text-align: right;
+          background: rgba(0,0,0,0.3);
+          border-right: 1px solid rgba(255,255,255,0.06);
+          user-select: none;
+        }
+        .line-numbers span {
+          padding: 0 12px;
+          font-family: 'SF Mono', 'Fira Code', Monaco, monospace;
+          font-size: 13px;
+          line-height: 1.7;
+          color: rgba(255,255,255,0.25);
+        }
         .code-display, .code-textarea {
-          width: 100%; min-height: 100%; margin: 0; padding: 20px;
+          flex: 1;
+          margin: 0;
+          padding: 20px;
           background: transparent;
           font-family: 'SF Mono', 'Fira Code', Monaco, monospace;
-          font-size: 13px; line-height: 1.7; color: #e5e7eb;
-          white-space: pre; overflow-x: auto;
+          font-size: 13px;
+          line-height: 1.7;
+          color: #e5e7eb;
+          white-space: pre;
+          overflow-x: auto;
         }
-        .code-textarea { border: none; outline: none; resize: none; }
-        .code-display code { font-family: inherit; }
-        .code-display.streaming { position: relative; }
+        .code-textarea {
+          border: none;
+          outline: none;
+          resize: none;
+          min-height: 100%;
+          width: 100%;
+        }
+        .code-display code {
+          font-family: inherit;
+          display: block;
+        }
+        .code-display.streaming {
+          position: relative;
+        }
         .cursor {
-          display: inline-block; width: 2px; height: 18px;
+          display: inline-block;
+          width: 2px;
+          height: 18px;
           background: linear-gradient(180deg, #8b5cf6, #6366f1);
           animation: blink 1s infinite;
           vertical-align: text-bottom;
@@ -1053,21 +1132,29 @@ function MobileCodeEditor({
         }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
         .code-toolbar {
-          display: flex; gap: 8px; padding: 12px 16px;
+          display: flex;
+          gap: 8px;
+          padding: 12px 16px;
           background: rgba(0,0,0,0.6);
           border-top: 1px solid rgba(255,255,255,0.06);
-          overflow-x: auto; -webkit-overflow-scrolling: touch;
-          position: sticky; bottom: 84px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          position: sticky;
+          bottom: 84px;
           backdrop-filter: blur(12px);
         }
         .code-key {
-          flex-shrink: 0; min-width: 44px; height: 40px; padding: 0 14px;
+          flex-shrink: 0;
+          min-width: 44px;
+          height: 40px;
+          padding: 0 14px;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.08);
           border-radius: 10px;
           color: rgba(255,255,255,0.9);
           font-family: 'SF Mono', Monaco, monospace;
-          font-size: 15px; font-weight: 500;
+          font-size: 15px;
+          font-weight: 500;
           cursor: pointer;
           transition: all 0.15s;
           -webkit-tap-highlight-color: transparent;
@@ -1092,11 +1179,22 @@ function MobilePreview({
   onRefresh: () => void;
 }) {
   const [viewport, setViewport] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
+  const [isLoaded, setIsLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (preview?.html && iframeRef.current) iframeRef.current.srcdoc = preview.html;
+    if (preview?.html && iframeRef.current) {
+      setIsLoaded(false);
+      iframeRef.current.srcdoc = preview.html;
+    }
   }, [preview?.html]);
+
+  const handleLoad = useCallback(() => setIsLoaded(true), []);
+
+  // Check for errors
+  const hasErrors = !isBuilding && preview?.errors && preview.errors.length > 0;
+  const firstError = hasErrors && preview?.errors ? preview.errors[0] : null;
+  const hasPreviewContent = !!preview?.html && preview.html.length > 100;
 
   const viewportSizes = { mobile: { width: 375, height: 667 }, tablet: { width: 768, height: 1024 }, desktop: { width: '100%', height: '100%' } };
 
@@ -1121,7 +1219,8 @@ function MobilePreview({
         }
       />
       <div className="preview-container">
-        {isBuilding ? (
+        {/* Building State */}
+        {isBuilding && (
           <div className="building-state">
             <div className="building-orb">
               <div className="orb-core" />
@@ -1132,18 +1231,30 @@ function MobilePreview({
             <h3>Building preview...</h3>
             <p>Alfred is crafting your creation</p>
           </div>
-        ) : preview?.html ? (
-          <div className={`iframe-wrapper ${viewport}`}>
-            {viewport === 'mobile' && <div className="device-notch" />}
-            <iframe
-              ref={iframeRef}
-              title="Preview"
-              sandbox="allow-scripts allow-same-origin"
-              style={viewport === 'desktop' ? { width: '100%', height: '100%' } : { width: viewportSizes[viewport].width, height: viewportSizes[viewport].height }}
-            />
-            {viewport === 'mobile' && <div className="device-home" />}
+        )}
+
+        {/* Error State */}
+        {!isBuilding && hasErrors && (
+          <div className="error-state">
+            <div className="error-glow" />
+            <div className="error-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round" />
+                <line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h3>Build Error</h3>
+            <p className="error-message">{firstError?.message || 'Unknown error'}</p>
+            <button className="retry-btn" onClick={onRefresh}>
+              {Icons.refresh}
+              <span>Try Again</span>
+            </button>
           </div>
-        ) : (
+        )}
+
+        {/* Empty State */}
+        {!isBuilding && !hasErrors && !hasPreviewContent && (
           <div className="empty-state">
             <div className="empty-visual">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
@@ -1159,6 +1270,29 @@ function MobilePreview({
             </div>
             <h3>No preview available</h3>
             <p>Build something to see it here</p>
+          </div>
+        )}
+
+        {/* Loading State (between build complete and iframe load) */}
+        {!isBuilding && hasPreviewContent && !isLoaded && !hasErrors && (
+          <div className="loading-state">
+            <div className="loading-spinner" />
+            <span>Rendering...</span>
+          </div>
+        )}
+
+        {/* Actual Preview */}
+        {!isBuilding && hasPreviewContent && !hasErrors && (
+          <div className={`iframe-wrapper ${viewport} ${isLoaded ? 'loaded' : ''}`}>
+            {viewport === 'mobile' && <div className="device-notch" />}
+            <iframe
+              ref={iframeRef}
+              title="Preview"
+              sandbox="allow-scripts allow-same-origin allow-forms"
+              onLoad={handleLoad}
+              style={viewport === 'desktop' ? { width: '100%', height: '100%' } : { width: viewportSizes[viewport].width, height: viewportSizes[viewport].height }}
+            />
+            {viewport === 'mobile' && <div className="device-home" />}
           </div>
         )}
       </div>
@@ -1212,9 +1346,13 @@ function MobilePreview({
         .iframe-wrapper.desktop { width: 100%; height: 100%; border-radius: 12px; }
         .iframe-wrapper iframe { display: block; border: none; background: white; border-radius: 12px; }
         .iframe-wrapper.mobile iframe { border-radius: 20px; }
-        .building-state, .empty-state {
+        .building-state, .empty-state, .error-state, .loading-state {
+          position: absolute;
+          inset: 0;
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; text-align: center; padding: 48px;
+          background: linear-gradient(180deg, #0d0d12 0%, #09090b 100%);
+          z-index: 10;
         }
         .building-orb {
           position: relative; width: 100px; height: 100px; margin-bottom: 28px;
@@ -1242,6 +1380,75 @@ function MobilePreview({
         .building-state h3, .empty-state h3 { font-size: 20px; font-weight: 650; color: rgba(255,255,255,0.9); margin: 0 0 8px; }
         .building-state p, .empty-state p { font-size: 14px; color: rgba(255,255,255,0.45); margin: 0; }
         .empty-visual { margin-bottom: 24px; }
+
+        /* Error State */
+        .error-state {
+          background: linear-gradient(180deg, #0f0a0a 0%, #0d0909 100%);
+        }
+        .error-glow {
+          position: absolute;
+          width: 200px; height: 200px;
+          background: radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%);
+          filter: blur(40px);
+        }
+        .error-icon {
+          position: relative;
+          margin-bottom: 20px;
+          animation: errorPulse 2s ease-in-out infinite;
+        }
+        @keyframes errorPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        .error-state h3 {
+          font-size: 20px; font-weight: 650;
+          color: #ef4444;
+          margin: 0 0 8px;
+        }
+        .error-message {
+          font-family: 'SF Mono', 'Fira Code', Monaco, monospace;
+          font-size: 13px;
+          color: rgba(239,68,68,0.7);
+          margin: 0 0 24px;
+          max-width: 280px;
+          line-height: 1.5;
+        }
+        .retry-btn {
+          display: flex; align-items: center; gap: 8px;
+          padding: 12px 24px;
+          background: rgba(239,68,68,0.15);
+          border: 1px solid rgba(239,68,68,0.3);
+          border-radius: 12px;
+          color: #ef4444;
+          font-size: 14px; font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .retry-btn:active {
+          background: rgba(239,68,68,0.25);
+          transform: scale(0.96);
+        }
+
+        /* Loading State */
+        .loading-spinner {
+          width: 40px; height: 40px;
+          border: 3px solid rgba(139,92,246,0.2);
+          border-top-color: #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-state span {
+          font-size: 13px;
+          color: rgba(255,255,255,0.5);
+          letter-spacing: 0.5px;
+        }
+
+        /* Iframe loaded state */
+        .iframe-wrapper { opacity: 0; transition: opacity 0.4s ease; }
+        .iframe-wrapper.loaded { opacity: 1; }
+        .preview-container { position: relative; }
       `}</style>
     </div>
   );
