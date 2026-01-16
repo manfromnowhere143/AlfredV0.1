@@ -2,13 +2,23 @@
  * /api/personas/[id]/chat - Chat with persona (streaming SSE)
  *
  * STATE-OF-THE-ART: Full personality integration with memory
+ *
+ * Features:
+ * - Personality anchoring to prevent drift
+ * - Emotion detection and tracking
+ * - Drift detection with automatic correction
+ * - Session-aware consistency metrics
  */
 
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { db, eq, sessions } from '@alfred/database';
 import * as schema from '@alfred/database';
-import { buildPersonaSystemPrompt } from '@alfred/persona';
+import {
+  buildPersonaSystemPrompt,
+  personalityAnchorManager,
+  advancedEmotionDetector,
+} from '@alfred/persona';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -79,22 +89,52 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Build rich system prompt with full personality
-    const systemPrompt = buildPersonaSystemPrompt({
-      persona: {
-        name: persona.name,
-        archetype: persona.archetype || undefined,
-        tagline: persona.tagline || undefined,
-        backstory: persona.backstory || undefined,
-        traits: persona.traits || [],
-        temperament: persona.temperament || undefined,
-        communicationStyle: (persona.communicationStyle as 'formal' | 'casual' | 'professional' | 'friendly' | 'authoritative' | 'nurturing' | 'playful') || undefined,
-        speakingStyle: persona.speakingStyle as any || undefined,
-      },
-      memories: [], // TODO: Fetch relevant memories
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STATE-OF-THE-ART: Personality Anchoring System
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Creates immutable identity markers and tracks consistency to prevent
+    // character drift over long conversations
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Create personality anchor (immutable identity markers)
+    const anchor = personalityAnchorManager.createAnchor({
+      id: persona.id,
+      name: persona.name,
+      archetype: persona.archetype || undefined,
+      tagline: persona.tagline || undefined,
+      backstory: persona.backstory || undefined,
+      traits: persona.traits || [],
+      temperament: persona.temperament || undefined,
+      communicationStyle: persona.communicationStyle as any || undefined,
+      speakingStyle: persona.speakingStyle as any || undefined,
+      currentMood: (persona as any).currentMood || 'neutral',
+      knowledgeDomains: (persona as any).knowledgeDomains || [],
     });
 
-    console.log(`[Chat] Persona "${persona.name}" responding with full personality`);
+    // Check if identity reinforcement is needed (every 5 messages or if drift detected)
+    const needsReinforcement = personalityAnchorManager.needsReinforcement(personaId, 5);
+    const anchorReinforcement = needsReinforcement
+      ? personalityAnchorManager.buildAnchorReinforcement(personaId)
+      : '';
+
+    // Detect user emotion for empathetic responses
+    const userEmotionResult = advancedEmotionDetector.detect(message);
+    console.log(`[Chat] User emotion detected: ${userEmotionResult.emotion} (confidence: ${userEmotionResult.confidence.toFixed(2)})`);
+
+    // Build rich system prompt with full personality
+    // Cast DB persona to Persona type (DB schema matches the interface)
+    const systemPrompt = buildPersonaSystemPrompt({
+      persona: persona as any, // DB schema has all required Persona fields
+      memories: [], // TODO: Fetch relevant memories
+      userEmotion: userEmotionResult.emotion,
+    });
+
+    // Combine system prompt with anchor reinforcement for consistent personality
+    const fullSystemPrompt = anchorReinforcement
+      ? `${systemPrompt}\n\n${anchorReinforcement}`
+      : systemPrompt;
+
+    console.log(`[Chat] Persona "${persona.name}" responding with full personality${needsReinforcement ? ' (identity reinforced)' : ''}`);
 
     // Initialize Anthropic client
     const client = new Anthropic();
@@ -108,7 +148,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           const response = await client.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 1024,
-            system: systemPrompt,
+            system: fullSystemPrompt,
             messages: [{ role: 'user', content: message }],
             stream: true,
           });
@@ -145,6 +185,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             emotion = emotionMatch[1].toLowerCase();
           }
 
+          // ═══════════════════════════════════════════════════════════════════════
+          // STATE-OF-THE-ART: Drift Detection & Consistency Tracking
+          // ═══════════════════════════════════════════════════════════════════════
+          // Track response for personality drift indicators
+          personalityAnchorManager.trackMessage(personaId, fullResponse);
+
+          // Get consistency metrics for monitoring
+          const metrics = personalityAnchorManager.getMetrics(personaId);
+          const consistencyScore = metrics?.consistencyScore ?? 1.0;
+          const driftIndicators = metrics?.driftIndicators.slice(-3) ?? [];
+
+          if (driftIndicators.length > 0) {
+            console.warn(`[Chat] Drift detected for "${persona.name}":`, driftIndicators);
+          }
+
           // TODO: Record interaction in database
           // await service.recordInteraction({
           //   personaId,
@@ -157,11 +212,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           //   outputTokens,
           // });
 
-          // Send completion event
+          // Send completion event with consistency metrics
           const doneChunk = JSON.stringify({
             type: 'done',
             emotion,
             usage: { inputTokens, outputTokens },
+            consistency: {
+              score: consistencyScore,
+              reinforced: needsReinforcement,
+              driftWarnings: driftIndicators.length,
+            },
           });
           controller.enqueue(encoder.encode(`data: ${doneChunk}\n\n`));
           

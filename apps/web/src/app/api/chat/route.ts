@@ -131,11 +131,29 @@ Rules:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BUILDER_MODE_PROMPT = `
+██████████████████████████████████████████████████████████████████████████████████
+██  STOP! READ THIS FIRST - YOUR OUTPUT FORMAT IS CRITICAL                       ██
+██████████████████████████████████████████████████████████████████████████████████
+
+⛔ FORBIDDEN - NEVER USE THESE:
+   - <boltArtifact> - WRONG
+   - <boltAction> - WRONG
+   - <artifact> - WRONG
+   - \`\`\`jsx or any markdown code blocks - WRONG
+   - Any XML or HTML-style tags for code - WRONG
+
+✅ YOU MUST USE THIS FORMAT:
+   - <<<PROJECT_START>>> ProjectName react
+   - <<<FILE: /path/to/file.tsx>>>
+   - <<<END_FILE>>>
+   - <<<PROJECT_END>>>
+
+If you use <boltArtifact> or any XML tags, the system will FAIL and show 0 files.
+The ONLY format that works is the <<<MARKER>>> protocol below.
+
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  ALFRED BUILDER MODE - Multi-File React Project Generation                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
-
-You are generating a complete, runnable React project. Use the STREAMING PROTOCOL below.
 
 ═══════════════════════════════════════════════════════════════════════════════
 STREAMING PROTOCOL - Follow EXACTLY
@@ -315,17 +333,118 @@ li.completed span {
 <<<PROJECT_END>>>
 
 ═══════════════════════════════════════════════════════════════════════════════
-CRITICAL RULES
+CRITICAL RULES - VIOLATION = SYSTEM FAILURE
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. ALWAYS use the protocol markers exactly as shown
-2. ALWAYS include a main.tsx or index.tsx as entry point
-3. ALWAYS include necessary CSS for styling
-4. Use modern React patterns (hooks, functional components)
-5. Make the UI visually appealing with proper styling
-6. Include proper TypeScript types
-7. Complete every file fully - never leave code incomplete
-8. Keep imports relative (./Component not absolute paths)
+1. START with <<<PROJECT_START>>> ProjectName react - NOTHING BEFORE THIS
+2. NEVER use <boltArtifact>, <artifact>, <boltAction> - THESE WILL CAUSE 0 FILES
+3. NEVER use \`\`\`jsx code blocks - raw code ONLY between <<<FILE:>>> and <<<END_FILE>>>
+4. Each file: <<<FILE: /path>>> then code then <<<END_FILE>>>
+5. End with <<<PROJECT_END>>>
+6. ALWAYS include /src/main.tsx or /src/index.tsx as entry point
+7. ALWAYS include /src/index.css for styling
+8. Use modern React (hooks, functional components, TypeScript)
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 README WITH MERMAID ARCHITECTURE DIAGRAM - REQUIRED FOR EVERY PROJECT!
+═══════════════════════════════════════════════════════════════════════════════
+
+ALWAYS generate a README.md file with a Mermaid architecture diagram.
+This is MANDATORY for every project you generate.
+
+The README must include:
+1. Project title and description
+2. A Mermaid flowchart showing the component architecture
+3. Features list
+4. Tech stack used
+5. Getting started instructions
+
+EXAMPLE README (include similar for every project):
+
+<<<FILE: /README.md md docs>>>
+# ProjectName
+
+Beautiful description of what this project does.
+
+## Architecture
+
+\`\`\`mermaid
+flowchart TD
+    subgraph UI["🎨 User Interface"]
+        App[App.tsx]
+        Header[Header]
+        Main[Main Content]
+        Footer[Footer]
+    end
+
+    subgraph State["📦 State Management"]
+        Store[Zustand Store]
+        Hooks[Custom Hooks]
+    end
+
+    subgraph Components["🧩 Components"]
+        Card[Card]
+        Button[Button]
+        Modal[Modal]
+    end
+
+    App --> Header
+    App --> Main
+    App --> Footer
+    Main --> Components
+    Components --> Store
+    Store --> Hooks
+
+    style App fill:#8b5cf6,color:#fff
+    style Store fill:#6366f1,color:#fff
+    style UI fill:#1e1e2e,stroke:#8b5cf6
+    style State fill:#1e1e2e,stroke:#6366f1
+    style Components fill:#1e1e2e,stroke:#22c55e
+\`\`\`
+
+## Features
+
+- ✨ Feature 1
+- 🎯 Feature 2
+- 🚀 Feature 3
+
+## Tech Stack
+
+- React 18 with TypeScript
+- Tailwind CSS for styling
+- Lucide React for icons
+
+## Getting Started
+
+1. Open in Alfred Builder
+2. Run preview
+3. Customize to your needs
+
+---
+*Built with Alfred Pro Builder*
+<<<END_FILE>>>
+
+IMPORTANT: The Mermaid diagram MUST be wrapped in \`\`\`mermaid code blocks
+inside the README.md file. This is the ONLY place where markdown code
+blocks are allowed (inside the README content itself).
+
+⚠️ WRONG FORMAT (will fail):
+<boltArtifact id="x" title="y">
+<boltAction type="file" filePath="z">
+code here
+</boltAction>
+</boltArtifact>
+
+✅ CORRECT FORMAT (will work):
+<<<PROJECT_START>>> MyApp react
+<<<DEPENDENCY: react@^18.2.0>>>
+<<<FILE: /src/main.tsx tsx component entry>>>
+import React from 'react';
+// code here
+<<<END_FILE>>>
+<<<PROJECT_END>>>
+
+YOUR RESPONSE MUST START WITH: <<<PROJECT_START>>>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -459,18 +578,18 @@ async function checkUsageLimits(userId: string): Promise<{ exceeded: boolean; me
 async function trackUsage(userId: string, usage: UsageData): Promise<void> {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     await db.execute(sql`
-      INSERT INTO usage (user_id, date, output_tokens, input_tokens, request_count, artifact_count)
-      VALUES (${userId}, ${today}, ${usage.outputTokens}, ${usage.inputTokens}, 1, 0)
-      ON CONFLICT (user_id, date) 
-      DO UPDATE SET 
+      INSERT INTO usage (id, user_id, date, output_tokens, input_tokens, request_count, artifact_count)
+      VALUES (gen_random_uuid(), ${userId}, ${today}, ${usage.outputTokens}, ${usage.inputTokens}, 1, 0)
+      ON CONFLICT (user_id, date)
+      DO UPDATE SET
         output_tokens = usage.output_tokens + ${usage.outputTokens},
         input_tokens = usage.input_tokens + ${usage.inputTokens},
         request_count = usage.request_count + 1,
         updated_at = NOW()
     `);
-    
+
     console.log(`[Alfred] 📊 Tracked usage: ${usage.outputTokens} output, ${usage.inputTokens} input tokens`);
   } catch (error) {
     // Don't fail the request if usage tracking fails
@@ -1101,8 +1220,14 @@ RULES:
           const streamOptions: StreamOptions = {
             onToken: (token: string) => {
               fullResponse += token;
-              const payload = JSON.stringify({ 
-                content: token, 
+
+              // Debug: Log when we see markers (only in builder mode)
+              if (isBuilderMode && (token.includes('<<<') || token.includes('>>>'))) {
+                console.log('[Chat] 🔍 Marker in token:', JSON.stringify(token.slice(0, 80)));
+              }
+
+              const payload = JSON.stringify({
+                content: token,
                 conversationId: convId,
                 isArtifactEdit, // Let frontend know this is an artifact edit response
               });
@@ -1184,18 +1309,34 @@ RULES:
             await trackUsage(userId, usageData);
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            conversationId: convId, 
-            done: true, 
+          // Debug: Log marker summary in builder mode
+          if (isBuilderMode) {
+            const projectStarts = (fullResponse.match(/<<<PROJECT_START>>>/g) || []).length;
+            const projectEnds = (fullResponse.match(/<<<PROJECT_END>>>/g) || []).length;
+            const fileStarts = (fullResponse.match(/<<<FILE:/g) || []).length;
+            const fileEnds = (fullResponse.match(/<<<END_FILE>>>/gi) || []).length;
+            console.log(`[Chat] 📊 Builder markers: PROJECT_START=${projectStarts}, PROJECT_END=${projectEnds}, FILE_START=${fileStarts}, FILE_END=${fileEnds}`);
+
+            if (fileStarts !== fileEnds) {
+              console.log('[Chat] ⚠️ Mismatch! FILES vs END_FILE count. Looking for END patterns...');
+              // Look for what Claude is actually outputting
+              const endPatterns = fullResponse.match(/<<<[^>]*END[^>]*>>>/gi);
+              console.log('[Chat] 🔍 END patterns found:', endPatterns?.slice(0, 5));
+            }
+          }
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            conversationId: convId,
+            done: true,
             duration: Date.now() - startTime,
             isArtifactEdit,
             usage: usageData, // Include usage in response for frontend
           })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
-          
+
           console.log(`[Alfred] ✅ Completed in ${Date.now() - startTime}ms ${isArtifactEdit ? '(artifact edit)' : ''}`);
-          
+
         } catch (error) {
           console.error('[Alfred] Stream failed:', error);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`));

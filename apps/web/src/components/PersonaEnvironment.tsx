@@ -477,7 +477,7 @@ export function PersonaEnvironment({
         ))}
       </motion.div>
 
-      {/* Ambient glow layer */}
+      {/* Ambient glow layer - NO ANIMATION for clean look */}
       <motion.div
         style={{
           position: "absolute",
@@ -485,16 +485,7 @@ export function PersonaEnvironment({
           x: layer2X,
           y: layer2Y,
           background: `radial-gradient(ellipse at 50% 50%, ${theme.glowColor} 0%, transparent 70%)`,
-          opacity: 0.5,
-        }}
-        animate={{
-          scale: [1, 1.05, 1],
-          opacity: [0.4, 0.6, 0.4],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: "easeInOut",
+          opacity: 0.4,
         }}
       />
 

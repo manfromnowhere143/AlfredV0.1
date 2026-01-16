@@ -18,8 +18,9 @@
  *    - This timing data drives EVERYTHING else
  *
  * 3. LIP-SYNC PHASE
- *    - LatentSync/MuseTalk for identity-consistent talking portraits
+ *    - RunPod MuseTalk H100 for identity-consistent talking portraits
  *    - No identity drift across videos
+ *    - GPU PROVIDER: RunPod ONLY - No fallbacks
  *
  * 4. AUDIO POST PHASE
  *    - Music bed with intelligent ducking
@@ -101,15 +102,6 @@ export {
   type TTSWithTimestampsResult,
 } from "./ElevenLabsService";
 
-// Lip sync service
-export {
-  LipSyncService,
-  lipSyncService,
-  type LipSyncModel,
-  type LipSyncConfig,
-  type LipSyncResult,
-} from "./LipSyncService";
-
 // Audio post service
 export {
   AudioPostService,
@@ -186,17 +178,6 @@ export {
   type PreviewState,
   type PreviewTimelineItem,
 } from "./ProgressivePreview";
-
-// Warm Pool & Caching Strategy
-export {
-  WarmPoolManager,
-  warmPoolManager,
-  CacheManager,
-  DEFAULT_WARM_POOL_CONFIG,
-  type WarmPoolConfig,
-  type WarmPoolStatus,
-  type PredictiveAction,
-} from "./WarmPoolStrategy";
 
 // RunPod Client (for serverless GPU)
 export {

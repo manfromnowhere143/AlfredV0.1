@@ -18,8 +18,22 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from "framer-motion";
 import { PersonaEnvironment, type PersonaArchetype } from "@/components/PersonaEnvironment";
-import type { EmotionState } from "@/components/LivePersona";
 import { LiveAvatar3DStaged } from "@/components/LiveAvatar3DStaged";
+import { LivePortraitAvatar } from "@/components/LivePortraitAvatar";
+import { VideoPersona } from "@/components/VideoPersona";
+import { useAvatarStore, type PersonaArchetype as StoreArchetype } from "@/lib/avatar/store";
+import { useAmbientSound } from "@/lib/audio/useAmbientSound";
+import type { EmotionState } from "@/components/LivePersona";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AVATAR MODE CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+// VIDEO_MODE: Real lip-sync video from Replicate/RunPod (highest quality, slow)
+// LIVEPORTRAIT_MODE: Canvas-based face animation (Pixar-quality, real-time)
+// CSS_MODE: CSS-animated avatar (basic, fastest)
+// ═══════════════════════════════════════════════════════════════════════════════
+const VIDEO_MODE_ENABLED = process.env.NEXT_PUBLIC_VIDEO_MODE === "true";
+const LIVEPORTRAIT_MODE_ENABLED = process.env.NEXT_PUBLIC_LIVEPORTRAIT_MODE !== "false"; // ON by default
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS — Refined for Immersion
@@ -90,9 +104,9 @@ interface EngageViewProps {
 // ANIMATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SPRING_GENTLE = { type: "spring", stiffness: 120, damping: 20 };
-const SPRING_SNAPPY = { type: "spring", stiffness: 400, damping: 30 };
-const EASE_OUT = { duration: 0.4, ease: [0.16, 1, 0.3, 1] };
+const SPRING_GENTLE = { type: "spring" as const, stiffness: 120, damping: 20 };
+const SPRING_SNAPPY = { type: "spring" as const, stiffness: 400, damping: 30 };
+const EASE_OUT = { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BREATHING ANIMATION HOOK — Creates lifelike presence
@@ -858,11 +872,60 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AVATAR STORE WIRING — Connect persona to the soul engine
+  // ═══════════════════════════════════════════════════════════════════════════
+  const setStoreArchetype = useAvatarStore((s) => s.setArchetype);
+  const setStoreEmotion = useAvatarStore((s) => s.setEmotion);
+  const setStoreState = useAvatarStore((s) => s.setState);
+
+  // Wire archetype when persona loads — controls blink rate, gaze, micro-expressions
+  useEffect(() => {
+    const archetype = (persona.archetype || "default") as StoreArchetype;
+    console.log("[EngageView] 🎭 Setting archetype:", archetype);
+    setStoreArchetype(archetype);
+  }, [persona.archetype, setStoreArchetype]);
+
+  // Wire emotion when it changes — controls facial expressions
+  useEffect(() => {
+    // Map EngageView emotion to store emotion
+    const emotionMap: Record<EmotionState, Parameters<typeof setStoreEmotion>[0]> = {
+      neutral: "neutral",
+      happy: "happy",
+      sad: "sad",
+      angry: "angry",
+      surprised: "surprised",
+      excited: "playful",
+      thoughtful: "focused",
+      confident: "confident",
+      curious: "curious",
+      concerned: "concerned",
+      calm: "neutral",
+    };
+    const storeEmotion = emotionMap[currentEmotion] || "neutral";
+    console.log("[EngageView] 😊 Setting emotion:", storeEmotion);
+    setStoreEmotion(storeEmotion, 0.7, 0.1); // intensity 0.7, transition speed 0.1
+  }, [currentEmotion, setStoreEmotion]);
+
+  // Wire state when it changes — controls gaze, breathing, head movement
+  useEffect(() => {
+    console.log("[EngageView] 📊 Setting state:", state);
+    setStoreState(state);
+  }, [state, setStoreState]);
+  // ═══════════════════════════════════════════════════════════════════════════
+
   // Get aura colors for this persona
   const auraColors = AURA_COLORS[persona.archetype] || AURA_COLORS.default;
 
+  // Ambient soundscape - creates immersive atmosphere
+  const { isPlaying: ambientPlaying, fadeOut: fadeOutAmbient } = useAmbientSound({
+    archetype: persona.archetype,
+    enabled: true,
+  });
+
   // Unlock AudioContext on first user interaction
   const unlockAudio = useCallback(async () => {
+    // 1. Unlock our local AudioContext (for microphone)
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();
       console.log("[EngageView] Created AudioContext");
@@ -870,6 +933,16 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
     if (audioContextRef.current.state === "suspended") {
       await audioContextRef.current.resume();
       console.log("[EngageView] AudioContext unlocked:", audioContextRef.current.state);
+    }
+
+    // 2. ALSO warm up the LipSync AudioContext for audio playback
+    // This is critical - without this, TTS audio won't play!
+    const lipSyncWarmUp = (window as any).__lipSyncWarmUp;
+    if (lipSyncWarmUp) {
+      const ready = await lipSyncWarmUp();
+      console.log("[EngageView] LipSync AudioContext warmed up:", ready);
+    } else {
+      console.warn("[EngageView] LipSync warmUp not available yet");
     }
   }, []);
 
@@ -885,15 +958,19 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
       if (validEmotions.includes(emotion as EmotionState)) {
         return emotion as EmotionState;
       }
+      // Map similar emotions to valid ones
+      if (emotion === "amused") return "happy";
+      if (emotion === "playful") return "excited";
     }
     return "neutral";
   };
 
-  // Clean text of emotion/action tags
+  // Clean text of emotion/action tags - FIXED to handle full phrases
   const cleanText = (text: string): string => {
     return text
-      .replace(/\[EMOTION:\w+\]/gi, "")
-      .replace(/\[ACTION:\w+\]/gi, "")
+      .replace(/\[EMOTION:[^\]]+\]/gi, "")   // Match anything inside brackets
+      .replace(/\[ACTION:[^\]]+\]/gi, "")    // Match anything inside brackets
+      .replace(/\s+/g, " ")                   // Collapse multiple spaces
       .trim();
   };
 
@@ -957,10 +1034,11 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
       if (cleanedResponse) {
         setState("speaking");
 
-        console.log("[EngageView] Calling speak API for:", cleanedResponse.substring(0, 50) + "...");
+        console.log("[EngageView] Calling SPEAK API (audio only, fast) for:", cleanedResponse.substring(0, 50) + "...");
 
         try {
-          const speakResponse = await fetch(`/api/personas/${persona.id}/speak`, {
+          // Use /speak endpoint for fast audio - LiveAvatar3D animates in real-time
+          const talkResponse = await fetch(`/api/personas/${persona.id}/speak`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -969,20 +1047,24 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
             }),
           });
 
-          console.log("[EngageView] Speak response status:", speakResponse.status);
+          console.log("[EngageView] Speak response status:", talkResponse.status);
 
-          if (speakResponse.ok) {
-            const speakData = await speakResponse.json();
-            console.log("[EngageView] Speak data:", speakData.audio ? "has audio" : "no audio", speakData.message || "");
+          if (talkResponse.ok) {
+            const speakData = await talkResponse.json();
+            console.log("[EngageView] Speak data:", speakData.audio ? `has audio (${speakData.audio.length} chars)` : "no audio");
 
             if (speakData.audio) {
-              // Pass audio to LiveAvatar3D - it handles playback and lip-sync
+              // Pass audio to LiveAvatar3DStaged - it handles real-time lip-sync animation
+              console.log("[EngageView] Setting audioData state NOW - LIVE lip-sync starting");
               setAudioData(speakData.audio);
+              console.log("[EngageView] audioData state set, returning");
               return; // Don't set idle here, wait for audio end callback
+            } else {
+              console.log("[EngageView] No audio in response, keys:", Object.keys(speakData));
             }
           } else {
-            const errorText = await speakResponse.text();
-            console.error("[EngageView] Speak API error:", speakResponse.status, errorText);
+            const errorText = await talkResponse.text();
+            console.error("[EngageView] Speak API error:", talkResponse.status, errorText);
           }
         } catch (speakError) {
           console.error("[EngageView] Speak fetch error:", speakError);
@@ -1121,11 +1203,11 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
         overflow: "hidden",
       }}
     >
-      {/* Immersive Environment Background */}
+      {/* Immersive Environment Background - DISABLED particles for cleaner look */}
       <PersonaEnvironment
         archetype={(persona.archetype as PersonaArchetype) || "sage"}
         emotion={currentEmotion}
-        isActive={true}
+        isActive={false}  /* Disable animated particles */
       />
 
       {/* Additional gradient overlay for persona focus */}
@@ -1144,21 +1226,77 @@ export default function EngageView({ persona, onClose }: EngageViewProps) {
       {/* Header */}
       <Header persona={persona} onClose={onClose} />
       
-      {/* FULL SCREEN AVATAR - Takes entire viewport */}
-      <LiveAvatar3DStaged
-        imageUrl={persona.imageUrl}
-        name={persona.name}
-        audioData={audioData}
-        onAudioEnd={() => {
-          setState("idle");
-          setAudioData(undefined);
-        }}
-      />
+      {/* ═══════════════════════════════════════════════════════════════════════
+          FULL SCREEN LIVING PERSONA
+          ═══════════════════════════════════════════════════════════════════════
+          Two modes:
+          1. VIDEO_MODE_ENABLED=true: VideoPersona with REAL lip-sync from Replicate
+          2. VIDEO_MODE_ENABLED=false: LiveAvatar3DStaged with CSS animation (instant)
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {VIDEO_MODE_ENABLED ? (
+        // REAL VIDEO MODE: Lip-sync video from Replicate/RunPod
+        <VideoPersona
+          personaId={persona.id}
+          imageUrl={persona.imageUrl}
+          name={persona.name}
+          state={state}
+          emotion={currentEmotion}
+          audioData={audioData}
+          onVideoReady={() => {
+            console.log("[EngageView] 🎬 VideoPersona ready - REAL video mode");
+          }}
+          onVideoEnd={() => {
+            console.log("[EngageView] 🎬 Video playback ended");
+            setState("idle");
+            setAudioData(undefined);
+          }}
+          onError={(error) => {
+            console.error("[EngageView] Video error:", error);
+          }}
+        />
+      ) : LIVEPORTRAIT_MODE_ENABLED && persona.imageUrl ? (
+        // LIVEPORTRAIT MODE: Canvas-based face animation (Pixar-quality, real-time)
+        <LivePortraitAvatar
+          imageUrl={persona.imageUrl}
+          name={persona.name}
+          emotion={currentEmotion === "excited" ? "happy" :
+                   currentEmotion === "confident" ? "neutral" :
+                   currentEmotion === "curious" ? "surprised" :
+                   currentEmotion === "concerned" ? "sad" :
+                   currentEmotion === "calm" ? "neutral" :
+                   (currentEmotion as "neutral" | "happy" | "sad" | "angry" | "surprised" | "thoughtful")}
+          audioData={audioData}
+          isSpeaking={state === "speaking"}
+          onReady={() => {
+            console.log("[EngageView] 🎭 LivePortrait ready - PIXAR-QUALITY animation active");
+          }}
+          onAudioEnd={() => {
+            console.log("[EngageView] 🔊 Audio playback ended");
+            setState("idle");
+            setAudioData(undefined);
+          }}
+        />
+      ) : (
+        // FALLBACK: CSS-animated avatar (basic, fastest)
+        <LiveAvatar3DStaged
+          imageUrl={persona.imageUrl}
+          name={persona.name}
+          audioData={audioData}
+          onReady={() => {
+            console.log("[EngageView] 🎭 LiveAvatar ready - persona is ALIVE");
+          }}
+          onAudioEnd={() => {
+            console.log("[EngageView] 🔊 Audio playback ended");
+            setState("idle");
+            setAudioData(undefined);
+          }}
+        />
+      )}
       
-      {/* Response caption */}
+      {/* Response caption - show during thinking and speaking */}
       <ResponseCaption
         text={currentResponse}
-        isVisible={state === "speaking"}
+        isVisible={state === "thinking" || state === "speaking"}
       />
       
       {/* Bottom controls */}

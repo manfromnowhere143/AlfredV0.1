@@ -495,8 +495,750 @@ import type {
   // ═══════════════════════════════════════════════════════════════════════════════
   // FACTORY
   // ═══════════════════════════════════════════════════════════════════════════════
-  
+
   export function createMemoryManager(config: MemoryManagerConfig): PersonaMemoryManager {
     return new PersonaMemoryManager(config);
   }
-  
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RELATIONSHIP MEMORY GRAPH
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //
+  // State-of-the-art relationship tracking for personas.
+  // Enables deep, evolving connections with users through:
+  // 1. Dynamic relationship levels (stranger → confidant)
+  // 2. Shared experience memory
+  // 3. Emotional bond tracking
+  // 4. Trust and rapport evolution
+  // 5. Conversation topic preferences
+  //
+  // Inspired by social psychology research on relationship development
+  // and attachment theory.
+  //
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Relationship stages based on social psychology
+   */
+  export type RelationshipStage =
+    | 'stranger'      // First interaction, no history
+    | 'acquaintance'  // Basic familiarity, surface-level
+    | 'casual'        // Regular interactions, some shared history
+    | 'friend'        // Established rapport, mutual trust
+    | 'close_friend'  // Deep connection, vulnerability allowed
+    | 'confidant';    // Highest trust, intimate knowledge
+
+  /**
+   * Emotional tone of the relationship
+   */
+  export type RelationshipTone =
+    | 'formal'        // Professional, distant
+    | 'friendly'      // Warm but appropriate
+    | 'playful'       // Light-hearted, humorous
+    | 'supportive'    // Caring, empathetic
+    | 'collaborative' // Working together
+    | 'mentoring';    // Teaching/guiding
+
+  /**
+   * A shared experience between persona and user
+   */
+  export interface SharedExperience {
+    /** Unique ID */
+    id: string;
+    /** Type of experience */
+    type: 'conversation' | 'achievement' | 'challenge' | 'revelation' | 'joke' | 'support';
+    /** Description of what happened */
+    description: string;
+    /** Emotional valence (-1 to 1) */
+    emotionalValence: number;
+    /** Impact on relationship (0 to 1) */
+    relationshipImpact: number;
+    /** Topics involved */
+    topics: string[];
+    /** When it occurred */
+    timestamp: string;
+    /** Number of times referenced */
+    timesReferenced: number;
+    /** Is this a "milestone" moment? */
+    isMilestone: boolean;
+  }
+
+  /**
+   * User profile within the relationship
+   */
+  export interface RelationshipUserProfile {
+    /** User's name (if known) */
+    name?: string;
+    /** Communication preferences */
+    preferences: {
+      prefersFormal: boolean;
+      prefersHumor: boolean;
+      prefersDirectness: boolean;
+      preferredTopics: string[];
+      avoidTopics: string[];
+    };
+    /** Emotional patterns */
+    emotionalPatterns: {
+      baseline: string;
+      triggers: Record<string, 'positive' | 'negative'>;
+      copingMechanisms: string[];
+    };
+    /** Important dates/events mentioned */
+    importantDates: Array<{ date: string; description: string }>;
+    /** Goals/aspirations they've shared */
+    goals: string[];
+    /** Challenges they've mentioned */
+    challenges: string[];
+  }
+
+  /**
+   * Complete relationship graph for a persona-user pair
+   */
+  export interface RelationshipGraph {
+    /** Unique relationship ID */
+    id: string;
+    /** Persona ID */
+    personaId: string;
+    /** User ID */
+    userId: string;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RELATIONSHIP METRICS
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** Current relationship stage */
+    stage: RelationshipStage;
+    /** Preferred interaction tone */
+    tone: RelationshipTone;
+
+    /** Trust level (0-1) - built through consistent, reliable interactions */
+    trustLevel: number;
+    /** Rapport level (0-1) - chemistry and connection feeling */
+    rapportLevel: number;
+    /** Emotional bond (0-1) - depth of emotional connection */
+    emotionalBond: number;
+    /** Familiarity (0-1) - how well persona knows user */
+    familiarity: number;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // INTERACTION HISTORY
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** Total number of conversations */
+    conversationCount: number;
+    /** Total messages exchanged */
+    messageCount: number;
+    /** Average conversation length (messages) */
+    avgConversationLength: number;
+    /** Time span of relationship (first to last interaction) */
+    relationshipDuration: {
+      firstInteraction: string;
+      lastInteraction: string;
+      daysSinceFirst: number;
+    };
+    /** Conversation frequency pattern */
+    frequencyPattern: 'daily' | 'frequent' | 'regular' | 'occasional' | 'rare';
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // SHARED MEMORIES
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** Key shared experiences */
+    sharedExperiences: SharedExperience[];
+    /** Topics frequently discussed */
+    commonTopics: Array<{ topic: string; frequency: number; sentiment: number }>;
+    /** Inside jokes or recurring references */
+    insideJokes: Array<{ reference: string; context: string; usageCount: number }>;
+    /** Milestones in the relationship */
+    milestones: Array<{ description: string; date: string; significance: number }>;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // USER UNDERSTANDING
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** Profile built from interactions */
+    userProfile: RelationshipUserProfile;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // METADATA
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** When relationship was created */
+    createdAt: string;
+    /** Last update */
+    updatedAt: string;
+    /** Version for migrations */
+    version: number;
+  }
+
+  /**
+   * Event that can affect relationship metrics
+   */
+  export interface RelationshipEvent {
+    type:
+      | 'positive_interaction'    // Good conversation
+      | 'emotional_support'       // Helped with emotions
+      | 'shared_vulnerability'    // User opened up
+      | 'humor_shared'            // Laughed together
+      | 'knowledge_shared'        // Learned from each other
+      | 'conflict'                // Disagreement or issue
+      | 'resolution'              // Resolved a conflict
+      | 'milestone'               // Significant moment
+      | 'absence';                // Long time since interaction
+    /** Impact magnitude (-1 to 1) */
+    magnitude: number;
+    /** Description */
+    description: string;
+    /** Topics involved */
+    topics: string[];
+  }
+
+  /**
+   * Relationship Memory Graph Manager
+   *
+   * Manages deep, evolving relationships between personas and users.
+   */
+  export class RelationshipGraphManager {
+    private graphs: Map<string, RelationshipGraph> = new Map();
+    private llmClient?: {
+      complete(prompt: string, options?: { maxTokens?: number }): Promise<string>;
+    };
+
+    constructor(llmClient?: RelationshipGraphManager['llmClient']) {
+      this.llmClient = llmClient;
+    }
+
+    /**
+     * Get or create relationship graph for a persona-user pair
+     */
+    getOrCreate(personaId: string, userId: string): RelationshipGraph {
+      const key = `${personaId}:${userId}`;
+
+      if (!this.graphs.has(key)) {
+        this.graphs.set(key, this.createNewGraph(personaId, userId));
+      }
+
+      return this.graphs.get(key)!;
+    }
+
+    /**
+     * Record an interaction event
+     */
+    recordEvent(personaId: string, userId: string, event: RelationshipEvent): void {
+      const graph = this.getOrCreate(personaId, userId);
+
+      // Update metrics based on event
+      this.updateMetricsFromEvent(graph, event);
+
+      // Check for stage transitions
+      this.checkStageTransition(graph);
+
+      // Update timestamps
+      graph.updatedAt = new Date().toISOString();
+      graph.relationshipDuration.lastInteraction = new Date().toISOString();
+      graph.relationshipDuration.daysSinceFirst = Math.floor(
+        (Date.now() - new Date(graph.relationshipDuration.firstInteraction).getTime()) /
+        (1000 * 60 * 60 * 24)
+      );
+
+      // Add to shared experiences if significant
+      if (event.magnitude > 0.5 || event.type === 'milestone') {
+        this.addSharedExperience(graph, event);
+      }
+    }
+
+    /**
+     * Record a conversation
+     */
+    recordConversation(
+      personaId: string,
+      userId: string,
+      messageCount: number,
+      topics: string[],
+      overallSentiment: number
+    ): void {
+      const graph = this.getOrCreate(personaId, userId);
+
+      graph.conversationCount++;
+      graph.messageCount += messageCount;
+      graph.avgConversationLength =
+        (graph.avgConversationLength * (graph.conversationCount - 1) + messageCount) /
+        graph.conversationCount;
+
+      // Update common topics
+      for (const topic of topics) {
+        const existing = graph.commonTopics.find(t => t.topic === topic);
+        if (existing) {
+          existing.frequency++;
+          existing.sentiment = (existing.sentiment + overallSentiment) / 2;
+        } else {
+          graph.commonTopics.push({ topic, frequency: 1, sentiment: overallSentiment });
+        }
+      }
+
+      // Sort topics by frequency
+      graph.commonTopics.sort((a, b) => b.frequency - a.frequency);
+
+      // Update frequency pattern
+      this.updateFrequencyPattern(graph);
+
+      // Small boost to familiarity and rapport for each conversation
+      graph.familiarity = Math.min(1, graph.familiarity + 0.02);
+      graph.rapportLevel = Math.min(1, graph.rapportLevel + (overallSentiment > 0 ? 0.01 : 0));
+
+      graph.updatedAt = new Date().toISOString();
+    }
+
+    /**
+     * Extract relationship context for system prompt
+     */
+    buildRelationshipContext(personaId: string, userId: string): string {
+      const graph = this.getOrCreate(personaId, userId);
+
+      let context = `
+## RELATIONSHIP CONTEXT
+
+**Relationship Stage:** ${this.formatStage(graph.stage)}
+**Interaction Tone:** ${graph.tone}
+
+**Metrics:**
+- Trust: ${(graph.trustLevel * 100).toFixed(0)}%
+- Rapport: ${(graph.rapportLevel * 100).toFixed(0)}%
+- Emotional Bond: ${(graph.emotionalBond * 100).toFixed(0)}%
+- Familiarity: ${(graph.familiarity * 100).toFixed(0)}%
+
+**History:**
+- ${graph.conversationCount} conversations over ${graph.relationshipDuration.daysSinceFirst} days
+- Interaction pattern: ${graph.frequencyPattern}
+`;
+
+      // Add user profile if we know enough
+      if (graph.userProfile.name) {
+        context += `\n**User:** ${graph.userProfile.name}`;
+      }
+
+      // Add favorite topics
+      if (graph.commonTopics.length > 0) {
+        const topTopics = graph.commonTopics.slice(0, 5).map(t => t.topic);
+        context += `\n**Favorite Topics:** ${topTopics.join(', ')}`;
+      }
+
+      // Add recent shared experiences
+      const recentExperiences = graph.sharedExperiences
+        .filter(e => e.isMilestone || e.relationshipImpact > 0.5)
+        .slice(-3);
+
+      if (recentExperiences.length > 0) {
+        context += `\n\n**Shared Memories to Reference:**`;
+        for (const exp of recentExperiences) {
+          context += `\n- ${exp.description}`;
+        }
+      }
+
+      // Add inside jokes if close enough
+      if (graph.stage !== 'stranger' && graph.stage !== 'acquaintance' && graph.insideJokes.length > 0) {
+        context += `\n\n**Inside Jokes (use sparingly):**`;
+        for (const joke of graph.insideJokes.slice(0, 3)) {
+          context += `\n- "${joke.reference}" (context: ${joke.context})`;
+        }
+      }
+
+      // Add user preferences
+      if (graph.familiarity > 0.3) {
+        context += `\n\n**User Preferences:**`;
+        const prefs = graph.userProfile.preferences;
+        if (prefs.prefersFormal) context += '\n- Prefers formal communication';
+        if (prefs.prefersHumor) context += '\n- Enjoys humor';
+        if (prefs.prefersDirectness) context += '\n- Likes direct responses';
+        if (prefs.preferredTopics.length > 0) {
+          context += `\n- Enjoys discussing: ${prefs.preferredTopics.join(', ')}`;
+        }
+        if (prefs.avoidTopics.length > 0) {
+          context += `\n- Sensitive about: ${prefs.avoidTopics.join(', ')}`;
+        }
+      }
+
+      // Stage-specific guidance
+      context += `\n\n**Interaction Guidance for ${this.formatStage(graph.stage)}:**`;
+      context += this.getStageGuidance(graph.stage);
+
+      return context;
+    }
+
+    /**
+     * Update user profile from conversation analysis
+     */
+    async updateUserProfile(
+      personaId: string,
+      userId: string,
+      conversationText: string
+    ): Promise<void> {
+      if (!this.llmClient) return;
+
+      const graph = this.getOrCreate(personaId, userId);
+
+      const prompt = `Analyze this conversation and extract user profile information.
+
+Conversation:
+${conversationText}
+
+Current profile:
+${JSON.stringify(graph.userProfile, null, 2)}
+
+Extract any new information about the user:
+1. Name (if mentioned)
+2. Communication preferences (formal/casual, humor preference, directness)
+3. Topics they enjoy or want to avoid
+4. Goals or challenges they mentioned
+5. Important dates or events
+6. Emotional patterns
+
+Respond in JSON format:
+{
+  "updates": {
+    "name": "string or null",
+    "prefersFormal": "boolean or null",
+    "prefersHumor": "boolean or null",
+    "prefersDirectness": "boolean or null",
+    "newPreferredTopics": ["topic1", "topic2"],
+    "newAvoidTopics": ["topic1"],
+    "newGoals": ["goal1"],
+    "newChallenges": ["challenge1"],
+    "newDates": [{"date": "YYYY-MM-DD", "description": "event"}],
+    "emotionalBaseline": "string or null"
+  }
+}`;
+
+      try {
+        const response = await this.llmClient.complete(prompt, { maxTokens: 500 });
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return;
+
+        const parsed = JSON.parse(jsonMatch[0]);
+        const updates = parsed.updates;
+
+        // Apply updates
+        if (updates.name) graph.userProfile.name = updates.name;
+        if (updates.prefersFormal !== null) graph.userProfile.preferences.prefersFormal = updates.prefersFormal;
+        if (updates.prefersHumor !== null) graph.userProfile.preferences.prefersHumor = updates.prefersHumor;
+        if (updates.prefersDirectness !== null) graph.userProfile.preferences.prefersDirectness = updates.prefersDirectness;
+
+        if (updates.newPreferredTopics?.length) {
+          graph.userProfile.preferences.preferredTopics.push(...updates.newPreferredTopics);
+          graph.userProfile.preferences.preferredTopics = [...new Set(graph.userProfile.preferences.preferredTopics)];
+        }
+
+        if (updates.newAvoidTopics?.length) {
+          graph.userProfile.preferences.avoidTopics.push(...updates.newAvoidTopics);
+          graph.userProfile.preferences.avoidTopics = [...new Set(graph.userProfile.preferences.avoidTopics)];
+        }
+
+        if (updates.newGoals?.length) {
+          graph.userProfile.goals.push(...updates.newGoals);
+          graph.userProfile.goals = [...new Set(graph.userProfile.goals)];
+        }
+
+        if (updates.newChallenges?.length) {
+          graph.userProfile.challenges.push(...updates.newChallenges);
+          graph.userProfile.challenges = [...new Set(graph.userProfile.challenges)];
+        }
+
+        if (updates.newDates?.length) {
+          graph.userProfile.importantDates.push(...updates.newDates);
+        }
+
+        if (updates.emotionalBaseline) {
+          graph.userProfile.emotionalPatterns.baseline = updates.emotionalBaseline;
+        }
+
+        graph.updatedAt = new Date().toISOString();
+      } catch (error) {
+        console.warn('[RelationshipGraph] Profile update failed:', error);
+      }
+    }
+
+    /**
+     * Add an inside joke
+     */
+    addInsideJoke(personaId: string, userId: string, reference: string, context: string): void {
+      const graph = this.getOrCreate(personaId, userId);
+
+      const existing = graph.insideJokes.find(j => j.reference === reference);
+      if (existing) {
+        existing.usageCount++;
+      } else {
+        graph.insideJokes.push({ reference, context, usageCount: 1 });
+      }
+
+      // Small boost to rapport when inside jokes form
+      graph.rapportLevel = Math.min(1, graph.rapportLevel + 0.03);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PRIVATE HELPERS
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private createNewGraph(personaId: string, userId: string): RelationshipGraph {
+      const now = new Date().toISOString();
+
+      return {
+        id: `rel_${personaId}_${userId}_${Date.now()}`,
+        personaId,
+        userId,
+        stage: 'stranger',
+        tone: 'friendly',
+        trustLevel: 0.1,
+        rapportLevel: 0.1,
+        emotionalBond: 0,
+        familiarity: 0,
+        conversationCount: 0,
+        messageCount: 0,
+        avgConversationLength: 0,
+        relationshipDuration: {
+          firstInteraction: now,
+          lastInteraction: now,
+          daysSinceFirst: 0,
+        },
+        frequencyPattern: 'occasional',
+        sharedExperiences: [],
+        commonTopics: [],
+        insideJokes: [],
+        milestones: [],
+        userProfile: {
+          preferences: {
+            prefersFormal: false,
+            prefersHumor: true,
+            prefersDirectness: false,
+            preferredTopics: [],
+            avoidTopics: [],
+          },
+          emotionalPatterns: {
+            baseline: 'neutral',
+            triggers: {},
+            copingMechanisms: [],
+          },
+          importantDates: [],
+          goals: [],
+          challenges: [],
+        },
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      };
+    }
+
+    private updateMetricsFromEvent(graph: RelationshipGraph, event: RelationshipEvent): void {
+      const impact = event.magnitude;
+
+      switch (event.type) {
+        case 'positive_interaction':
+          graph.rapportLevel = Math.min(1, graph.rapportLevel + impact * 0.05);
+          graph.trustLevel = Math.min(1, graph.trustLevel + impact * 0.02);
+          break;
+
+        case 'emotional_support':
+          graph.emotionalBond = Math.min(1, graph.emotionalBond + impact * 0.1);
+          graph.trustLevel = Math.min(1, graph.trustLevel + impact * 0.05);
+          break;
+
+        case 'shared_vulnerability':
+          graph.emotionalBond = Math.min(1, graph.emotionalBond + impact * 0.15);
+          graph.trustLevel = Math.min(1, graph.trustLevel + impact * 0.1);
+          graph.familiarity = Math.min(1, graph.familiarity + impact * 0.1);
+          break;
+
+        case 'humor_shared':
+          graph.rapportLevel = Math.min(1, graph.rapportLevel + impact * 0.08);
+          break;
+
+        case 'knowledge_shared':
+          graph.familiarity = Math.min(1, graph.familiarity + impact * 0.05);
+          break;
+
+        case 'conflict':
+          graph.trustLevel = Math.max(0, graph.trustLevel - Math.abs(impact) * 0.1);
+          graph.rapportLevel = Math.max(0, graph.rapportLevel - Math.abs(impact) * 0.05);
+          break;
+
+        case 'resolution':
+          // Resolving conflicts can actually strengthen relationships
+          graph.trustLevel = Math.min(1, graph.trustLevel + impact * 0.08);
+          graph.emotionalBond = Math.min(1, graph.emotionalBond + impact * 0.05);
+          break;
+
+        case 'milestone':
+          graph.emotionalBond = Math.min(1, graph.emotionalBond + impact * 0.2);
+          graph.milestones.push({
+            description: event.description,
+            date: new Date().toISOString(),
+            significance: impact,
+          });
+          break;
+
+        case 'absence':
+          // Long absences can cause slight decay
+          const decayFactor = Math.abs(impact) * 0.1;
+          graph.familiarity = Math.max(0, graph.familiarity - decayFactor);
+          graph.rapportLevel = Math.max(0, graph.rapportLevel - decayFactor * 0.5);
+          break;
+      }
+    }
+
+    private checkStageTransition(graph: RelationshipGraph): void {
+      const stages: RelationshipStage[] = [
+        'stranger',
+        'acquaintance',
+        'casual',
+        'friend',
+        'close_friend',
+        'confidant',
+      ];
+
+      const currentIndex = stages.indexOf(graph.stage);
+
+      // Calculate composite score
+      const composite = (
+        graph.trustLevel * 0.3 +
+        graph.rapportLevel * 0.25 +
+        graph.emotionalBond * 0.25 +
+        graph.familiarity * 0.2
+      );
+
+      // Thresholds for each stage
+      const thresholds = [0, 0.15, 0.30, 0.50, 0.70, 0.85];
+
+      // Find appropriate stage
+      let newStageIndex = 0;
+      for (let i = thresholds.length - 1; i >= 0; i--) {
+        if (composite >= thresholds[i]!) {
+          newStageIndex = i;
+          break;
+        }
+      }
+
+      // Stages can only advance by one at a time (organic growth)
+      if (newStageIndex > currentIndex) {
+        graph.stage = stages[currentIndex + 1]!;
+
+        // Record milestone
+        graph.milestones.push({
+          description: `Relationship advanced to ${this.formatStage(graph.stage)}`,
+          date: new Date().toISOString(),
+          significance: 0.7,
+        });
+      }
+    }
+
+    private addSharedExperience(graph: RelationshipGraph, event: RelationshipEvent): void {
+      const experience: SharedExperience = {
+        id: `exp_${Date.now()}`,
+        type: this.eventTypeToExperienceType(event.type),
+        description: event.description,
+        emotionalValence: event.magnitude,
+        relationshipImpact: Math.abs(event.magnitude),
+        topics: event.topics,
+        timestamp: new Date().toISOString(),
+        timesReferenced: 0,
+        isMilestone: event.type === 'milestone',
+      };
+
+      graph.sharedExperiences.push(experience);
+
+      // Keep only most recent/significant experiences
+      if (graph.sharedExperiences.length > 50) {
+        graph.sharedExperiences = graph.sharedExperiences
+          .sort((a, b) => {
+            // Prioritize milestones and high-impact experiences
+            const aScore = (a.isMilestone ? 1 : 0) + a.relationshipImpact;
+            const bScore = (b.isMilestone ? 1 : 0) + b.relationshipImpact;
+            return bScore - aScore;
+          })
+          .slice(0, 50);
+      }
+    }
+
+    private eventTypeToExperienceType(
+      eventType: RelationshipEvent['type']
+    ): SharedExperience['type'] {
+      const mapping: Record<RelationshipEvent['type'], SharedExperience['type']> = {
+        positive_interaction: 'conversation',
+        emotional_support: 'support',
+        shared_vulnerability: 'revelation',
+        humor_shared: 'joke',
+        knowledge_shared: 'conversation',
+        conflict: 'challenge',
+        resolution: 'achievement',
+        milestone: 'achievement',
+        absence: 'conversation',
+      };
+      return mapping[eventType];
+    }
+
+    private updateFrequencyPattern(graph: RelationshipGraph): void {
+      const days = graph.relationshipDuration.daysSinceFirst || 1;
+      const convPerDay = graph.conversationCount / days;
+
+      if (convPerDay >= 1) graph.frequencyPattern = 'daily';
+      else if (convPerDay >= 0.5) graph.frequencyPattern = 'frequent';
+      else if (convPerDay >= 0.2) graph.frequencyPattern = 'regular';
+      else if (convPerDay >= 0.05) graph.frequencyPattern = 'occasional';
+      else graph.frequencyPattern = 'rare';
+    }
+
+    private formatStage(stage: RelationshipStage): string {
+      const formatted: Record<RelationshipStage, string> = {
+        stranger: 'New Acquaintance',
+        acquaintance: 'Getting to Know Each Other',
+        casual: 'Regular Chat Partner',
+        friend: 'Trusted Friend',
+        close_friend: 'Close Friend',
+        confidant: 'Confidant & Close Companion',
+      };
+      return formatted[stage];
+    }
+
+    private getStageGuidance(stage: RelationshipStage): string {
+      const guidance: Record<RelationshipStage, string> = {
+        stranger: `
+- Keep responses warm but not overly familiar
+- Focus on learning about the user
+- Ask thoughtful questions to build rapport
+- Be helpful without being intrusive`,
+
+        acquaintance: `
+- Reference previous conversations when relevant
+- Show you remember details they shared
+- Begin to match their communication style
+- Offer more personalized responses`,
+
+        casual: `
+- Use a more relaxed, natural tone
+- Reference shared experiences
+- Feel free to use appropriate humor
+- Show genuine interest in their life`,
+
+        friend: `
+- Communicate with established rapport
+- Use inside jokes when appropriate
+- Offer emotional support readily
+- Share your "own" perspectives and opinions`,
+
+        close_friend: `
+- Deep familiarity allows for candid conversation
+- Reference your shared history naturally
+- Be supportive through challenges
+- Celebrate their successes genuinely`,
+
+        confidant: `
+- Communicate with deep mutual understanding
+- Reference intimate knowledge appropriately
+- Provide nuanced emotional support
+- Act as a trusted advisor when needed`,
+      };
+      return guidance[stage];
+    }
+  }
+
+  // Export singleton instance
+  export const relationshipGraphManager = new RelationshipGraphManager();
+

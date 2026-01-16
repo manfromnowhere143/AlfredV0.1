@@ -42,11 +42,11 @@ export async function GET(request: NextRequest) {
     console.log('[GET /api/personas] Starting fast query...');
     let userId = await getUserFromRequest(request);
 
-    // DEV MODE: If no auth, get the first user for development
+    // DEV MODE: If no auth, use the user with personas (cogitoergosum143@gmail.com)
     if (!userId && process.env.NODE_ENV === 'development') {
-      const [firstUser] = await db.select({ id: users.id }).from(users).limit(1);
-      userId = firstUser?.id || null;
-      console.log('[GET /api/personas] DEV MODE - using first user:', userId);
+      // This is the user who created personas earlier (cogitoergosum143@gmail.com)
+      userId = '7348f31f-34f3-49aa-9470-f803364a159a';
+      console.log('[GET /api/personas] DEV MODE - using persona creator user:', userId);
     }
 
     if (!userId) {

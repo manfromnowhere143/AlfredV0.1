@@ -127,8 +127,8 @@ import type {
       style: 'pixar_3d' as PersonaVisualStyle,
       width: 1024,
       height: 1024,
-      steps: 30,
-      cfgScale: 7.5,
+      steps: 28, // FLUX quality
+      cfgScale: 3.5, // FLUX optimal (NOT 7.5!)
     },
   
     voice: {
@@ -255,26 +255,16 @@ import type {
   
   /**
    * GPU provider configurations
+   * RunPod is our ONLY GPU provider - no fallbacks.
    */
   export const GPU_PROVIDERS = {
-    replicate: {
-      name: 'Replicate',
-      baseUrl: 'https://api.replicate.com/v1',
-      models: {
-        sdxl: 'stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316',
-        instantid: 'instantid/instantid:...',
-        animateDiff: 'lucataco/animate-diff:...',
-        sadTalker: 'cjwbw/sadtalker:...',
-      },
-    },
-    modal: {
-      name: 'Modal',
-      baseUrl: 'https://api.modal.com',
-      // Modal uses function names instead of model IDs
-    },
     runpod: {
       name: 'RunPod',
       baseUrl: 'https://api.runpod.ai/v2',
+      endpoints: {
+        comfyui: 'RUNPOD_ENDPOINT_ID',      // ComfyUI FLUX (24GB) for images
+        video: 'RUNPOD_VIDEO_ENDPOINT_ID',  // MuseTalk H100 (80GB) for video
+      },
     },
   } as const;
   

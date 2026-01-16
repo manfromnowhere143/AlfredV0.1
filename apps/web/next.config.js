@@ -63,8 +63,8 @@ const nextConfig = {
             value: [
               // Default: only same origin
               "default-src 'self'",
-              // Scripts: self + trusted CDNs for preview iframe + inline for Next.js
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.tailwindcss.com https://www.googletagmanager.com",
+              // Scripts: self + trusted CDNs for preview iframe + inline for Next.js + wasm-unsafe-eval for ESBuild WASM
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh https://cdn.tailwindcss.com https://www.googletagmanager.com",
               // Workers: allow blob URLs for ESBuild/Monaco workers
               "worker-src 'self' blob:",
               // Styles: self + inline (required for styled-jsx and Tailwind)

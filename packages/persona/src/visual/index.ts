@@ -85,7 +85,7 @@ export interface VisualEngineConfig {
   sadTalker?: SadTalkerConfig;
   /** Image enhancer endpoint config */
   enhancer?: EnhancerConfig;
-  /** GPU provider for image generation (RunPod/Replicate) */
+  /** GPU provider for image generation (RunPod only) */
   gpuProvider: {
     endpoint: string;
     apiKey: string;

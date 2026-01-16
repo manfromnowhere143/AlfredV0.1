@@ -74,7 +74,6 @@ export {
 export {
   IdentityLockPipeline,
   createIdentityLockPipeline,
-  ReplicateProvider,
   RunPodProvider,
   type GPUProviderConfig,
   type IdentityLockConfig,
@@ -102,10 +101,19 @@ export {
   MemoryManager,
   EmotionDetector,
   buildPersonaSystemPrompt,
+  // State-of-the-art personality anchoring system
+  PersonalityAnchorManager,
+  personalityAnchorManager,
+  // Advanced emotion detection with multi-dimensional analysis
+  AdvancedEmotionDetector,
+  advancedEmotionDetector,
   type BrainProcessingOptions,
   type SystemPromptContext,
   type MemoryQuery,
   type EmotionDetectionResult,
+  type PersonalityAnchor,
+  type ConsistencyMetrics,
+  type AdvancedEmotionResult,
 } from './brain';
 
 // REALTIME MODULE EXPORTS

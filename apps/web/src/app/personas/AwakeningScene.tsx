@@ -10,10 +10,12 @@
  *
  *   "The eyes are the window to the soul" — now watch that soul awaken.
  *
+ *   NOW WITH REAL VIDEO GENERATION - Not CSS tricks anymore!
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import React, { useRef, useMemo, useEffect, useState, Suspense } from "react";
+import React, { useRef, useMemo, useEffect, useState, Suspense, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
@@ -24,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface PersonaData {
+  id: string; // Added for API calls
   name: string;
   archetype: string;
   imageUrl?: string;
@@ -33,6 +36,15 @@ interface AwakeningSceneProps {
   persona: PersonaData;
   onComplete: () => void;
   onSkip?: () => void;
+}
+
+// Video awakening state
+interface AwakeningVideoState {
+  status: "checking" | "generating" | "ready" | "failed" | "playing" | "fallback";
+  videoUrl?: string;
+  audioUrl?: string;
+  firstWords?: string;
+  error?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -345,8 +357,167 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
   const [firstWords, setFirstWords] = useState("");
   const [heartbeatVolume, setHeartbeatVolume] = useState(0.3);
 
-  // Stage progression timing
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // REAL VIDEO AWAKENING STATE
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const [videoState, setVideoState] = useState<AwakeningVideoState>({
+    status: "checking",
+  });
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch or generate awakening video
+  const initializeVideo = useCallback(async () => {
+    if (!persona.id) {
+      console.log("[Awakening] No persona ID, using CSS fallback");
+      setVideoState({ status: "fallback" });
+      return;
+    }
+
+    try {
+      // First, check if video exists
+      console.log("[Awakening] Checking for awakening video...");
+      const checkResp = await fetch(`/api/personas/${persona.id}/awakening`);
+      const checkData = await checkResp.json();
+
+      if (checkData.status === "ready" && checkData.videoUrl) {
+        console.log("[Awakening] Video ready!");
+        setVideoState({
+          status: "ready",
+          videoUrl: checkData.videoUrl,
+          audioUrl: checkData.audioUrl,
+          firstWords: checkData.firstWords,
+        });
+        return;
+      }
+
+      if (checkData.status === "generating") {
+        console.log("[Awakening] Video generating, starting poll...");
+        setVideoState({ status: "generating" });
+        startPolling();
+        return;
+      }
+
+      // Not started - trigger generation
+      console.log("[Awakening] Starting video generation...");
+      setVideoState({ status: "generating" });
+
+      const genResp = await fetch(`/api/personas/${persona.id}/awakening`, {
+        method: "POST",
+      });
+      const genData = await genResp.json();
+
+      if (genData.status === "ready" && genData.videoUrl) {
+        setVideoState({
+          status: "ready",
+          videoUrl: genData.videoUrl,
+          audioUrl: genData.audioUrl,
+          firstWords: genData.firstWords,
+        });
+      } else if (genData.status === "generating") {
+        startPolling();
+      } else {
+        console.log("[Awakening] Generation failed, using CSS fallback");
+        setVideoState({ status: "fallback", error: genData.error });
+      }
+    } catch (err) {
+      console.error("[Awakening] Error:", err);
+      setVideoState({ status: "fallback", error: "Network error" });
+    }
+  }, [persona.id]);
+
+  // Poll for video completion
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/personas/${persona.id}/awakening`);
+        const data = await resp.json();
+
+        if (data.status === "ready" && data.videoUrl) {
+          console.log("[Awakening] Video ready (polled)!");
+          setVideoState({
+            status: "ready",
+            videoUrl: data.videoUrl,
+            audioUrl: data.audioUrl,
+            firstWords: data.firstWords,
+          });
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        } else if (data.status === "failed") {
+          console.log("[Awakening] Generation failed, using CSS fallback");
+          setVideoState({ status: "fallback", error: data.error });
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
+      } catch (err) {
+        console.error("[Awakening] Poll error:", err);
+      }
+    }, 3000);
+
+    // Timeout after 90 seconds - fall back to CSS
+    setTimeout(() => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        if (videoState.status === "generating") {
+          console.log("[Awakening] Timeout, using CSS fallback");
+          setVideoState({ status: "fallback", error: "Generation timeout" });
+        }
+      }
+    }, 90000);
+  }, [persona.id, videoState.status]);
+
+  // Initialize video on mount
   useEffect(() => {
+    initializeVideo();
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [initializeVideo]);
+
+  // Play video when ready
+  useEffect(() => {
+    if (videoState.status === "ready" && videoState.videoUrl && videoRef.current) {
+      console.log("[Awakening] Playing real awakening video!");
+      setVideoState((prev) => ({ ...prev, status: "playing" }));
+
+      videoRef.current.play().catch((err) => {
+        console.error("[Awakening] Video play error:", err);
+        setVideoState({ status: "fallback", error: "Playback failed" });
+      });
+    }
+  }, [videoState.status, videoState.videoUrl]);
+
+  // Handle video end
+  const handleVideoEnd = useCallback(() => {
+    console.log("[Awakening] Video ended");
+    setFirstWords(videoState.firstWords || getFirstWords(persona.archetype));
+    setShowText(true);
+    setTimeout(onComplete, 2000);
+  }, [onComplete, persona.archetype, videoState.firstWords]);
+
+  // Stage progression timing - ONLY runs for CSS fallback mode
+  useEffect(() => {
+    // Skip CSS animation if we have real video
+    if (videoState.status === "playing" || videoState.status === "ready") {
+      return;
+    }
+
+    // Wait for video check to complete before starting CSS fallback
+    if (videoState.status === "checking" || videoState.status === "generating") {
+      return;
+    }
+
+    // CSS fallback animation
     const timings: Record<AwakeningStage, number> = {
       darkness: 1500,     // Start in darkness with heartbeat
       stirring: 1500,     // Light begins to seep in
@@ -378,9 +549,10 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
       }, timings[current]);
     };
 
+    console.log("[Awakening] Starting CSS fallback animation");
     progress("darkness");
     return () => clearTimeout(timeout);
-  }, [persona, onComplete]);
+  }, [persona, onComplete, videoState.status, heartbeatVolume]);
 
   // Stage labels
   const stageLabels: Record<AwakeningStage, string> = {
@@ -392,6 +564,10 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
     alive: "Consciousness",
   };
 
+  // Determine if showing video or CSS fallback
+  const showRealVideo = videoState.status === "playing" || videoState.status === "ready";
+  const showGenerating = videoState.status === "checking" || videoState.status === "generating";
+
   return (
     <div style={{
       position: "fixed",
@@ -400,12 +576,192 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
       zIndex: 9999,
       overflow: "hidden",
     }}>
-      {/* Three.js Canvas for particles and effects */}
-      <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
-        <Suspense fallback={null}>
-          <SceneContent stage={stage} />
-        </Suspense>
-      </Canvas>
+      {/* ═══════════════════════════════════════════════════════════════════════════
+          REAL VIDEO AWAKENING — When available
+          ═══════════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showRealVideo && videoState.videoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 100,
+            }}
+          >
+            {/* Cinematic letterbox effect */}
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "10%",
+              background: "linear-gradient(to bottom, #000, transparent)",
+              zIndex: 10,
+            }} />
+            <div style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: "10%",
+              background: "linear-gradient(to top, #000, transparent)",
+              zIndex: 10,
+            }} />
+
+            {/* The actual awakening video */}
+            <video
+              ref={videoRef}
+              src={videoState.videoUrl}
+              onEnded={handleVideoEnd}
+              onError={() => setVideoState({ status: "fallback", error: "Video load error" })}
+              playsInline
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                borderRadius: 20,
+                boxShadow: "0 0 100px rgba(255,215,0,0.3)",
+              }}
+            />
+
+            {/* Ambient glow around video */}
+            <motion.div
+              animate={{
+                opacity: [0.3, 0.6, 0.3],
+                scale: [1, 1.05, 1],
+              }}
+              transition={{ duration: 3, repeat: Infinity }}
+              style={{
+                position: "absolute",
+                width: "60%",
+                height: "60%",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(255,215,0,0.15) 0%, transparent 70%)",
+                pointerEvents: "none",
+                filter: "blur(40px)",
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════════════════════════════════════════════════════════════════
+          GENERATING STATE — Show while video is being created
+          ═══════════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showGenerating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 50,
+            }}
+          >
+            {/* Pulsing persona preview */}
+            <motion.div
+              animate={{
+                scale: [1, 1.02, 1],
+                opacity: [0.6, 0.9, 0.6],
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                overflow: "hidden",
+                boxShadow: "0 0 60px rgba(255,215,0,0.2)",
+                border: "2px solid rgba(255,215,0,0.3)",
+              }}
+            >
+              {persona.imageUrl ? (
+                <img
+                  src={persona.imageUrl}
+                  alt={persona.name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "brightness(0.7) saturate(0.8)",
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(135deg, #1a1a2e, #16213e)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  <span style={{ fontSize: 80, fontWeight: 200, color: "rgba(255,255,255,0.4)" }}>
+                    {persona.name.charAt(0)}
+                  </span>
+                </div>
+              )}
+            </motion.div>
+
+            <motion.p
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{
+                marginTop: 40,
+                fontSize: 14,
+                color: "rgba(255,215,0,0.8)",
+                letterSpacing: 4,
+                textTransform: "uppercase",
+              }}
+            >
+              Preparing awakening...
+            </motion.p>
+
+            {/* Loading bar */}
+            <div style={{
+              marginTop: 20,
+              width: 200,
+              height: 2,
+              background: "rgba(255,255,255,0.1)",
+              borderRadius: 1,
+              overflow: "hidden",
+            }}>
+              <motion.div
+                animate={{ x: ["-100%", "100%"] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  width: "50%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.8), transparent)",
+                }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════════════════════════════════════════════════════════════════
+          CSS FALLBACK — Three.js particles and eyelid animation
+          ═══════════════════════════════════════════════════════════════════════════ */}
+      {videoState.status === "fallback" && (
+        <>
+          {/* Three.js Canvas for particles and effects */}
+          <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+            <Suspense fallback={null}>
+              <SceneContent stage={stage} />
+            </Suspense>
+          </Canvas>
 
       {/* Central persona portrait with eyelids */}
       <motion.div
@@ -522,7 +878,7 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
         padding: "48px 24px",
         pointerEvents: "none",
       }}>
-        {/* Top - Stage indicator */}
+        {/* Top - Stage indicator (CSS fallback specific) */}
         <motion.div
           key={stage}
           initial={{ opacity: 0, y: -20 }}
@@ -541,77 +897,8 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
           {stageLabels[stage]}
         </motion.div>
 
-        {/* Center - Name and words (appears at end) */}
-        <AnimatePresence>
-          {showText && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-              style={{
-                textAlign: "center",
-                maxWidth: 500,
-                position: "absolute",
-                bottom: "20%",
-              }}
-            >
-              <motion.h1
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.8 }}
-                style={{
-                  fontSize: "clamp(32px, 7vw, 52px)",
-                  fontWeight: 200,
-                  color: "#ffffff",
-                  margin: "0 0 16px",
-                  letterSpacing: 3,
-                  textShadow: "0 0 40px rgba(255,215,0,0.4)",
-                }}
-              >
-                {persona.name}
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.9 }}
-                transition={{ delay: 0.8, duration: 1 }}
-                style={{
-                  fontSize: 18,
-                  fontWeight: 300,
-                  color: "rgba(255,250,230,0.9)",
-                  fontStyle: "italic",
-                  lineHeight: 1.6,
-                }}
-              >
-                &ldquo;{firstWords}&rdquo;
-              </motion.p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Bottom - Skip button */}
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.3 }}
-          whileHover={{ opacity: 1 }}
-          onClick={onSkip}
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 99,
-            padding: "10px 28px",
-            color: "rgba(255,255,255,0.8)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            pointerEvents: "auto",
-            backdropFilter: "blur(10px)",
-            letterSpacing: 2,
-          }}
-        >
-          Skip Ceremony
-        </motion.button>
+        {/* Spacer */}
+        <div />
       </div>
 
       {/* Progress bar at bottom */}
@@ -663,6 +950,79 @@ export default function AwakeningScene({ persona, onComplete, onSkip }: Awakenin
           />
         )}
       </AnimatePresence>
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════════
+          SHARED UI ELEMENTS — Shown in both video and CSS modes
+          ═══════════════════════════════════════════════════════════════════════════ */}
+
+      {/* Name and first words overlay - shown after video OR CSS completion */}
+      <AnimatePresence>
+        {showText && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              bottom: "15%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              textAlign: "center",
+              zIndex: 200,
+            }}
+          >
+            <h1 style={{
+              fontSize: "clamp(32px, 7vw, 52px)",
+              fontWeight: 200,
+              color: "#ffffff",
+              margin: "0 0 16px",
+              letterSpacing: 3,
+              textShadow: "0 0 40px rgba(255,215,0,0.4)",
+            }}>
+              {persona.name}
+            </h1>
+            <p style={{
+              fontSize: 18,
+              fontWeight: 300,
+              color: "rgba(255,250,230,0.9)",
+              fontStyle: "italic",
+              lineHeight: 1.6,
+            }}>
+              &ldquo;{firstWords}&rdquo;
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Skip button - always available */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.3 }}
+        whileHover={{ opacity: 1 }}
+        onClick={onSkip}
+        style={{
+          position: "absolute",
+          bottom: 30,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 99,
+          padding: "10px 28px",
+          color: "rgba(255,255,255,0.8)",
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: "pointer",
+          backdropFilter: "blur(10px)",
+          letterSpacing: 2,
+          zIndex: 300,
+        }}
+      >
+        Skip Ceremony
+      </motion.button>
     </div>
   );
 }

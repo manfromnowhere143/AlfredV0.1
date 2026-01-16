@@ -1145,6 +1145,9 @@ export const personas = pgTable(
     // 3D Avatar
     modelUrl: text('model_url'), // GLB/GLTF 3D model URL for real-time avatar
 
+    // Living Persona Video
+    idleVideoUrl: text('idle_video_url'), // Looping idle video for REAL living persona (not CSS tricks)
+
     // Voice
     voiceProvider: varchar('voice_provider', { length: 50 }),
     voiceId: varchar('voice_id', { length: 100 }),

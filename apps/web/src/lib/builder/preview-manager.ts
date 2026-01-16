@@ -262,7 +262,8 @@ export class PreviewManager {
    */
   private setupParserEvents(): void {
     this.parser.onEvent((event) => {
-      console.log('[PreviewManager] 🔔 Event received:', event.type);
+      console.log('[PreviewManager] 🔔 Event received:', event.type, (event as any).path || (event as any).projectName || '');
+      console.log('[PreviewManager] Current fileSystem files:', this.fileSystem.getFileCount());
       this.options.onStreamEvent(event);
 
       switch (event.type) {
@@ -356,11 +357,15 @@ export class PreviewManager {
           }
 
           // Notify about all files
-          for (const file of this.fileSystem.getAllFiles()) {
+          const finalFiles = this.fileSystem.getAllFiles();
+          console.log('[PreviewManager] 🏁 Final file count:', finalFiles.length);
+          for (const file of finalFiles) {
+            console.log('[PreviewManager] 📄 File:', file.path, '| Size:', file.content.length);
             this.options.onFileChange(file);
           }
 
           // Final rebuild
+          console.log('[PreviewManager] 🔨 Triggering final rebuild...');
           this.rebuild();
           break;
       }

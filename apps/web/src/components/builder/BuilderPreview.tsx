@@ -726,10 +726,23 @@ export function BuilderPreview({
     if (!preview?.html || !iframeRef.current) return;
     setIsLoaded(false);
     setError(null);
+
+    console.log('[BuilderPreview] 📥 Setting iframe srcdoc, length:', preview.html.length);
     iframeRef.current.srcdoc = preview.html;
+
+    // Fallback: Force isLoaded after 3 seconds if onLoad doesn't fire
+    const fallbackTimer = setTimeout(() => {
+      console.log('[BuilderPreview] ⏰ Fallback timer triggered - forcing isLoaded=true');
+      setIsLoaded(true);
+    }, 3000);
+
+    return () => clearTimeout(fallbackTimer);
   }, [preview?.html, refreshKey]);
 
-  const handleLoad = useCallback(() => setIsLoaded(true), []);
+  const handleLoad = useCallback(() => {
+    console.log('[BuilderPreview] ✅ Iframe onLoad fired');
+    setIsLoaded(true);
+  }, []);
   const handleError = useCallback(() => {
     setError('Failed to load preview');
     setIsLoaded(true);

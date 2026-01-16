@@ -236,32 +236,71 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
 
       console.log('[ESBuild] 🎯 Entry point:', entryPoint);
 
-      // Create virtual filesystem plugin
-      const virtualFsPlugin = this.createVirtualFsPlugin(files);
-      const cdnPlugin = this.createCdnPlugin(project.dependencies || {});
+      // Use transform API instead of build - more reliable, no plugins needed
+      // Transform each file individually, then combine
+      console.log('[ESBuild] 🔄 Transforming files with ESBuild...');
 
-      // Bundle with ESBuild
-      const result = await this.esbuild.build({
-        entryPoints: [entryPoint],
-        bundle: true,
-        write: false,
-        format: 'esm',
-        target: 'es2020',
-        jsx: 'automatic',
-        jsxImportSource: 'react',
-        minify: false,
-        sourcemap: 'inline',
-        plugins: [virtualFsPlugin, cdnPlugin],
-        define: {
-          'process.env.NODE_ENV': '"development"',
-        },
-        logLevel: 'silent',
-      });
+      const transformedFiles: { path: string; code: string }[] = [];
+      const transformErrors: FileError[] = [];
 
-      // Extract bundled code
-      const bundledCode = result.outputFiles?.[0]?.text || '';
-      const errors = this.extractErrors(result);
-      const warnings = this.extractWarnings(result);
+      for (const file of files) {
+        if (!file.path.match(/\.(tsx?|jsx?)$/)) continue;
+
+        try {
+          console.log('[ESBuild] 📄 Transforming:', file.path);
+          const result = await this.esbuild.transform(file.content, {
+            loader: file.path.endsWith('.tsx') ? 'tsx' :
+                    file.path.endsWith('.ts') ? 'ts' :
+                    file.path.endsWith('.jsx') ? 'jsx' : 'js',
+            jsx: 'automatic',
+            jsxImportSource: 'react',
+            target: 'es2020',
+            format: 'esm',
+          });
+
+          // Strip import/export for inline execution
+          let code = result.code;
+          // Remove import statements (will be loaded from CDN)
+          code = code.replace(/^import\s+.*?from\s+['"][^'"]+['"];?\s*$/gm, '');
+          code = code.replace(/^import\s+['"][^'"]+['"];?\s*$/gm, '');
+          // Convert export default to variable assignment
+          code = code.replace(/export\s+default\s+function\s+(\w+)/g, 'const $1 = function $1');
+          code = code.replace(/export\s+default\s+/g, 'const _default = ');
+          // Remove other exports
+          code = code.replace(/^export\s+\{[^}]*\};?\s*$/gm, '');
+          code = code.replace(/^export\s+(const|let|var|function|class)\s+/gm, '$1 ');
+
+          transformedFiles.push({ path: file.path, code });
+          console.log('[ESBuild] ✅ Transformed:', file.path, '| Size:', code.length);
+        } catch (err) {
+          console.error('[ESBuild] ❌ Transform error:', file.path, err);
+          transformErrors.push({
+            line: 0,
+            column: 0,
+            message: `${file.path}: ${err instanceof Error ? err.message : 'Transform failed'}`,
+            severity: 'error' as const,
+            source: 'esbuild',
+          });
+        }
+      }
+
+      if (transformErrors.length > 0) {
+        return {
+          success: false,
+          errors: transformErrors,
+          buildTime: performance.now() - startTime,
+        };
+      }
+
+      // Combine transformed code
+      // Order: utilities first, then components, then App, then entry point
+      const orderedFiles = this.orderFiles(transformedFiles, entryPoint);
+      const bundledCode = orderedFiles.map(f => `// ${f.path}\n${f.code}`).join('\n\n');
+
+      console.log('[ESBuild] ✅ All files transformed! Total size:', bundledCode.length);
+
+      const errors: FileError[] = [];
+      const warnings: FileError[] = [];
 
       // Generate preview HTML
       const html = this.generatePreviewHTML(bundledCode, project);
@@ -341,11 +380,16 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       }
     }
 
+    console.log('[ESBuild:VFS] 📁 Created file map with', fileMap.size, 'entries');
+
     return {
       name: 'virtual-fs',
       setup: (build) => {
+        console.log('[ESBuild:VFS] 🔧 Plugin setup called');
+
         // Resolve virtual files
         build.onResolve({ filter: /^[./]/ }, (args) => {
+          console.log('[ESBuild:VFS] 🔍 Resolving:', args.path, 'from:', args.importer);
           let path = args.path;
 
           // Handle relative imports
@@ -364,6 +408,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           for (const ext of extensions) {
             const fullPath = path + ext;
             if (fileMap.has(fullPath)) {
+              console.log('[ESBuild:VFS] ✅ Resolved to:', fullPath);
               return { path: fullPath, namespace: 'virtual-fs' };
             }
           }
@@ -372,18 +417,22 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           for (const ext of ['/index.tsx', '/index.ts', '/index.jsx', '/index.js']) {
             const indexPath = path + ext;
             if (fileMap.has(indexPath)) {
+              console.log('[ESBuild:VFS] ✅ Resolved to index:', indexPath);
               return { path: indexPath, namespace: 'virtual-fs' };
             }
           }
 
+          console.log('[ESBuild:VFS] ⚠️ Not found in VFS:', path);
           return { path, namespace: 'virtual-fs' };
         });
 
         // Load virtual files
         build.onLoad({ filter: /.*/, namespace: 'virtual-fs' }, (args) => {
+          console.log('[ESBuild:VFS] 📄 Loading:', args.path);
           const file = fileMap.get(args.path) || fileMap.get(args.path.slice(1));
 
           if (!file) {
+            console.log('[ESBuild:VFS] ❌ File not found:', args.path);
             return {
               errors: [{
                 text: `File not found: ${args.path}`,
@@ -406,11 +455,14 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
             default: loader = 'tsx'; break;
           }
 
+          console.log('[ESBuild:VFS] ✅ Loaded:', args.path, '| Size:', file.content.length, '| Loader:', loader);
           return {
             contents: file.content,
             loader,
           };
         });
+
+        console.log('[ESBuild:VFS] ✅ Plugin setup complete');
       },
     };
   }
@@ -423,22 +475,29 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
     return {
       name: 'cdn-resolver',
       setup: (build) => {
+        console.log('[ESBuild:CDN] 🔧 Plugin setup called');
+
         // Match bare imports (npm packages)
         build.onResolve({ filter: /^[^./]/ }, (args) => {
           const packageName = args.path;
+          console.log('[ESBuild:CDN] 📦 Resolving package:', packageName);
 
           // Skip if already a URL
           if (packageName.startsWith('http')) {
+            console.log('[ESBuild:CDN] ↗️ External URL:', packageName);
             return { external: true };
           }
 
           // Mark as external, will be loaded from CDN at runtime
+          console.log('[ESBuild:CDN] ✅ Marked external:', packageName);
           return {
             path: packageName,
             namespace: 'cdn',
             external: true,
           };
         });
+
+        console.log('[ESBuild:CDN] ✅ Plugin setup complete');
       },
     };
   }
@@ -714,9 +773,176 @@ ${bundledCode}
     return { imports };
   }
 
+  /**
+   * Generate fallback preview when ESBuild times out
+   * Uses Babel standalone to compile JSX in the browser
+   */
+  private generateFallbackPreview(files: VirtualFile[], project: AlfredProject): string {
+    // Find main component file (App.tsx or similar)
+    const appFile = files.find(f =>
+      f.path.includes('App.tsx') ||
+      f.path.includes('App.jsx')
+    );
+
+    // Find all component files
+    const componentFiles = files.filter(f =>
+      (f.path.endsWith('.tsx') || f.path.endsWith('.jsx')) &&
+      !f.path.includes('main.tsx') &&
+      !f.path.includes('index.tsx')
+    );
+
+    // Build inline modules
+    const inlineModules = componentFiles.map(f => {
+      // Clean up the code - remove import/export statements for inline use
+      let code = f.content;
+      // Keep React import but make it global
+      code = code.replace(/import\s+React.*from\s+['"]react['"]/g, '// React is global');
+      code = code.replace(/import\s+\{[^}]+\}\s+from\s+['"]react['"]/g, '// React hooks are global');
+      // Remove other imports for now
+      code = code.replace(/import\s+.*from\s+['"][^'"]+['"]/g, '// import removed for fallback');
+      // Convert export default to window assignment
+      const exportMatch = code.match(/export\s+default\s+(\w+)/);
+      if (exportMatch) {
+        code = code.replace(/export\s+default\s+\w+/, '');
+        code += `\nwindow.${exportMatch[1]} = ${exportMatch[1]};`;
+      }
+      return { path: f.path, code };
+    });
+
+    const appCode = appFile ? appFile.content : componentFiles[0]?.content || 'function App() { return <div>No App component found</div>; }';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${project.name || 'Alfred Preview'} (Fallback Mode)</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React from CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel for JSX transformation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root {
+      min-height: 100vh;
+      width: 100%;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+    }
+    body {
+      -webkit-font-smoothing: antialiased;
+    }
+    .fallback-banner {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(139, 92, 246, 0.9);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .alfred-error-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      color: #ff6b6b;
+      padding: 20px;
+      font-family: 'Fira Code', monospace;
+      font-size: 14px;
+      overflow: auto;
+      z-index: 99999;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="fallback-banner">⚡ Fallback Preview Mode</div>
+
+  <script type="text/babel" data-presets="react">
+    // Make React hooks available globally
+    const { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext } = React;
+
+    // Simple lucide icon component
+    const Icon = ({ name, size = 24, ...props }) => {
+      const ref = React.useRef(null);
+      React.useEffect(() => {
+        if (ref.current && window.lucide) {
+          ref.current.innerHTML = '';
+          const icon = window.lucide.createElement(window.lucide.icons[name] || window.lucide.icons.circle);
+          if (icon) ref.current.appendChild(icon);
+        }
+      }, [name]);
+      return <span ref={ref} style={{ display: 'inline-flex', width: size, height: size }} {...props} />;
+    };
+
+    // Main App component
+    ${this.stripImportsExports(appCode)}
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+
+  <script>
+    // Error handling
+    window.onerror = (message, source, line, col, error) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'alfred-error-overlay';
+      overlay.innerHTML = '<div style="font-size:18px;font-weight:bold;margin-bottom:16px;">Runtime Error</div><div>' + message + '</div><div style="margin-top:16px;opacity:0.8;white-space:pre-wrap;">' + (error?.stack || '') + '</div>';
+      document.body.appendChild(overlay);
+    };
+  </script>
+</body>
+</html>`;
+  }
+
+  /**
+   * Strip import/export statements for inline JSX
+   */
+  private stripImportsExports(code: string): string {
+    let result = code;
+    // Remove import statements
+    result = result.replace(/import\s+.*from\s+['"][^'"]+['"];?\n?/g, '');
+    result = result.replace(/import\s+['"][^'"]+['"];?\n?/g, '');
+    // Remove export default
+    result = result.replace(/export\s+default\s+/g, '');
+    // Remove named exports
+    result = result.replace(/export\s+\{[^}]+\};?\n?/g, '');
+    result = result.replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ');
+    return result;
+  }
+
   // ==========================================================================
   // UTILITIES
   // ==========================================================================
+
+  /**
+   * Order files for execution: components before App, App before entry point
+   */
+  private orderFiles(files: { path: string; code: string }[], entryPoint: string): { path: string; code: string }[] {
+    const isEntry = (p: string) => p === entryPoint || p.includes('main.') || p.includes('index.');
+    const isApp = (p: string) => p.toLowerCase().includes('app.');
+    const isUtil = (p: string) => p.includes('util') || p.includes('lib') || p.includes('helper') || p.includes('hook');
+
+    // Sort: utils -> components -> App -> entry
+    return [...files].sort((a, b) => {
+      const aScore = isEntry(a.path) ? 4 : isApp(a.path) ? 3 : isUtil(a.path) ? 1 : 2;
+      const bScore = isEntry(b.path) ? 4 : isApp(b.path) ? 3 : isUtil(b.path) ? 1 : 2;
+      return aScore - bScore;
+    });
+  }
 
   /**
    * Find entry point from files

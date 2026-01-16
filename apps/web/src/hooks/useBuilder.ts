@@ -68,7 +68,7 @@ export interface UseBuilderResult {
   // LLM Integration
   processChunk: (chunk: string) => void;
   processComplete: (output: string) => void;
-  syncFiles: () => void;
+  syncFiles: (fullOutput?: string) => VirtualFile[];
 
   // Manager access for advanced usage
   manager: PreviewManager | null;
@@ -265,8 +265,18 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
 
     console.log('[useBuilder] 🔨 rebuild() starting, setting isBuilding=true');
     setIsBuilding(true);
+
+    // Add timeout to prevent hanging forever
+    const timeoutPromise = new Promise<null>((_, reject) => {
+      setTimeout(() => reject(new Error('Build timeout after 30s')), 30000);
+    });
+
     try {
-      const result = await manager.rebuild();
+      const result = await Promise.race([
+        manager.rebuild(),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof manager.rebuild>>;
+
       console.log('[useBuilder] ✅ rebuild() completed, success:', result?.success, 'HTML length:', result?.html?.length || 0);
       // Explicitly set preview result here as well (in addition to onPreviewUpdate callback)
       if (result) {

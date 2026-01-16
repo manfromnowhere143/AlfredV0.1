@@ -90,9 +90,10 @@ export class MultiFileStreamingParser {
   processChunk(chunk: string): void {
     this.buffer += chunk;
 
-    // Debug: Log buffer length periodically
-    if (this.buffer.length % 1000 < chunk.length) {
-      console.log('[Parser] 📊 Buffer size:', this.buffer.length, '| Format:', this.detectedFormat);
+    // Debug: Log buffer info more aggressively
+    const hasMarkers = this.buffer.includes('<<<FILE:') || this.buffer.includes('<<<PROJECT');
+    if (hasMarkers || this.buffer.length % 1000 < chunk.length) {
+      console.log('[Parser] 📊 Buffer size:', this.buffer.length, '| Format:', this.detectedFormat, '| Has markers:', hasMarkers);
     }
 
     // Auto-detect format on first significant content
@@ -116,6 +117,8 @@ export class MultiFileStreamingParser {
     let iterations = 0;
     const maxIterations = 100; // Safety limit
 
+    console.log('[Parser] 🔄 Starting parse loop, buffer length:', this.buffer.length);
+
     while (this.buffer.length !== lastBufferLength && iterations < maxIterations) {
       lastBufferLength = this.buffer.length;
       iterations++;
@@ -126,6 +129,8 @@ export class MultiFileStreamingParser {
         this.parseMarkerFormat();
       }
     }
+
+    console.log('[Parser] 🔄 Parse loop done. Iterations:', iterations, '| Completed files:', this.state.completedFiles.length);
   }
 
   // ==========================================================================

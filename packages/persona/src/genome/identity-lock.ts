@@ -38,22 +38,111 @@ import type {
     VisualDNA,
     PersonaGenome,
   } from './types';
-  
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PIXAR-QUALITY IMAGE GENERATION PRESETS
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //
+  // "Make something wonderful and put it out there." — Steve Jobs
+  //
+  // These presets define the exact parameters for Pixar-quality image generation.
+  // Each preset is carefully tuned for optimal FLUX output.
+  //
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const IMAGE_QUALITY_PRESETS = {
+    // Fast preview for iteration
+    draft: {
+      steps: 15,
+      cfgScale: 3.5,
+      width: 768,
+      height: 768,
+      sampler: "euler",
+      scheduler: "normal",
+    },
+    // Balanced quality/speed for most use cases
+    standard: {
+      steps: 28,
+      cfgScale: 3.5,
+      width: 1024,
+      height: 1024,
+      sampler: "euler",
+      scheduler: "normal",
+    },
+    // High quality for final output
+    high: {
+      steps: 40,
+      cfgScale: 3.5,
+      width: 1024,
+      height: 1024,
+      sampler: "dpmpp_2m",
+      scheduler: "karras",
+    },
+    // Pixar-quality for hero images
+    pixar: {
+      steps: 50,
+      cfgScale: 3.5,
+      width: 1024,
+      height: 1024,
+      sampler: "dpmpp_2m_sde",
+      scheduler: "karras",
+    },
+    // Cinema-quality for maximum fidelity
+    cinema: {
+      steps: 75,
+      cfgScale: 3.5,
+      width: 1024,
+      height: 1024,
+      sampler: "dpmpp_2m_sde",
+      scheduler: "karras",
+    },
+  } as const;
+
+  export type ImageQualityPreset = keyof typeof IMAGE_QUALITY_PRESETS;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PIXAR-QUALITY STYLE PROMPTS - The Soul of Visual Generation
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const PIXAR_STYLE_PROMPTS = {
+    // The core Pixar aesthetic - friendly, appealing, full of life
+    pixar_3d: `masterpiece, pixar style, disney pixar 3d render, stunning character portrait, octane render, unreal engine 5, soft subsurface scattering, beautiful expressive eyes with catchlights, smooth flawless skin texture, gentle ambient occlusion, professional studio lighting with rim light, detailed face with appealing proportions, warm inviting expression, friendly character design, high detail, 8k resolution, photorealistic rendering`,
+
+    // Arcane/League of Legends stylized look
+    arcane_stylized: `masterpiece, arcane league of legends style, fortiche production, stylized painterly portrait, dramatic volumetric lighting, expressive detailed face, sharp features, glowing eyes, painterly brush strokes, cinematic color grading, detailed textures, atmospheric, moody lighting, professional digital art, trending on artstation, 8k ultra detailed`,
+
+    // Premium anime aesthetic
+    anime_premium: `masterpiece, best quality, ultra detailed anime portrait, beautiful detailed eyes with reflections, sharp linework, professional anime style, studio quality, soft shading, beautiful lighting, detailed hair, expressive face, clean background, trending on pixiv, professional illustration`,
+
+    // Hyperrealistic photographic quality
+    hyper_realistic: `masterpiece, hyperrealistic portrait photography, shot on hasselblad h6d-400c, zeiss otus 85mm f/1.4, professional studio lighting setup, octane render, subsurface scattering, detailed skin pores and texture, sharp focus on eyes, shallow depth of field, 8k resolution, RAW photo, photorealistic, award winning portrait photography`,
+
+    // Epic fantasy character
+    fantasy_epic: `masterpiece, epic fantasy character portrait, dramatic cinematic lighting, magical atmosphere, detailed ornate costume, mystical aura effects, professional concept art, trending on artstation, by greg rutkowski and ross tran, 8k ultra detailed, volumetric lighting`,
+
+    // Clean corporate professional look
+    corporate_professional: `masterpiece, professional business headshot, clean white or gray background, soft studio lighting, professional attire, confident approachable expression, linkedin profile quality, corporate photography style, sharp focus, high detail, professional retouching`,
+  } as const;
+
+  export type PixarStylePreset = keyof typeof PIXAR_STYLE_PROMPTS;
+
   // ═══════════════════════════════════════════════════════════════════════════════
   // TYPES
   // ═══════════════════════════════════════════════════════════════════════════════
-  
+
   /**
    * GPU Provider configuration
    */
   export interface GPUProviderConfig {
-    provider: 'runpod' | 'modal' | 'replicate' | 'fal' | 'together';
+    provider: 'runpod' | 'modal' | 'fal' | 'together';
     apiKey: string;
     baseUrl?: string;
     /** Timeout in ms */
     timeout?: number;
     /** Max retries on failure */
     maxRetries?: number;
+    /** Quality preset for image generation */
+    qualityPreset?: ImageQualityPreset;
   }
   
   /**
@@ -141,7 +230,7 @@ import type {
   
   /**
    * Abstract GPU provider interface
-   * Allows switching between RunPod, Modal, Replicate, etc.
+   * Allows switching between RunPod, Modal, Fal, etc.
    */
   export abstract class GPUProvider {
     protected config: GPUProviderConfig;
@@ -206,14 +295,74 @@ import type {
       console.log('[RunPod] Generating with ComfyUI SDXL...');
       console.log(`[RunPod] Endpoint: ${this.endpointId}`);
 
-      // ComfyUI SDXL workflow
+      // Retry logic for cold starts - first few generations may return blank
+      const MAX_RETRIES = 3;
+      let lastResult: GenerationResult | null = null;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const result = await this._generateWithIdentityAttempt(request, seed + (attempt - 1), startTime, attempt);
+        lastResult = result;
+
+        // Check if image is blank (all null bytes after PNG header)
+        if (this.isImageBlank(result.imageUrl)) {
+          console.warn(`[RunPod] Attempt ${attempt}/${MAX_RETRIES}: Got blank image, model may be loading...`);
+          if (attempt < MAX_RETRIES) {
+            // Wait a bit longer for cold start
+            await new Promise(r => setTimeout(r, 3000 * attempt));
+            continue;
+          }
+          console.error('[RunPod] All retries returned blank images - model may not be loaded');
+        }
+
+        // Image is valid, return it
+        return result;
+      }
+
+      return lastResult!;
+    }
+
+    /**
+     * Check if a base64 image is blank (all zeros after header)
+     */
+    private isImageBlank(imageUrl: string): boolean {
+      if (!imageUrl.startsWith('data:image')) return false;
+
+      // Extract base64 data
+      const base64Data = imageUrl.split(',')[1];
+      if (!base64Data || base64Data.length < 200) return true;
+
+      // Check if data after PNG header is mostly zeros (AAAA in base64 = null bytes)
+      // Look at bytes 100-200 of the base64 data - should have variation if real image
+      const sampleSection = base64Data.substring(100, 200);
+      const uniqueChars = new Set(sampleSection).size;
+
+      // A real image will have variety; blank image will be mostly 'A' (null bytes)
+      if (uniqueChars < 5) {
+        console.log(`[RunPod] Blank image detected: only ${uniqueChars} unique chars in sample`);
+        return true;
+      }
+
+      return false;
+    }
+
+    private async _generateWithIdentityAttempt(
+      request: GenerationRequest,
+      seed: number,
+      startTime: number,
+      attempt: number
+    ): Promise<GenerationResult> {
+      if (attempt > 1) {
+        console.log(`[RunPod] Retry attempt ${attempt}...`);
+      }
+
+      // ComfyUI FLUX workflow (FLUX uses different settings than SDXL!)
       const workflow = this.buildSDXLWorkflow({
         prompt: request.prompt,
-        negativePrompt: request.negativePrompt || 'blurry, low quality, distorted, ugly, bad anatomy',
+        negativePrompt: '', // FLUX ignores negative prompts - leave empty!
         width: request.params?.width || 1024,
         height: request.params?.height || 1024,
-        steps: request.params?.steps || 25,
-        cfgScale: request.params?.cfgScale || 7.0,
+        steps: request.params?.steps || 28, // FLUX quality: 28 steps
+        cfgScale: request.params?.cfgScale || 3.5, // FLUX: 1.0-3.5, NOT 7-9!
         seed,
       });
 
@@ -295,8 +444,12 @@ import type {
     }
 
     /**
-     * Build FLUX workflow for ComfyUI
-     * Uses flux1-dev-fp8.safetensors (state-of-the-art!)
+     * Build Flux workflow for ComfyUI
+     * Uses flux1-dev-fp8.safetensors (fast, high quality)
+     *
+     * CRITICAL: Positive and negative prompts must use DIFFERENT nodes!
+     *
+     * Supports Pixar-quality presets with advanced samplers.
      */
     private buildSDXLWorkflow(params: {
       prompt: string;
@@ -306,15 +459,23 @@ import type {
       steps: number;
       cfgScale: number;
       seed: number;
+      sampler?: string;
+      scheduler?: string;
     }): object {
-      // FLUX workflow - simpler than SDXL, no negative prompt needed
+      // Default to euler if not specified (works best for FLUX)
+      const samplerName = params.sampler || "euler";
+      const schedulerName = params.scheduler || "normal";
+
+      // Flux workflow with proper positive/negative conditioning
       return {
+        // Load Flux checkpoint (base model)
         "4": {
           "class_type": "CheckpointLoaderSimple",
           "inputs": {
             "ckpt_name": "flux1-dev-fp8.safetensors"
           }
         },
+        // Empty latent for image generation
         "5": {
           "class_type": "EmptyLatentImage",
           "inputs": {
@@ -323,6 +484,7 @@ import type {
             "width": params.width
           }
         },
+        // POSITIVE prompt encoding
         "6": {
           "class_type": "CLIPTextEncode",
           "inputs": {
@@ -330,21 +492,31 @@ import type {
             "text": params.prompt
           }
         },
+        // NEGATIVE prompt encoding - SEPARATE NODE!
+        "7": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": ["4", 1],
+            "text": params.negativePrompt
+          }
+        },
+        // KSampler with quality preset sampler/scheduler
         "3": {
           "class_type": "KSampler",
           "inputs": {
-            "cfg": 1.0,
+            "cfg": params.cfgScale,
             "denoise": 1,
             "latent_image": ["5", 0],
             "model": ["4", 0],
-            "negative": ["6", 0],
-            "positive": ["6", 0],
-            "sampler_name": "euler",
-            "scheduler": "simple",
+            "negative": ["7", 0],  // Uses node 7 (negative prompt)
+            "positive": ["6", 0],  // Uses node 6 (positive prompt)
+            "sampler_name": samplerName,  // Pixar: dpmpp_2m_sde
+            "scheduler": schedulerName,   // Pixar: karras
             "seed": params.seed,
             "steps": params.steps
           }
         },
+        // Decode latent to image
         "8": {
           "class_type": "VAEDecode",
           "inputs": {
@@ -352,6 +524,7 @@ import type {
             "vae": ["4", 2]
           }
         },
+        // Save image
         "9": {
           "class_type": "SaveImage",
           "inputs": {
@@ -424,262 +597,6 @@ import type {
     private calculateCost(executionTimeMs: number): number {
       // RunPod A40 pricing: ~$0.00044 per second
       return (executionTimeMs / 1000) * 0.00044;
-    }
-  }
-  
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // REPLICATE PROVIDER — State-of-the-Art (FLUX PuLID + InstantID Fallback)
-  // ═══════════════════════════════════════════════════════════════════════════════
-  //
-  // "Every pixel intentional. Every face consistent."
-  //
-  // Model Hierarchy (2025 State-of-the-Art):
-  // 1. FLUX PuLID    — Best identity preservation (NeurIPS 2024)
-  // 2. InstantID     — Reliable fallback
-  //
-  // ═══════════════════════════════════════════════════════════════════════════════
-
-  export class ReplicateProvider extends GPUProvider {
-    private readonly baseUrl = 'https://api.replicate.com/v1';
-
-    // State-of-the-art models
-    private readonly MODELS = {
-      // Primary: FLUX PuLID — Best identity fidelity
-      FLUX_PULID: 'bytedance/pulid-flux',
-      // Fallback: InstantID — Reliable, well-tested
-      INSTANT_ID: 'zsxkib/instant-id',
-      // Face analysis
-      FACE_ANALYSIS: 'daanelson/face-analysis',
-    };
-
-    async extractFaceEmbedding(imageUrl: string): Promise<FaceDetectionResult> {
-      console.log('[Replicate] Extracting face embedding...');
-
-      const response = await fetch(`${this.baseUrl}/predictions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: this.MODELS.FACE_ANALYSIS,
-          input: {
-            image: imageUrl,
-            return_face_embeddings: true,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Face analysis request failed: ${response.status}`);
-      }
-
-      const prediction = await response.json();
-      const result = await this.waitForPrediction(prediction.id);
-
-      if (!result.output?.faces?.length) {
-        throw new Error('No face detected in image');
-      }
-
-      const face = result.output.faces[0];
-      console.log(`[Replicate] Face detected with confidence: ${face.confidence}`);
-
-      return {
-        bbox: face.bbox || [0, 0, 0, 0],
-        landmarks: face.landmarks || [],
-        confidence: face.confidence || face.det_score || 0.9,
-        embedding: face.embedding || [],
-        age: face.age,
-        gender: face.gender,
-      };
-    }
-
-    async generateWithIdentity(request: GenerationRequest): Promise<GenerationResult> {
-      // Try FLUX PuLID first (state-of-the-art)
-      try {
-        return await this.generateWithFluxPuLID(request);
-      } catch (error) {
-        console.warn('[Replicate] FLUX PuLID failed, falling back to InstantID:', error);
-        return await this.generateWithInstantID(request);
-      }
-    }
-
-    /**
-     * FLUX PuLID — State-of-the-art identity preservation
-     * NeurIPS 2024 — Pure and Lightning ID Customization
-     */
-    private async generateWithFluxPuLID(request: GenerationRequest): Promise<GenerationResult> {
-      const startTime = Date.now();
-      const seed = request.params?.seed || Math.floor(Math.random() * 2147483647);
-
-      console.log('[Replicate] Generating with FLUX PuLID (State-of-the-Art)...');
-
-      const response = await fetch(`${this.baseUrl}/predictions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: this.MODELS.FLUX_PULID,
-          input: {
-            prompt: request.prompt,
-            // PuLID uses reference image directly, not embedding
-            main_face_image: request.referenceImageUrl,
-            // FLUX parameters
-            num_steps: request.params?.steps || 28,
-            guidance_scale: request.params?.cfgScale || 4.0,
-            seed,
-            width: request.params?.width || 1024,
-            height: request.params?.height || 1024,
-            // PuLID identity strength
-            id_weight: request.params?.identityStrength || 1.0,
-            // Output format
-            output_format: 'webp',
-            output_quality: 95,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`FLUX PuLID request failed: ${response.status} - ${error}`);
-      }
-
-      const prediction = await response.json();
-      const result = await this.waitForPrediction(prediction.id);
-
-      const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-      const generationTimeMs = Date.now() - startTime;
-
-      console.log(`[Replicate] FLUX PuLID complete in ${generationTimeMs}ms`);
-
-      return {
-        imageUrl,
-        seed,
-        generationTimeMs,
-        cost: this.calculateCost(result.metrics?.predict_time || 0),
-      };
-    }
-
-    /**
-     * InstantID — Reliable fallback
-     */
-    private async generateWithInstantID(request: GenerationRequest): Promise<GenerationResult> {
-      const startTime = Date.now();
-      const seed = request.params?.seed || Math.floor(Math.random() * 2147483647);
-
-      console.log('[Replicate] Generating with InstantID (Fallback)...');
-
-      const response = await fetch(`${this.baseUrl}/predictions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: this.MODELS.INSTANT_ID,
-          input: {
-            prompt: request.prompt,
-            negative_prompt: request.negativePrompt || 'blurry, low quality, distorted face, ugly',
-            image: request.referenceImageUrl,
-            ip_adapter_scale: request.params?.styleStrength || 0.8,
-            identitynet_strength_ratio: request.params?.identityStrength || 0.8,
-            num_inference_steps: request.params?.steps || 30,
-            guidance_scale: request.params?.cfgScale || 5.0,
-            seed,
-            width: request.params?.width || 1024,
-            height: request.params?.height || 1024,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`InstantID request failed: ${response.status} - ${error}`);
-      }
-
-      const prediction = await response.json();
-      const result = await this.waitForPrediction(prediction.id);
-
-      const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-      const generationTimeMs = Date.now() - startTime;
-
-      console.log(`[Replicate] InstantID complete in ${generationTimeMs}ms`);
-
-      return {
-        imageUrl,
-        seed,
-        generationTimeMs,
-        cost: this.calculateCost(result.metrics?.predict_time || 0),
-      };
-    }
-
-    async generateBatch(requests: GenerationRequest[]): Promise<GenerationResult[]> {
-      // Run in parallel with concurrency limit
-      const CONCURRENCY = 4;
-      const results: GenerationResult[] = [];
-
-      for (let i = 0; i < requests.length; i += CONCURRENCY) {
-        const batch = requests.slice(i, i + CONCURRENCY);
-        const batchResults = await Promise.all(
-          batch.map((req) => this.generateWithIdentity(req))
-        );
-        results.push(...batchResults);
-      }
-
-      return results;
-    }
-
-    async healthCheck(): Promise<boolean> {
-      try {
-        const response = await fetch(`${this.baseUrl}/models`, {
-          headers: { 'Authorization': `Token ${this.config.apiKey}` },
-        });
-        return response.ok;
-      } catch {
-        return false;
-      }
-    }
-
-    async getQueueDepth(): Promise<number> {
-      return 0;
-    }
-
-    private async waitForPrediction(id: string, maxAttempts = 120): Promise<any> {
-      console.log(`[Replicate] Waiting for prediction ${id}...`);
-
-      for (let i = 0; i < maxAttempts; i++) {
-        const response = await fetch(`${this.baseUrl}/predictions/${id}`, {
-          headers: { 'Authorization': `Token ${this.config.apiKey}` },
-        });
-
-        const prediction = await response.json();
-
-        if (prediction.status === 'succeeded') {
-          console.log(`[Replicate] Prediction ${id} succeeded`);
-          return prediction;
-        }
-
-        if (prediction.status === 'failed') {
-          console.error(`[Replicate] Prediction ${id} failed:`, prediction.error);
-          throw new Error(`Prediction failed: ${prediction.error}`);
-        }
-
-        if (prediction.status === 'canceled') {
-          throw new Error('Prediction was canceled');
-        }
-
-        // Wait before polling again (1 second)
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-
-      throw new Error(`Prediction timed out after ${maxAttempts} seconds`);
-    }
-
-    private calculateCost(predictTimeSeconds: number): number {
-      // Replicate H100 pricing for FLUX models
-      return predictTimeSeconds * 0.0032;
     }
   }
   
@@ -757,12 +674,12 @@ import type {
   
       const requests: GenerationRequest[] = Array.from({ length: count }, () => ({
         prompt,
-        negativePrompt,
+        negativePrompt: '', // FLUX ignores negative prompts
         params: {
           width: this.settings.defaultWidth,
           height: this.settings.defaultHeight,
-          steps: 30,
-          cfgScale: 7.5,
+          steps: 28, // FLUX quality steps
+          cfgScale: 3.5, // FLUX optimal (NOT 7.5!)
           // Different seeds for variation
           seed: Math.floor(Math.random() * 2147483647),
         },
@@ -866,14 +783,14 @@ import type {
   
         const result = await this.config.primaryProvider.generateWithIdentity({
           prompt: fullPrompt,
-          negativePrompt: styleEmbedding.negativePrompt,
+          negativePrompt: '', // FLUX ignores negative prompts
           faceEmbedding: faceEmbedding.vector,
           styleEmbedding: styleEmbedding.vector.length > 0 ? styleEmbedding.vector : undefined,
           params: {
             width: this.settings.defaultWidth,
             height: this.settings.defaultHeight,
-            steps: 30,
-            cfgScale: 7.5,
+            steps: 28, // FLUX quality
+            cfgScale: 3.5, // FLUX optimal (NOT 7.5!)
             identityStrength: 0.85,
             styleStrength: 0.3,
           },
@@ -937,16 +854,16 @@ import type {
         styleEmbedding,
         expressions,
         generationConfig: {
-          checkpoint: 'sd_xl_base_1.0',
-          cfgScale: 7.5,
-          sampler: 'DPM++ 2M Karras',
-          steps: 30,
+          checkpoint: 'flux1-dev-fp8',
+          cfgScale: 3.5, // FLUX optimal (NOT 7.5!)
+          sampler: 'euler',
+          steps: 28, // FLUX quality steps
           identityStrength: 0.85,
           styleStrength: 0.3,
         },
         lockedPrompt: {
           positive: styleEmbedding.stylePrompt || '',
-          negative: styleEmbedding.negativePrompt || this.getDefaultNegativePrompt(stylePreset),
+          negative: '', // FLUX ignores negative prompts
         },
       };
     }
@@ -960,38 +877,21 @@ import type {
       stylePreset: string,
       customAddition?: string
     ): string {
-      const stylePrompts: Record<string, string> = {
-        pixar_3d: 'pixar style, 3d render, high quality character portrait, soft lighting, smooth skin, expressive eyes',
-        arcane_stylized: 'arcane style, stylized portrait, painterly, dramatic lighting, detailed face, expressive',
-        anime_premium: 'masterpiece, best quality, anime style, detailed face, beautiful eyes, sharp features',
-        hyper_realistic: 'hyperrealistic portrait, professional photography, studio lighting, sharp focus, high detail, 8k',
-        fantasy_epic: 'epic fantasy portrait, dramatic lighting, detailed face, magical aura, cinematic',
-        corporate_professional: 'professional business portrait, clean background, studio lighting, corporate headshot',
-      };
-  
-      const stylePrefix = stylePrompts[stylePreset] || stylePrompts.hyper_realistic;
+      // Use the Pixar-quality style prompts defined at module level
+      const stylePrefix = PIXAR_STYLE_PROMPTS[stylePreset as PixarStylePreset] || PIXAR_STYLE_PROMPTS.hyper_realistic;
       const parts = [stylePrefix, description];
-      
+
       if (customAddition) {
         parts.push(customAddition);
       }
-  
+
       return parts.join(', ');
     }
   
     private getDefaultNegativePrompt(stylePreset: string): string {
-      const baseNegative = 'ugly, deformed, noisy, blurry, distorted, out of focus, bad anatomy, extra limbs, poorly drawn face, poorly drawn hands, missing fingers';
-  
-      const styleNegatives: Record<string, string> = {
-        pixar_3d: `${baseNegative}, photo, realistic, anime, cartoon 2d, sketch, painting`,
-        arcane_stylized: `${baseNegative}, photo, realistic, anime, 3d render, cgi`,
-        anime_premium: `${baseNegative}, 3d, realistic, photo, lowres, worst quality, low quality`,
-        hyper_realistic: `${baseNegative}, cartoon, anime, illustration, painting, drawing, cgi, 3d render`,
-        fantasy_epic: `${baseNegative}, anime, cartoon, photo, modern`,
-        corporate_professional: `${baseNegative}, casual, artistic, stylized, fantasy, dramatic`,
-      };
-  
-      return styleNegatives[stylePreset] || baseNegative;
+      // FLUX ignores negative prompts - they can actually HURT quality
+      // Return empty string for FLUX model
+      return '';
     }
   }
   
@@ -1000,59 +900,30 @@ import type {
   // ═══════════════════════════════════════════════════════════════════════════════
   
   /**
-   * Create an Identity Lock Pipeline with default configuration
+   * Create an Identity Lock Pipeline with RunPod
    *
-   * Priority: RunPod (if endpoint configured) > Replicate (FLUX PuLID)
+   * Uses RunPod ComfyUI with FLUX for state-of-the-art image generation.
+   * No fallbacks - RunPod is our ONLY GPU provider.
    */
   export function createIdentityLockPipeline(options: {
     runpodApiKey?: string;
     runpodEndpointId?: string;
-    replicateApiKey?: string;
     storage: IdentityLockConfig['storage'];
   }): IdentityLockPipeline {
-    let primaryProvider: GPUProvider;
-    let fallbackProvider: GPUProvider | undefined;
-
-    // Prefer RunPod if endpoint is configured (user has credits there)
-    if (options.runpodApiKey && options.runpodEndpointId) {
-      primaryProvider = new RunPodProvider({
-        provider: 'runpod',
-        apiKey: options.runpodApiKey,
-        baseUrl: options.runpodEndpointId, // Pass endpoint ID
-      });
-      console.log(`[Pipeline] Primary: RunPod ComfyUI (${options.runpodEndpointId})`);
-
-      // Replicate as fallback if configured
-      if (options.replicateApiKey) {
-        fallbackProvider = new ReplicateProvider({
-          provider: 'replicate',
-          apiKey: options.replicateApiKey,
-        });
-        console.log('[Pipeline] Fallback: Replicate (FLUX PuLID)');
-      }
-    } else if (options.replicateApiKey) {
-      primaryProvider = new ReplicateProvider({
-        provider: 'replicate',
-        apiKey: options.replicateApiKey,
-      });
-      console.log('[Pipeline] Primary: Replicate (FLUX PuLID + InstantID)');
-
-      // RunPod as fallback if configured
-      if (options.runpodApiKey && options.runpodEndpointId) {
-        fallbackProvider = new RunPodProvider({
-          provider: 'runpod',
-          apiKey: options.runpodApiKey,
-          baseUrl: options.runpodEndpointId,
-        });
-        console.log('[Pipeline] Fallback: RunPod');
-      }
-    } else {
-      throw new Error('At least one GPU provider API key is required');
+    // RunPod is required - no fallbacks
+    if (!options.runpodApiKey || !options.runpodEndpointId) {
+      throw new Error('RunPod API key and endpoint ID are required (RUNPOD_API_KEY, RUNPOD_ENDPOINT_ID)');
     }
+
+    const primaryProvider = new RunPodProvider({
+      provider: 'runpod',
+      apiKey: options.runpodApiKey,
+      baseUrl: options.runpodEndpointId,
+    });
+    console.log(`[Pipeline] Using RunPod ComfyUI FLUX (${options.runpodEndpointId})`);
 
     return new IdentityLockPipeline({
       primaryProvider,
-      fallbackProvider,
       storage: options.storage,
     });
   }

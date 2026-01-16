@@ -87,40 +87,136 @@ async function getUserFromRequest(request: NextRequest): Promise<string | null> 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSION STORAGE (Redis-backed in production)
+// SESSION STORAGE — Database-backed (survives server restarts!)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * In-memory session storage for development
- * TODO: Replace with Redis for production
- * 
- * ```typescript
- * // Production implementation:
- * const redis = new Redis(process.env.REDIS_URL);
- * const sessionStorage = {
- *   save: (s) => redis.set(`wizard:${s.id}`, JSON.stringify(s), 'EX', 86400),
- *   load: (id) => redis.get(`wizard:${id}`).then(s => s ? JSON.parse(s) : null),
- *   delete: (id) => redis.del(`wizard:${id}`),
- * };
- * ```
+ * Database-backed session storage
+ * CRITICAL: Survives hot reloads and server restarts
+ * Uses personaWizardSessions table from @alfred/database
  */
-const wizardSessions = new Map<string, WizardSession>();
-
 const sessionStorage = {
   async save(session: WizardSession): Promise<void> {
-    wizardSessions.set(session.id, session);
-    console.log(`[Session] Saved: ${session.id} (step: ${session.currentStep})`);
-  },
-  async load(sessionId: string): Promise<WizardSession | null> {
-    const session = wizardSessions.get(sessionId) || null;
-    if (session) {
-      console.log(`[Session] Loaded: ${sessionId} (step: ${session.currentStep})`);
+    console.log(`[Session] Saving to database: ${session.id} (step: ${session.currentStep})`);
+
+    // Map WizardSession to database columns
+    const dbData = {
+      id: session.id,
+      personaId: session.personaId,
+      userId: session.userId,
+      currentStep: session.currentStep,
+      stepsStatus: session.steps,
+      sparkData: session.data.spark ? {
+        name: session.data.spark.name,
+        tagline: session.data.spark.tagline,
+        description: session.data.spark.description,
+        archetype: session.data.spark.archetype,
+        suggestedTraits: session.data.spark.suggestedTraits,
+        backstoryHook: session.data.spark.backstoryHook,
+      } : null,
+      visualData: session.data.visual ? {
+        stylePreset: session.data.visual.stylePreset,
+        variations: session.data.visual.variations,
+        chosenIndex: session.data.visual.chosenIndex,
+        visualDNA: session.data.visual.visualDNA,
+      } : null,
+      voiceData: session.data.voice ? {
+        provider: session.data.voice.provider,
+        voiceId: session.data.voice.voiceId,
+        isCloned: session.data.voice.isCloned,
+        samples: session.data.voice.samples,
+      } : null,
+      mindData: session.data.mind ? {
+        traits: session.data.mind.traits,
+        communicationStyle: session.data.mind.communicationStyle,
+        // Convert knowledgeDomains to string[] for DB compatibility
+        knowledgeDomains: session.data.mind.knowledgeDomains?.map((d: any) =>
+          typeof d === 'string' ? d : d.domain
+        ),
+        backstory: session.data.mind.backstory,
+        systemPrompt: session.data.mind.systemPrompt,
+      } : null,
+      totalCostUsd: session.metadata.totalCost,
+      updatedAt: new Date(),
+      expiresAt: new Date(session.metadata.expiresAt),
+    };
+
+    // Upsert - insert or update
+    const existing = await db
+      .select({ id: schema.personaWizardSessions.id })
+      .from(schema.personaWizardSessions)
+      .where(eq(schema.personaWizardSessions.id, session.id))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(schema.personaWizardSessions)
+        .set(dbData)
+        .where(eq(schema.personaWizardSessions.id, session.id));
+    } else {
+      await db.insert(schema.personaWizardSessions).values({
+        ...dbData,
+        createdAt: new Date(),
+      });
     }
+
+    console.log(`[Session] ✅ Saved to database: ${session.id}`);
+  },
+
+  async load(sessionId: string): Promise<WizardSession | null> {
+    console.log(`[Session] Loading from database: ${sessionId}`);
+
+    const [row] = await db
+      .select()
+      .from(schema.personaWizardSessions)
+      .where(eq(schema.personaWizardSessions.id, sessionId))
+      .limit(1);
+
+    if (!row) {
+      console.log(`[Session] Not found in database: ${sessionId}`);
+      return null;
+    }
+
+    // Check expiration
+    if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
+      console.log(`[Session] Expired: ${sessionId}`);
+      await this.delete(sessionId);
+      return null;
+    }
+
+    // Reconstruct WizardSession from database row
+    const session: WizardSession = {
+      id: row.id,
+      personaId: row.personaId || '',
+      userId: row.userId,
+      currentStep: row.currentStep as any,
+      steps: (row.stepsStatus || {}) as any,
+      data: {
+        spark: row.sparkData as any,
+        visual: row.visualData as any,
+        voice: row.voiceData as any,
+        mind: row.mindData as any,
+        genome: undefined,
+      },
+      metadata: {
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        expiresAt: row.expiresAt?.toISOString() || new Date(Date.now() + 86400000).toISOString(),
+        totalCost: row.totalCostUsd || 0,
+        totalTimeMs: 0,
+      },
+    };
+
+    console.log(`[Session] ✅ Loaded from database: ${sessionId} (step: ${session.currentStep})`);
     return session;
   },
+
   async delete(sessionId: string): Promise<void> {
-    wizardSessions.delete(sessionId);
-    console.log(`[Session] Deleted: ${sessionId}`);
+    console.log(`[Session] Deleting from database: ${sessionId}`);
+    await db
+      .delete(schema.personaWizardSessions)
+      .where(eq(schema.personaWizardSessions.id, sessionId));
+    console.log(`[Session] ✅ Deleted: ${sessionId}`);
   },
 };
 
@@ -179,7 +275,7 @@ const llmClient = {
 const assetStorage = {
   async upload(buffer: Buffer, filename: string): Promise<string> {
     // TODO: Implement Supabase storage upload
-    // For now, return the URL directly (images come from Replicate/RunPod)
+    // Return the URL directly (images come from RunPod ComfyUI FLUX)
     console.log(`[Storage] Would upload: ${filename}`);
     return filename;
   },
@@ -195,30 +291,24 @@ const assetStorage = {
 /**
  * Initialize the Identity Lock Pipeline
  *
- * Provider Priority (configurable):
- * 1. RunPod ComfyUI — If RUNPOD_ENDPOINT_ID is set (your $30)
- * 2. Replicate FLUX PuLID — If only REPLICATE_API_TOKEN is set
+ * GPU Provider: RunPod ONLY - No fallbacks
+ * Uses ComfyUI with FLUX for state-of-the-art image generation.
  *
  * "Design is not just what it looks like. Design is how it works." — Steve Jobs
  */
 function getIdentityPipeline(): IdentityLockPipeline {
-  const replicateKey = process.env.REPLICATE_API_TOKEN;
   const runpodKey = process.env.RUNPOD_API_KEY;
   const runpodEndpoint = process.env.RUNPOD_ENDPOINT_ID;
 
-  if (!replicateKey && !runpodKey) {
-    throw new Error("No GPU provider API key configured (REPLICATE_API_TOKEN or RUNPOD_API_KEY)");
+  if (!runpodKey || !runpodEndpoint) {
+    throw new Error("RunPod not configured (RUNPOD_API_KEY, RUNPOD_ENDPOINT_ID required)");
   }
 
-  // Prefer RunPod if endpoint is configured (user has credits there)
-  const useRunPod = runpodKey && runpodEndpoint;
-  const provider = useRunPod ? `RunPod ComfyUI (${runpodEndpoint})` : "Replicate (FLUX PuLID)";
-  console.log(`[Pipeline] Initializing with ${provider} — State of the Art 2025`);
+  console.log(`[Pipeline] Initializing with RunPod ComfyUI FLUX (${runpodEndpoint}) — State of the Art 2025`);
 
   return createIdentityLockPipeline({
-    runpodApiKey: useRunPod ? runpodKey : undefined,
+    runpodApiKey: runpodKey,
     runpodEndpointId: runpodEndpoint,
-    replicateApiKey: useRunPod ? undefined : replicateKey, // Only use Replicate if not using RunPod
     storage: assetStorage,
   });
 }
@@ -568,7 +658,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         await service.update({ userId, tier: "pro" }, personaId, {
           name: genome.metadata.name,
           tagline: genome.metadata.tagline,
-          traits: genome.mindDNA.traits || [],
+          traits: genome.mindDNA?.traits || [],
           // Voice DNA
           voiceId: genome.voiceDNA?.voiceId || genome.voiceDNA?.identity?.voiceId,
           voiceProvider: genome.voiceDNA?.identity?.provider as "elevenlabs" | "coqui" | undefined,

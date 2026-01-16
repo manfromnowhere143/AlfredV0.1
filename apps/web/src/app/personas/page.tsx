@@ -1024,7 +1024,7 @@ function CreateFlow({
     setProcessingPhase('expressions');
 
     try {
-      await fetch(`/api/personas/${personaId}/wizard`, {
+      const response = await fetch(`/api/personas/${personaId}/wizard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1034,6 +1034,15 @@ function CreateFlow({
         }),
       });
 
+      const result = await response.json();
+
+      // CRITICAL: Check for success
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || `Lock identity failed: ${response.status}`);
+      }
+
+      console.log('[Wizard] Identity locked successfully:', result.data?.visualDNA?.primaryImageUrl?.substring(0, 50));
+
       // Brief complete animation
       setProcessingPhase('complete');
       await new Promise(r => setTimeout(r, 1000));
@@ -1042,7 +1051,8 @@ function CreateFlow({
       setStep(3); // Move to Voice step
     } catch (err: unknown) {
       setShowProcessing(false);
-      const errorMessage = err instanceof Error ? err.message : "Failed to lock";
+      const errorMessage = err instanceof Error ? err.message : "Failed to lock identity";
+      console.error('[Wizard] Lock identity error:', errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);

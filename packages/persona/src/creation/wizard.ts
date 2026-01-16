@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  * CREATION WIZARD
@@ -424,7 +426,7 @@ import type {
      */
     async startSession(userId: string, personaId: string): Promise<WizardSession> {
       const session: WizardSession = {
-        id: `wizard_${personaId}_${Date.now()}`,
+        id: randomUUID(), // Must be valid UUID for database storage
         userId,
         personaId,
         currentStep: 'spark',
@@ -564,14 +566,22 @@ import type {
       const { faceEmbedding, styleEmbedding } = await this.config.identityPipeline.lockIdentity(
         chosenImage!.imageUrl
       );
-  
-      const basePrompt = this.buildVisualDescription(spark, { stylePreset: visual.stylePreset });
-      const expressions = await this.config.identityPipeline.generateExpressionGrid(
-        faceEmbedding,
-        styleEmbedding,
-        basePrompt
-      );
-  
+
+      // SKIP EXPRESSION GENERATION - Saves 5+ minutes!
+      // Expressions are NOT used by RunPod video (uses single source image)
+      // LiveAvatar3DStaged and VideoPersona don't use expression grid either
+      // Create minimal placeholder with just the primary image as neutral
+      const expressions = {
+        neutral: {
+          intensity: 1.0,
+          imageUrl: chosenImage!.imageUrl,
+          thumbnailUrl: chosenImage!.imageUrl,
+          seed: chosenImage!.seed,
+          generatedAt: new Date().toISOString(),
+        },
+      } as any;
+      console.log('[Wizard] Skipping expression grid generation (not used by video pipeline)');
+
       const visualDNA = await this.config.identityPipeline.buildVisualDNA(
         faceEmbedding,
         styleEmbedding,

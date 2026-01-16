@@ -315,7 +315,8 @@ export const StreamingCodeDisplay = memo(function StreamingCodeDisplay({
         .code-display {
           flex: 1;
           display: flex;
-          overflow: auto;
+          overflow-y: auto;
+          overflow-x: auto;
           padding: 12px 0;
           min-height: 0;
         }
@@ -327,6 +328,8 @@ export const StreamingCodeDisplay = memo(function StreamingCodeDisplay({
           text-align: right;
           user-select: none;
           flex-shrink: 0;
+          background: #0d0d10;
+          border-right: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .line-number {
@@ -334,21 +337,25 @@ export const StreamingCodeDisplay = memo(function StreamingCodeDisplay({
           line-height: 20px;
           color: rgba(255, 255, 255, 0.2);
           min-width: 32px;
+          height: 20px;
         }
 
         .code-content {
           flex: 1;
           margin: 0;
           padding: 0 16px;
-          overflow-x: auto;
           font-size: 13px;
           line-height: 20px;
           color: rgba(255, 255, 255, 0.9);
+          min-width: 0;
+          /* Ensure the pre element displays correctly */
+          display: flex;
         }
 
         .code-content code {
           display: block;
           white-space: pre;
+          flex: 1;
         }
 
         .cursor {

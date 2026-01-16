@@ -876,10 +876,13 @@ export default function BuilderPage() {
           )}
           {(viewMode === 'preview' || viewMode === 'split') && (
             <div className={`preview-panel ${viewMode === 'split' ? 'split' : 'full'}`}>
-              {/* DEBUG: Show state values */}
+              {/* DEBUG: Show state values - both React state AND direct manager read */}
               {process.env.NODE_ENV === 'development' && (
-                <div style={{position:'absolute',top:4,right:4,zIndex:9999,fontSize:10,background:'rgba(0,0,0,0.8)',color:'#0f0',padding:'4px 8px',borderRadius:4,fontFamily:'monospace'}}>
-                  streaming:{String(isStreaming)} | building:{String(builder.isBuilding)} | files:{builder.files.length} | selected:{builder.selectedFile?.path || 'none'}
+                <div style={{position:'absolute',top:4,right:4,zIndex:9999,fontSize:10,background:'rgba(0,0,0,0.8)',color:'#0f0',padding:'4px 8px',borderRadius:4,fontFamily:'monospace',maxWidth:300}}>
+                  <div>streaming:{String(isStreaming)} | building:{String(builder.isBuilding)}</div>
+                  <div>React files:{builder.files.length} | Manager files:{builder.manager?.getFiles?.()?.length ?? 'N/A'}</div>
+                  <div>selected:{builder.selectedFile?.path?.slice(-20) || 'none'}</div>
+                  <div>preview:{builder.previewResult ? `${builder.previewResult.success ? '✓' : '✗'} ${builder.previewResult.html?.length || 0}b` : 'null'}</div>
                 </div>
               )}
               <BuilderPreview

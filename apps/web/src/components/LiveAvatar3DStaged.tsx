@@ -17,50 +17,32 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { useAvatarStore } from "@/lib/avatar/store";
 import { useLipSync } from "@/lib/avatar/useLipSync";
-import { AvatarDiagnosticsOverlay } from "./AvatarDiagnosticsOverlay";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FULL SCREEN ANIMATED PERSONA - Real breathing, blinking, mouth movement
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function FullScreenPersona({ imageUrl, name }: { imageUrl?: string; name: string }) {
-  // Read all animation state from store
-  const state = useAvatarStore((s) => s.state);
-  const audioAmplitude = useAvatarStore((s) => s.audioAmplitude);
+  // Read animation state from store
   const isBlinking = useAvatarStore((s) => s.isBlinking);
   const breathingPhase = useAvatarStore((s) => s.breathingPhase);
-  const gazeX = useAvatarStore((s) => s.gazeX);
-  const gazeY = useAvatarStore((s) => s.gazeY);
   const headPitch = useAvatarStore((s) => s.headPitch);
   const headYaw = useAvatarStore((s) => s.headYaw);
   const headRoll = useAvatarStore((s) => s.headRoll);
   const tick = useAvatarStore((s) => s.tick);
 
-  // Tick counter for diagnostics
-  const tickCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
   const animationFrameRef = useRef<number | null>(null);
 
   // Main animation loop - calls store.tick() every frame
   useEffect(() => {
-    console.log('[LiveAvatar] Starting presence loop');
-
     const loop = (now: number) => {
       const deltaTime = now - lastTimeRef.current;
       lastTimeRef.current = now;
-
-      // Call store tick to update all animation state
       tick(deltaTime);
-      tickCountRef.current++;
-
-      // Log every 60 frames to prove loop is running
-      if (tickCountRef.current % 60 === 0) {
-        console.log(`[LiveAvatar] tick #${tickCountRef.current}, deltaTime: ${deltaTime.toFixed(1)}ms`);
-      }
-
       animationFrameRef.current = requestAnimationFrame(loop);
     };
 
@@ -69,32 +51,21 @@ function FullScreenPersona({ imageUrl, name }: { imageUrl?: string; name: string
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
-        console.log('[LiveAvatar] Presence loop stopped');
       }
     };
   }, [tick]);
 
-  // Calculate visual transforms from store state
-  const breathScale = 1 + Math.sin(breathingPhase * Math.PI * 2) * 0.008;
-  const breathY = Math.sin(breathingPhase * Math.PI * 2) * 2;
+  // Calculate visual transforms - subtle, natural animation
+  const breathScale = 1 + Math.sin(breathingPhase * Math.PI * 2) * 0.015; // 1.5% scale
+  const breathY = Math.sin(breathingPhase * Math.PI * 2) * 4; // 4px vertical
 
-  // Mouth opening based on audio amplitude (for overlay indicator)
-  const mouthOpen = state === 'speaking' ? audioAmplitude * 20 : 0;
-
-  // Head transform from store values (subtle, natural)
+  // Head transform - subtle micro-movements
   const headTransform = `
-    translateY(${breathY + headPitch * 50}px)
-    translateX(${headYaw * 30}px)
+    translateY(${breathY + headPitch * 15}px)
+    translateX(${headYaw * 12}px)
     scale(${breathScale})
-    rotate(${headRoll * 5}deg)
+    rotate(${headRoll * 2}deg)
   `;
-
-  // State colors for indicator
-  const stateColor =
-    state === 'speaking' ? '#22c55e' :
-    state === 'listening' ? '#3b82f6' :
-    state === 'thinking' ? '#8b5cf6' :
-    '#71717a';
 
   return (
     <div style={{
@@ -120,53 +91,18 @@ function FullScreenPersona({ imageUrl, name }: { imageUrl?: string; name: string
         }}
       >
         {imageUrl ? (
-          <>
-            <img
-              src={imageUrl}
-              alt={name}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                // Blink effect: darken when blinking
-                filter: isBlinking ? 'brightness(0.85)' : 'brightness(1)',
-                transition: 'filter 0.08s ease-out',
-              }}
-            />
-
-            {/* BLINK OVERLAY - darkens eye region when blinking */}
-            {isBlinking && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '25%',
-                  left: '30%',
-                  width: '40%',
-                  height: '10%',
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), transparent)',
-                  borderRadius: '50%',
-                  pointerEvents: 'none',
-                }}
-              />
-            )}
-
-            {/* MOUTH MOVEMENT OVERLAY - jaw drop effect when speaking */}
-            {mouthOpen > 2 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '20%',
-                  left: '35%',
-                  width: '30%',
-                  height: `${6 + mouthOpen * 0.5}%`,
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, transparent 70%)',
-                  borderRadius: '50%',
-                  pointerEvents: 'none',
-                  transform: `scaleY(${1 + mouthOpen / 30})`,
-                }}
-              />
-            )}
-          </>
+          <img
+            src={imageUrl}
+            alt={name}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              // Subtle blink effect
+              filter: isBlinking ? 'brightness(0.95)' : 'brightness(1)',
+              transition: 'filter 0.1s ease-out',
+            }}
+          />
         ) : (
           <div style={{
             width: '50vmin',
@@ -187,89 +123,6 @@ function FullScreenPersona({ imageUrl, name }: { imageUrl?: string; name: string
         )}
       </div>
 
-      {/* STATE INDICATOR - Shows what's happening */}
-      <div style={{
-        position: 'absolute',
-        bottom: 100,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '12px 24px',
-        background: 'rgba(0,0,0,0.8)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: 30,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        border: `2px solid ${stateColor}`,
-        boxShadow: `0 0 20px ${stateColor}40`,
-        zIndex: 10,
-      }}>
-        {/* Pulsing indicator */}
-        <div style={{
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          background: stateColor,
-          boxShadow: `0 0 10px ${stateColor}`,
-          animation: state !== 'idle' ? 'pulse 1s infinite' : 'none',
-        }} />
-
-        <span style={{
-          color: '#fff',
-          fontSize: 16,
-          fontWeight: 600,
-          textTransform: 'capitalize',
-        }}>
-          {state}
-        </span>
-
-        {/* Audio level when speaking */}
-        {state === 'speaking' && (
-          <div style={{
-            width: 80,
-            height: 6,
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: 3,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              width: `${Math.min(audioAmplitude * 100, 100)}%`,
-              height: '100%',
-              background: stateColor,
-              transition: 'width 0.05s ease-out',
-            }} />
-          </div>
-        )}
-      </div>
-
-      {/* PERSONA NAME */}
-      <div style={{
-        position: 'absolute',
-        top: 80,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '12px 28px',
-        background: 'rgba(0, 0, 0, 0.7)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: 30,
-        zIndex: 10,
-      }}>
-        <span style={{
-          color: '#fff',
-          fontSize: 20,
-          fontWeight: 600,
-          letterSpacing: 1,
-        }}>
-          {name}
-        </span>
-      </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.2); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -299,23 +152,39 @@ export function LiveAvatar3DStaged({
   onReady,
   onAudioEnd,
 }: LiveAvatar3DStagedProps) {
-  const { connectToAudioData, stop } = useLipSync();
+  const { connectToAudioData, warmUp, stop } = useLipSync();
   const setState = useAvatarStore((s) => s.setState);
+
+  // Expose warmUp for parent components to call on user interaction
+  // This ensures AudioContext is ready before playing audio
+  useEffect(() => {
+    // Store warmUp in window for easy access from parent
+    (window as any).__lipSyncWarmUp = warmUp;
+    return () => {
+      delete (window as any).__lipSyncWarmUp;
+    };
+  }, [warmUp]);
 
   // Connect audio data for playback
   useEffect(() => {
     if (audioData) {
+      console.log('[LiveAvatar] 🔊 RECEIVED audioData! Length:', audioData.length);
+      console.log('[LiveAvatar] 🔊 First 50 chars:', audioData.substring(0, 50));
       setState('speaking');
       connectToAudioData(audioData).then((audio) => {
+        console.log('[LiveAvatar] 🔊 Audio connected, setting onended handler');
         audio.onended = () => {
+          console.log('[LiveAvatar] 🔊 Audio playback ENDED');
           stop();
           setState('idle');
           onAudioEnd?.();
         };
       }).catch((err) => {
-        console.error('[LiveAvatar] Audio connection failed:', err);
+        console.error('[LiveAvatar] ❌ Audio connection failed:', err);
         setState('idle');
       });
+    } else {
+      console.log('[LiveAvatar] No audioData received (undefined)');
     }
 
     return () => {
@@ -328,12 +197,7 @@ export function LiveAvatar3DStaged({
     onReady?.();
   }, [onReady]);
 
-  return (
-    <>
-      <FullScreenPersona imageUrl={imageUrl} name={name} />
-      <AvatarDiagnosticsOverlay rendererName="LiveAvatar → Animated (tick loop)" />
-    </>
-  );
+  return <FullScreenPersona imageUrl={imageUrl} name={name} />;
 }
 
 export default LiveAvatar3DStaged;

@@ -39,7 +39,7 @@ export interface HealthCheckResult {
 // ============================================================================
 
 const DEFAULT_CONFIG: Partial<DatabaseConfig> = {
-  maxConnections: 10,
+  maxConnections: 50, // Increased from 10 to handle concurrent video checks
   idleTimeout: 20,
   connectTimeout: 10,
   ssl: 'prefer',
@@ -107,10 +107,10 @@ export function createDatabaseClient(config: DatabaseConfig): DatabaseClient {
  */
 export function createDatabaseClientFromEnv(): DatabaseClient {
   const connectionString = getConnectionStringFromEnv();
-  
+
   return createDatabaseClient({
     connectionString,
-    maxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || '10', 10),
+    maxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || String(DEFAULT_CONFIG.maxConnections || 50), 10),
     ssl: process.env.DB_SSL === 'true' ? 'require' : 'prefer',
   });
 }

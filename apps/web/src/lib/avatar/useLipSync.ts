@@ -165,7 +165,7 @@ export function useLipSync(config: LipSyncConfig = {}) {
   }, [setAudioAmplitude, setViseme, estimateViseme]);
 
   // Connect to audio element
-  const connectToAudio = useCallback(async (audioElement: HTMLAudioElement) => {
+  const connectToAudio = useCallback(async (audioElement: HTMLAudioElement): Promise<void> => {
     console.log('[LipSync] connectToAudio called');
 
     // Cleanup previous
@@ -183,7 +183,7 @@ export function useLipSync(config: LipSyncConfig = {}) {
     // Create or reuse audio context
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();
-      console.log('[LipSync] Created new AudioContext');
+      console.log('[LipSync] Created new AudioContext, state:', audioContextRef.current.state);
     }
 
     // Update store with current state
@@ -191,11 +191,18 @@ export function useLipSync(config: LipSyncConfig = {}) {
 
     // Resume if suspended - AWAIT this!
     if (audioContextRef.current.state === 'suspended') {
-      console.log('[LipSync] AudioContext suspended, resuming...');
-      await audioContextRef.current.resume();
-      console.log('[LipSync] AudioContext resumed, state:', audioContextRef.current.state);
+      console.log('[LipSync] AudioContext suspended, attempting resume...');
+      try {
+        await audioContextRef.current.resume();
+        console.log('[LipSync] ✅ AudioContext resumed, state:', audioContextRef.current.state);
+      } catch (resumeError) {
+        console.error('[LipSync] ❌ AudioContext resume FAILED:', resumeError);
+        console.error('[LipSync] Audio will NOT play - user interaction required');
+      }
       setAudioContextState(audioContextRef.current.state as 'running' | 'suspended' | 'closed');
     }
+
+    console.log('[LipSync] AudioContext final state:', audioContextRef.current.state);
 
     // Create analyser
     const analyser = audioContextRef.current.createAnalyser();
@@ -225,15 +232,14 @@ export function useLipSync(config: LipSyncConfig = {}) {
       console.error('[LipSync] AudioContext state:', audioContextRef.current.state);
       setAnalyserConnected(false);
 
-      // Try to still analyze even without source connection
-      // (won't work but at least we tried)
-      console.warn('[LipSync] Attempting to start analysis loop anyway (will likely fail silently)');
+      // Still try to play without lip-sync
+      console.warn('[LipSync] Will try to play audio anyway (without lip-sync)');
     }
 
     // Start analysis loop
     analyze();
 
-    console.log('[LipSync] Connected to audio element, starting analysis');
+    console.log('[LipSync] Connected to audio element, analysis loop started');
   }, [fftSize, smoothingTimeConstant, minDecibels, maxDecibels, analyze, setAudioContextState, setAnalyserConnected]);
 
   // Connect to audio stream (for streaming TTS)
@@ -285,35 +291,78 @@ export function useLipSync(config: LipSyncConfig = {}) {
 
   // Connect to raw audio data (base64 or ArrayBuffer)
   const connectToAudioData = useCallback(async (audioData: string | ArrayBuffer) => {
+    console.log('[LipSync] connectToAudioData called with', typeof audioData === 'string' ? 'base64 string' : 'ArrayBuffer');
+
     // Create audio element
     const audio = new Audio();
 
     if (typeof audioData === 'string') {
-      // Base64 data URL
-      audio.src = audioData.startsWith('data:') ? audioData : `data:audio/mp3;base64,${audioData}`;
+      // Base64 data URL - use the data as-is if it already has the data: prefix
+      // ElevenLabs returns audio/mpeg format
+      audio.src = audioData.startsWith('data:') ? audioData : `data:audio/mpeg;base64,${audioData}`;
+      console.log('[LipSync] Audio src set, length:', audioData.length, 'starts with data:', audioData.startsWith('data:'));
     } else {
       // ArrayBuffer
-      const blob = new Blob([audioData], { type: 'audio/mp3' });
+      const blob = new Blob([audioData], { type: 'audio/mpeg' });
       audio.src = URL.createObjectURL(blob);
+      console.log('[LipSync] Audio blob created from ArrayBuffer');
     }
 
     // Wait for loadedmetadata
-    await new Promise<void>((resolve) => {
-      audio.addEventListener('loadedmetadata', () => resolve(), { once: true });
+    await new Promise<void>((resolve, reject) => {
+      audio.addEventListener('loadedmetadata', () => {
+        console.log('[LipSync] Audio metadata loaded, duration:', audio.duration);
+        resolve();
+      }, { once: true });
+      audio.addEventListener('error', (e) => {
+        console.error('[LipSync] Audio load error:', e);
+        reject(e);
+      }, { once: true });
       audio.load();
     });
 
-    connectToAudio(audio);
+    // CRITICAL: Connect audio BEFORE playing (await this!)
+    await connectToAudio(audio);
 
-    // Auto-play
+    // Auto-play - must happen AFTER AudioContext is connected and running
+    console.log('[LipSync] Attempting audio.play()...');
     try {
       await audio.play();
+      console.log('[LipSync] ✅ Audio playback STARTED successfully');
     } catch (e) {
-      console.error('[LipSync] Autoplay blocked:', e);
+      console.error('[LipSync] ❌ Autoplay blocked:', e);
+      console.error('[LipSync] User must interact with page first (click, tap, etc)');
+      console.error('[LipSync] Try: Click anywhere on the page, then send message again');
     }
 
     return audio;
   }, [connectToAudio]);
+
+  // Pre-warm AudioContext (call this on user interaction)
+  const warmUp = useCallback(async (): Promise<boolean> => {
+    console.log('[LipSync] warmUp called - ensuring AudioContext is ready');
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+      console.log('[LipSync] Created new AudioContext during warmUp, state:', audioContextRef.current.state);
+    }
+
+    if (audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        console.log('[LipSync] ✅ AudioContext warmed up successfully, state:', audioContextRef.current.state);
+        setAudioContextState('running');
+        return true;
+      } catch (e) {
+        console.error('[LipSync] ❌ warmUp failed:', e);
+        return false;
+      }
+    }
+
+    console.log('[LipSync] AudioContext already running');
+    setAudioContextState(audioContextRef.current.state as 'running' | 'suspended' | 'closed');
+    return audioContextRef.current.state === 'running';
+  }, [setAudioContextState]);
 
   // Stop analysis
   const stop = useCallback(() => {
@@ -343,6 +392,7 @@ export function useLipSync(config: LipSyncConfig = {}) {
     connectToAudio,
     connectToStream,
     connectToAudioData,
+    warmUp,
     stop,
   };
 }

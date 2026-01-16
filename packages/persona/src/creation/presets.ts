@@ -34,9 +34,9 @@ import type {
         'pixar style, 3d render, high quality character portrait, soft lighting, smooth skin, expressive eyes, detailed features, professional studio lighting, octane render, subsurface scattering',
       negativePrompt:
         'ugly, deformed, noisy, blurry, distorted, out of focus, bad anatomy, extra limbs, poorly drawn face, poorly drawn hands, missing fingers, photo, realistic, anime, cartoon 2d, sketch, painting',
-      cfgScale: 7.5,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'DPM++ 2M Karras',
-      checkpoint: 'sd_xl_base_1.0',
+      checkpoint: 'flux1-dev-fp8.safetensors',
       loras: ['pixar_style_xl_v1'],
       previewImage: '/presets/pixar_preview.jpg',
     },
@@ -49,9 +49,9 @@ import type {
         'arcane style, stylized portrait, painterly, dramatic lighting, detailed face, expressive, fantasy art, league of legends art style, vibrant colors, cinematic, detailed eyes',
       negativePrompt:
         'ugly, deformed, noisy, blurry, photo, realistic, anime, 3d render, cgi, cartoon, chibi, low quality',
-      cfgScale: 8.0,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'Euler a',
-      checkpoint: 'sd_xl_base_1.0',
+      checkpoint: 'flux1-dev-fp8.safetensors',
       loras: ['arcane_style_xl_v2'],
       previewImage: '/presets/arcane_preview.jpg',
     },
@@ -64,7 +64,7 @@ import type {
         'masterpiece, best quality, anime style, detailed face, beautiful eyes, sharp features, professional artwork, studio quality, vibrant colors, cel shading, clean lines',
       negativePrompt:
         'ugly, deformed, bad anatomy, bad proportions, extra limbs, lowres, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 3d, realistic, photo',
-      cfgScale: 7.0,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'DPM++ 2M Karras',
       checkpoint: 'animagine_xl_v3',
       loras: [],
@@ -79,7 +79,7 @@ import type {
         'hyperrealistic portrait, professional photography, studio lighting, sharp focus, high detail, 8k uhd, dslr, soft lighting, high quality, film grain, detailed skin texture, detailed eyes',
       negativePrompt:
         'cartoon, anime, illustration, painting, drawing, art, sketch, cgi, 3d, render, doll, plastic, fake, ugly, deformed, noisy, blurry, low resolution, oversaturated',
-      cfgScale: 6.5,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'DPM++ SDE Karras',
       checkpoint: 'juggernaut_xl_v9',
       loras: ['detail_tweaker_xl', 'skin_texture_xl'],
@@ -94,9 +94,9 @@ import type {
         'epic fantasy portrait, dramatic lighting, detailed armor, magical aura, cinematic, professional concept art, artstation, detailed face, ornate details, volumetric lighting',
       negativePrompt:
         'ugly, deformed, noisy, blurry, low quality, anime, cartoon, photo, realistic modern, plain background, simple',
-      cfgScale: 8.5,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'Euler a',
-      checkpoint: 'sd_xl_base_1.0',
+      checkpoint: 'flux1-dev-fp8.safetensors',
       loras: ['fantasy_art_xl_v1'],
       previewImage: '/presets/fantasy_preview.jpg',
     },
@@ -109,7 +109,7 @@ import type {
         'professional business portrait, clean background, studio lighting, corporate headshot, friendly expression, well-groomed, professional attire, high quality, sharp focus',
       negativePrompt:
         'casual, messy, artistic, stylized, fantasy, cartoon, anime, dramatic, excessive makeup, unprofessional',
-      cfgScale: 7.0,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'DPM++ 2M Karras',
       checkpoint: 'juggernaut_xl_v9',
       loras: [],
@@ -123,9 +123,9 @@ import type {
       promptPrefix: '',
       negativePrompt:
         'ugly, deformed, noisy, blurry, distorted, low quality',
-      cfgScale: 7.5,
+      cfgScale: 3.5, // FLUX optimal
       sampler: 'DPM++ 2M Karras',
-      checkpoint: 'sd_xl_base_1.0',
+      checkpoint: 'flux1-dev-fp8.safetensors',
       loras: [],
       previewImage: '/presets/custom_preview.jpg',
     },

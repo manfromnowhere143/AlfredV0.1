@@ -61,17 +61,12 @@ export const STYLE_PRESETS: Record<PersonaVisualStyle, StylePreset> = {
 soft ambient lighting, expressive cartoon eyes, smooth rounded features,
 Disney quality rendering, octane render, highly detailed, 8K resolution,
 studio lighting, professional character design, appealing proportions`,
-    negativePrompt: `realistic photo, 2D flat, low quality, blurry, ugly, deformed,
-bad anatomy, worst quality, low resolution, amateur, poorly rendered,
-uncanny valley, creepy, horror, dark, gritty`,
-    cfgScale: 7.5,
-    sampler: 'DPM++ 2M Karras',
-    checkpoint: 'dreamshaper_8',
-    loras: [
-      { name: 'pixar_style_v2', weight: 0.8 },
-      { name: '3d_render_style', weight: 0.5 },
-    ],
-    steps: 30,
+    negativePrompt: '', // FLUX ignores negative prompts
+    cfgScale: 3.5, // FLUX optimal (NOT 7.5!)
+    sampler: 'euler', // Best for FLUX
+    checkpoint: 'flux1-dev-fp8.safetensors',
+    loras: [], // FLUX handles prompts differently
+    steps: 28, // FLUX quality steps
     postProcess: {
       colorGrade: 'warm_vibrant',
       sharpening: 0.3,
@@ -116,7 +111,7 @@ professional anime illustration, sakuga quality, detailed clothing folds,
 beautiful lighting, intricate details, high production value`,
     negativePrompt: `3D render, western cartoon, realistic, low quality, sketch, rough,
 amateur, simple shading, flat colors, generic anime, chibi, super deformed`,
-    cfgScale: 7.0,
+    cfgScale: 3.5, // FLUX optimal
     sampler: 'DPM++ SDE Karras',
     checkpoint: 'animagineXL_v3',
     loras: [
@@ -212,7 +207,7 @@ amateur photography, selfie quality, bad lighting, unflattering angles`,
     description: 'Fully customizable style with your own prompts and settings.',
     promptPrefix: '',
     negativePrompt: 'low quality, blurry, amateur, deformed',
-    cfgScale: 7.0,
+    cfgScale: 3.5, // FLUX optimal
     sampler: 'DPM++ 2M Karras',
     checkpoint: 'dreamshaper_8',
     loras: [],

@@ -7,7 +7,7 @@
  * Features syntax highlighting, IntelliSense-lite, and themes.
  */
 
-import React, { useCallback, useRef, useEffect, memo } from 'react';
+import React, { useCallback, useRef, useEffect, useState, memo } from 'react';
 import Editor, { OnMount, OnChange, loader, Monaco } from '@monaco-editor/react';
 
 // Use Monaco's own types from the wrapper package
@@ -121,10 +121,18 @@ const ALFRED_DARK_THEME: IStandaloneThemeData = {
 };
 
 // Configure Monaco loader to use CDN
+console.log('[Monaco] Configuring loader...');
 loader.config({
   paths: {
     vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs',
   },
+});
+
+// Pre-initialize Monaco to speed up first load
+loader.init().then((monaco) => {
+  console.log('[Monaco] ✅ Pre-initialized successfully');
+}).catch((err) => {
+  console.error('[Monaco] ❌ Pre-initialization failed:', err);
 });
 
 // ============================================================================
@@ -146,6 +154,7 @@ export const MonacoEditor = memo(function MonacoEditor({
 
   // Handle editor mount
   const handleMount: OnMount = useCallback((editor, monaco) => {
+    console.log('[Monaco] 🎉 Editor mounted successfully');
     editorRef.current = editor;
     monacoRef.current = monaco;
 
