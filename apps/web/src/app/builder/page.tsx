@@ -627,6 +627,11 @@ export default function BuilderPage() {
         }
       }
 
+      // CRITICAL: Set isStreaming to false IMMEDIATELY after stream ends
+      // This allows builder.isBuilding to control the animation during ESBuild
+      console.log('[Builder] 🏁 Stream reading complete, setting isStreaming=false');
+      setIsStreaming(false);
+
       // Debug: Log marker summary on client
       const clientFileStarts = (fullResponse.match(/<<<FILE:/g) || []).length;
       const clientFileEnds = (fullResponse.match(/<<<END_FILE>>>/gi) || []).length;
@@ -713,11 +718,6 @@ export default function BuilderPage() {
 
         // Force rebuild to trigger preview and wait for completion
         console.log('[Builder] 🔨 Triggering rebuild...');
-
-        // CRITICAL: Set isStreaming to false BEFORE rebuild so builder.isBuilding takes over
-        // This ensures the animation shows during ESBuild, then preview shows when done
-        setIsStreaming(false);
-
         try {
           const previewResult = await builder.rebuild?.();
           if (previewResult?.errors?.length) {
@@ -740,16 +740,18 @@ export default function BuilderPage() {
           .trim();
         responseText = cleanResponse || "I'm ready to help you build something. Describe what you'd like to create!";
         console.log('[Builder] 💬 No files created, showing text response');
-
-        // Set isStreaming to false when no files to build
-        setIsStreaming(false);
       }
       setMessages(prev => prev.map(m => m.isStreaming ? { ...m, content: responseText, isStreaming: false } : m));
     } catch (err) {
       console.error('[Builder] ❌ Error:', err);
+      setIsStreaming(false); // Ensure streaming state is reset on error
       setMessages(prev => prev.map(m => m.isStreaming ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false } : m));
     }
-    finally { setIsStreaming(false); }
+    finally {
+      // Safety net: ensure isStreaming is always false when done
+      console.log('[Builder] 🏁 finally block, ensuring isStreaming=false');
+      setIsStreaming(false);
+    }
   }, [inputValue, isStreaming, builder, chatMinimized]);
 
   // Loading/Auth

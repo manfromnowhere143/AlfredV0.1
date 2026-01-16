@@ -234,10 +234,32 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       };
     }
 
+    console.log('[useBuilder] 🔨 rebuild() starting, setting isBuilding=true');
     setIsBuilding(true);
-    const result = await manager.rebuild();
-    setIsBuilding(false);
-    return result;
+    try {
+      const result = await manager.rebuild();
+      console.log('[useBuilder] ✅ rebuild() completed, success:', result?.success, 'HTML length:', result?.html?.length || 0);
+      // Explicitly set preview result here as well (in addition to onPreviewUpdate callback)
+      if (result) {
+        setPreviewResult(result);
+      }
+      return result;
+    } catch (error) {
+      console.error('[useBuilder] ❌ Rebuild failed:', error);
+      return {
+        success: false,
+        errors: [{
+          line: 0,
+          column: 0,
+          message: error instanceof Error ? error.message : 'Build failed',
+          severity: 'error' as const,
+        }],
+      };
+    } finally {
+      // Always reset isBuilding, even if rebuild throws
+      console.log('[useBuilder] 🏁 rebuild() finally block, setting isBuilding=false');
+      setIsBuilding(false);
+    }
   }, []);
 
   const reset = useCallback(() => {
@@ -251,6 +273,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     setPreviewResult(null);
     setConsoleEntries([]);
     setProjectName(initialProjectName);
+    setIsBuilding(false);  // Ensure isBuilding is reset
   }, [initialProjectName]);
 
   const clearConsole = useCallback(() => {
@@ -268,7 +291,8 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       return;
     }
 
-    setIsBuilding(true);
+    // Note: Don't set isBuilding here - that's for the actual ESBuild phase
+    // Chunk processing is just parsing, not building
 
     // Debug: Log chunk preview for marker detection
     if (chunk.includes('<<<') || chunk.includes('>>>') || chunk.includes('<bolt')) {
@@ -289,21 +313,47 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     const manager = managerRef.current;
     if (!manager) return;
 
-    setIsBuilding(true);
+    // Note: Don't set isBuilding here - that's for the actual ESBuild phase
     manager.processComplete(output);
   }, []);
 
   /**
    * Force sync files from manager to React state
    * Call this after streaming completes to ensure UI updates
+   * Returns the synced files array for immediate use (bypasses React async)
+   *
+   * @param fullOutput - Optional: full LLM output for fallback parsing if streaming failed
    */
-  const syncFiles = useCallback(() => {
+  const syncFiles = useCallback((fullOutput?: string): VirtualFile[] => {
     const manager = managerRef.current;
-    if (!manager) return;
+    if (!manager) {
+      console.warn('[useBuilder] ❌ Cannot sync - manager not initialized');
+      return [];
+    }
 
-    const fs = manager.getFileSystem();
-    const allFiles = fs.getAllFiles();
-    console.log('[useBuilder] 🔄 Forcing file sync, files:', allFiles.length);
+    let fs = manager.getFileSystem();
+    let allFiles = fs.getAllFiles();
+    console.log('[useBuilder] 🔄 Initial sync, files:', allFiles.length);
+
+    // FALLBACK: If no files and we have the full output, reprocess it completely
+    if (allFiles.length === 0 && fullOutput && fullOutput.includes('<<<FILE:')) {
+      console.log('[useBuilder] ⚠️ Streaming parser produced 0 files, using fallback...');
+      console.log('[useBuilder] 📊 Output has', (fullOutput.match(/<<<FILE:/g) || []).length, 'file markers');
+
+      // Reset and reprocess the complete output
+      manager.reset();
+      manager.processComplete(fullOutput);
+
+      // Get files again after reprocessing
+      fs = manager.getFileSystem();
+      allFiles = fs.getAllFiles();
+      console.log('[useBuilder] 🔄 After fallback reprocess, files:', allFiles.length);
+    }
+
+    // Log file paths for debugging
+    if (allFiles.length > 0) {
+      console.log('[useBuilder] 📂 Files:', allFiles.map(f => f.path).join(', '));
+    }
 
     setFiles(allFiles);
     setFileTree(fs.getTree());
@@ -311,6 +361,10 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     if (allFiles.length > 0 && !selectedPath) {
       setSelectedPath(allFiles[0].path);
     }
+
+    // Note: Don't set isBuilding here - rebuild() manages its own state
+    // Return files for immediate use (React state update is async)
+    return allFiles;
   }, [selectedPath]);
 
   // -------------------------------------------------------------------------
