@@ -1506,7 +1506,7 @@ export function BuilderLayout({
             preview: (
               <BuilderPreview
                 preview={previewResult}
-                isBuilding={isBuilding}
+                isBuilding={isStreaming || isBuilding}
                 onConsole={onConsole}
               />
             ),
@@ -1592,7 +1592,7 @@ export function BuilderLayout({
 
           {/* Right - Preview (Collapsible) */}
           <div className="preview-panel">
-            <BuilderPreview preview={previewResult} isBuilding={isBuilding} onConsole={onConsole} />
+            <BuilderPreview preview={previewResult} isBuilding={isStreaming || isBuilding} onConsole={onConsole} />
           </div>
         </div>
 
@@ -1713,7 +1713,7 @@ export function BuilderLayout({
 
         {/* Preview Panel */}
         <ResizablePanel minWidth={320} maxWidth={800} defaultWidth={480} side="right">
-          <BuilderPreview preview={previewResult} isBuilding={isBuilding} onConsole={onConsole} />
+          <BuilderPreview preview={previewResult} isBuilding={isStreaming || isBuilding} onConsole={onConsole} />
         </ResizablePanel>
       </div>
 

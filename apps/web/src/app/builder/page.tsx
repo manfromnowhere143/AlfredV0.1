@@ -634,14 +634,20 @@ export default function BuilderPage() {
       console.log('[Builder] 📝 Full response length:', fullResponse.length);
 
       // Force sync files from manager to React state
-      builder.syncFiles?.();
+      // syncFiles() now accepts fullResponse for fallback parsing if streaming failed
+      let managerFiles = builder.syncFiles?.(fullResponse) || [];
 
-      // Small delay to allow React state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // If syncFiles returned empty, try getting directly from manager after a delay
+      if (managerFiles.length === 0) {
+        console.log('[Builder] ⚠️ syncFiles returned 0, waiting and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        managerFiles = builder.manager?.getFileSystem()?.getAllFiles() || [];
+      }
 
-      // Get files directly from manager (React state is async)
-      let managerFiles = builder.manager?.getFileSystem()?.getAllFiles() || [];
       console.log(`[Builder] 📦 Stream complete. Chunks: ${chunkCount}, Manager Files: ${managerFiles.length}`);
+      if (managerFiles.length > 0) {
+        console.log('[Builder] 📂 File paths:', managerFiles.map(f => f.path).join(', '));
+      }
       console.log('[Builder] Full response preview:', fullResponse.slice(0, 500));
 
       // FALLBACK: If streaming parser didn't create files, manually extract them
@@ -677,9 +683,14 @@ export default function BuilderPage() {
 
         if (extractedCount > 0) {
           console.log('[Builder] ✅ Fallback extracted', extractedCount, 'files');
-          builder.syncFiles?.();
-          await new Promise(r => setTimeout(r, 100));
-          managerFiles = builder.manager?.getFileSystem()?.getAllFiles() || [];
+          // Use syncFiles return value for immediate access
+          managerFiles = builder.syncFiles?.() || [];
+          if (managerFiles.length === 0) {
+            // If still empty, wait and try again from manager directly
+            await new Promise(r => setTimeout(r, 150));
+            managerFiles = builder.manager?.getFileSystem()?.getAllFiles() || [];
+          }
+          console.log('[Builder] 📦 After fallback, files:', managerFiles.length);
         }
       }
 
@@ -687,11 +698,31 @@ export default function BuilderPage() {
       let responseText: string;
       if (managerFiles.length > 0) {
         responseText = `Created ${managerFiles.length} file${managerFiles.length > 1 ? 's' : ''}. Building preview...`;
-        builder.selectFile(managerFiles[0].path);
+
+        // Select the entry point or first meaningful file
+        const entryPoint = managerFiles.find(f =>
+          f.isEntryPoint ||
+          f.path.includes('main.tsx') ||
+          f.path.includes('index.tsx') ||
+          f.path.includes('App.tsx')
+        );
+        const fileToSelect = entryPoint || managerFiles[0];
+        console.log('[Builder] 📂 Selecting file:', fileToSelect.path);
+        builder.selectFile(fileToSelect.path);
         console.log('[Builder] 🎉 Files created:', managerFiles.map(f => f.path));
 
-        // Force rebuild to trigger preview
-        builder.rebuild?.();
+        // Force rebuild to trigger preview and wait for completion
+        console.log('[Builder] 🔨 Triggering rebuild...');
+        try {
+          const previewResult = await builder.rebuild?.();
+          if (previewResult?.errors?.length) {
+            console.warn('[Builder] ⚠️ Preview built with errors:', previewResult.errors.length);
+          } else {
+            console.log('[Builder] ✅ Preview rebuilt successfully');
+          }
+        } catch (rebuildError) {
+          console.error('[Builder] ❌ Rebuild error:', rebuildError);
+        }
       } else {
         // Extract meaningful text from response (remove protocol markers if any)
         const cleanResponse = fullResponse
@@ -805,7 +836,11 @@ export default function BuilderPage() {
           )}
           {(viewMode === 'preview' || viewMode === 'split') && (
             <div className={`preview-panel ${viewMode === 'split' ? 'split' : 'full'}`}>
-              <BuilderPreview preview={builder.previewResult} isBuilding={builder.isBuilding} onConsole={() => {}} />
+              <BuilderPreview
+                preview={builder.previewResult}
+                isBuilding={isStreaming || builder.isBuilding}
+                onConsole={() => {}}
+              />
             </div>
           )}
         </div>
@@ -958,7 +993,7 @@ export default function BuilderPage() {
         /* Content */
         .builder-content { display: flex; flex: 1; min-height: 0; }
         .file-panel { width: 220px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
-        .editor-area { flex: 1; display: flex; min-width: 0; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .editor-area { flex: 1; display: flex; min-width: 0; height: 100%; overflow: hidden; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
         .editor-panel, .preview-panel { display: flex; flex-direction: column; height: 100%; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
         .editor-panel.full, .preview-panel.full { flex: 1; }
         .editor-panel.split, .preview-panel.split { flex: 1; }
@@ -967,7 +1002,7 @@ export default function BuilderPage() {
         .tab { display: flex; align-items: center; padding: 0 14px; border-top: 2px solid transparent; }
         .tab.active { background: #09090b; border-top-color: #8b5cf6; }
         .tab span { font-size: 11px; font-family: "SF Mono", Monaco, monospace; color: rgba(255,255,255,0.8); }
-        .editor-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+        .editor-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
         .editor-content.streaming { padding: 0; background: #0d0d10; height: 100%; position: relative; }
         .editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: rgba(255,255,255,0.25); font-size: 12px; }
         .editor-loading { display: flex; align-items: center; justify-content: center; height: 100%; background: #09090b; }
