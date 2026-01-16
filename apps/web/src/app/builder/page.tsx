@@ -15,16 +15,22 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { useSession, signIn } from 'next-auth/react';
 import { useBuilder } from '@/hooks/useBuilder';
+import { useDeviceType } from '@/hooks/useDeviceType';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
 
-const MonacoEditor = dynamic(
+const MonacoEditor = nextDynamic(
   () => import('@/components/builder/MonacoEditor').then(mod => mod.MonacoEditor),
   { ssr: false, loading: () => <div className="editor-loading"><div className="loading-pulse" /></div> }
+);
+
+const MobileBuilderLayout = nextDynamic(
+  () => import('@/components/builder/MobileBuilderLayout'),
+  { ssr: false, loading: () => <div className="loading-screen"><div className="loading-orb"><div className="orb-ring" /><div className="orb-core" /></div></div> }
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -195,6 +201,7 @@ function ViewToggle({ mode, onModeChange }: { mode: ViewMode; onModeChange: (m: 
 
 export default function BuilderPage() {
   const { data: session, status } = useSession();
+  const { isMobile } = useDeviceType();
 
   // State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -786,7 +793,41 @@ export default function BuilderPage() {
   if (status === 'loading') return <div className="loading-screen"><div className="loading-orb"><div className="orb-ring" /><div className="orb-core" /></div><style jsx>{`.loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:#09090b}.loading-orb{position:relative;width:48px;height:48px}.orb-ring{position:absolute;inset:0;border:2px solid transparent;border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite}.orb-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:50%}@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>;
   if (!session) return <div className="auth-screen"><div className="auth-card"><div className="auth-logo">{Icons.layers}</div><h1>Alfred Builder</h1><p>Sign in to start building</p><button onClick={() => signIn()}>Sign In</button></div><style jsx>{`.auth-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,sans-serif}.auth-card{text-align:center;color:white}.auth-logo{width:72px;height:72px;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:20px}h1{font-size:28px;font-weight:700;margin:0 0 8px}p{color:rgba(255,255,255,0.5);margin:0 0 32px}button{padding:14px 32px;background:linear-gradient(135deg,#8b5cf6,#6366f1);border:none;border-radius:12px;color:white;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.2s}button:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(139,92,246,0.4)}`}</style></div>;
 
-  // Main render
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // MOBILE LAYOUT — Steve Jobs Level Mobile Experience
+  // ═══════════════════════════════════════════════════════════════════════════════
+  if (isMobile) {
+    return (
+      <>
+        <MobileBuilderLayout
+          fileTree={builder.fileTree}
+          files={builder.files}
+          selectedFile={builder.selectedFile}
+          projectName={builder.projectName}
+          previewResult={builder.previewResult}
+          isBuilding={builder.isBuilding}
+          isStreaming={isStreaming}
+          onFileSelect={handleFileSelect}
+          onFileChange={handleEditorChange}
+          onSendMessage={(msg) => sendMessage(msg)}
+          onRebuild={() => builder.rebuild?.()}
+          streamingFile={streamingFile}
+          streamingCode={streamingCode}
+          streamingSteps={streamingSteps}
+          messages={messages}
+        />
+        {limitReached && (
+          <LimitReached
+            limitType={limitReached.type}
+            resetIn={limitReached.resetIn}
+            onDismiss={() => setLimitReached(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Main render (Desktop)
   return (
     <div className="builder-page">
       {/* Header */}
