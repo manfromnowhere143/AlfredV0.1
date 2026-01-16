@@ -713,12 +713,19 @@ export default function BuilderPage() {
 
         // Force rebuild to trigger preview and wait for completion
         console.log('[Builder] 🔨 Triggering rebuild...');
+
+        // CRITICAL: Set isStreaming to false BEFORE rebuild so builder.isBuilding takes over
+        // This ensures the animation shows during ESBuild, then preview shows when done
+        setIsStreaming(false);
+
         try {
           const previewResult = await builder.rebuild?.();
           if (previewResult?.errors?.length) {
             console.warn('[Builder] ⚠️ Preview built with errors:', previewResult.errors.length);
+            console.warn('[Builder] Errors:', previewResult.errors.map(e => e.message).join(', '));
           } else {
             console.log('[Builder] ✅ Preview rebuilt successfully');
+            console.log('[Builder] Preview HTML length:', previewResult?.html?.length || 0);
           }
         } catch (rebuildError) {
           console.error('[Builder] ❌ Rebuild error:', rebuildError);
@@ -733,6 +740,9 @@ export default function BuilderPage() {
           .trim();
         responseText = cleanResponse || "I'm ready to help you build something. Describe what you'd like to create!";
         console.log('[Builder] 💬 No files created, showing text response');
+
+        // Set isStreaming to false when no files to build
+        setIsStreaming(false);
       }
       setMessages(prev => prev.map(m => m.isStreaming ? { ...m, content: responseText, isStreaming: false } : m));
     } catch (err) {
