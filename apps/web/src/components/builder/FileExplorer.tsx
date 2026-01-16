@@ -533,6 +533,26 @@ export function FileExplorer({
   isLoading = false,
   className = '',
 }: FileExplorerProps) {
+  // Debug: Log tree updates
+  React.useEffect(() => {
+    if (tree) {
+      const countFiles = (dir: VirtualDirectory): number => {
+        let count = 0;
+        for (const child of dir.children) {
+          if ('children' in child) {
+            count += countFiles(child);
+          } else {
+            count++;
+          }
+        }
+        return count;
+      };
+      console.log('[FileExplorer] 🌲 Tree received, total files:', countFiles(tree), ', root children:', tree.children.length);
+    } else {
+      console.log('[FileExplorer] 🌲 Tree is null');
+    }
+  }, [tree]);
+
   // Track expanded directories
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set(['/src', '/components', '/lib', '/app'])

@@ -29,23 +29,81 @@ type Plugin = import('esbuild-wasm').Plugin;
 
 const ESM_CDN = 'https://esm.sh';
 
-// Packages to load from CDN (externals)
+// Packages to load from CDN (externals) - State of the Art 2025
 const CDN_PACKAGES = new Set([
+  // Core React
   'react',
   'react-dom',
   'react-dom/client',
   'react/jsx-runtime',
   'react/jsx-dev-runtime',
+
+  // Animation & Motion
   'framer-motion',
-  'lucide-react',
-  'recharts',
-  'zustand',
+  'motion',
+  '@formkit/auto-animate',
+  'gsap',
+
+  // 3D Graphics (Three.js ecosystem)
   'three',
   '@react-three/fiber',
   '@react-three/drei',
+  '@react-three/postprocessing',
+  '@react-three/rapier',
+  'leva', // 3D controls
+
+  // UI Component Libraries
+  '@radix-ui/react-dialog',
+  '@radix-ui/react-dropdown-menu',
+  '@radix-ui/react-popover',
+  '@radix-ui/react-select',
+  '@radix-ui/react-tabs',
+  '@radix-ui/react-tooltip',
+  '@radix-ui/react-slot',
+  'lucide-react',
+  '@heroicons/react',
+
+  // Styling
   'clsx',
   'tailwind-merge',
   'class-variance-authority',
+  'tailwindcss-animate',
+
+  // State Management
+  'zustand',
+  'jotai',
+  '@tanstack/react-query',
+  'swr',
+
+  // Data Visualization
+  'recharts',
+  'd3',
+  '@visx/group',
+  '@visx/shape',
+
+  // Diagrams & Charts
+  'mermaid',
+  'react-flow-renderer',
+  '@xyflow/react',
+
+  // Forms
+  'react-hook-form',
+  '@hookform/resolvers',
+  'zod',
+
+  // Date/Time
+  'date-fns',
+  'dayjs',
+
+  // Utilities
+  'lodash-es',
+  'nanoid',
+  'uuid',
+
+  // Markdown & Content
+  'react-markdown',
+  'remark-gfm',
+  'rehype-highlight',
 ]);
 
 // React version for CDN
@@ -79,18 +137,40 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
 
   private async doInitialize(): Promise<void> {
     try {
+      console.log('[ESBuild] Starting initialization...');
+
       // Dynamic import to avoid SSR issues
       const esbuildModule = await import('esbuild-wasm');
       this.esbuild = esbuildModule;
 
-      await esbuildModule.initialize({
-        wasmURL: 'https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm',
-      });
+      console.log('[ESBuild] Module loaded, initializing WASM...');
 
-      this.initialized = true;
-      console.log('[ESBuild] Initialized successfully');
+      // Try multiple WASM sources in case one fails
+      const wasmSources = [
+        'https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm',
+        'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.1/esbuild.wasm',
+        'https://esm.sh/esbuild-wasm@0.20.1/esbuild.wasm',
+      ];
+
+      let lastError: Error | null = null;
+      for (const wasmURL of wasmSources) {
+        try {
+          console.log('[ESBuild] Trying WASM URL:', wasmURL);
+          await esbuildModule.initialize({ wasmURL });
+          this.initialized = true;
+          console.log('[ESBuild] ✅ Initialized successfully from:', wasmURL);
+          return;
+        } catch (err) {
+          console.warn('[ESBuild] Failed to load from:', wasmURL, err);
+          lastError = err instanceof Error ? err : new Error(String(err));
+          // Small delay before trying next source
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+
+      throw lastError || new Error('Failed to initialize ESBuild from any source');
     } catch (error) {
-      console.error('[ESBuild] Initialization failed:', error);
+      console.error('[ESBuild] ❌ Initialization failed:', error);
       throw error;
     }
   }
@@ -104,18 +184,57 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
     try {
       await this.initialize();
 
-      if (!this.esbuild) {
-        throw new Error('ESBuild not initialized');
+      if (!this.esbuild || !this.initialized) {
+        return {
+          success: false,
+          errors: [{
+            line: 0,
+            column: 0,
+            message: 'ESBuild not initialized. Try refreshing the page.',
+            severity: 'error',
+            source: 'alfred',
+          }],
+          buildTime: performance.now() - startTime,
+        };
       }
 
       // Get files as array
       const files = Array.from(project.files.values());
 
+      // Debug: Log file count
+      console.log('[ESBuild] 📁 Building project with', files.length, 'files');
+      if (files.length > 0) {
+        console.log('[ESBuild] Files:', files.map(f => f.path).join(', '));
+      }
+
+      // Check if we have any files at all
+      if (files.length === 0) {
+        return {
+          success: false,
+          errors: [{
+            line: 0,
+            column: 0,
+            message: 'No files to build. Add code to your project first.',
+            severity: 'warning',
+            source: 'alfred',
+          }],
+          buildTime: performance.now() - startTime,
+        };
+      }
+
       // Find entry point
       const entryPoint = activeFile || project.entryPoint || this.findEntryPoint(files);
       if (!entryPoint) {
-        return this.createErrorResult('No entry point found', startTime);
+        return this.createErrorResult('No entry point found. Add a main.tsx or index.tsx file.', startTime);
       }
+
+      // Verify entry point exists in files
+      const entryFileExists = files.some(f => f.path === entryPoint);
+      if (!entryFileExists) {
+        return this.createErrorResult(`Entry point not found: ${entryPoint}. Available files: ${files.map(f => f.path).join(', ')}`, startTime);
+      }
+
+      console.log('[ESBuild] 🎯 Entry point:', entryPoint);
 
       // Create virtual filesystem plugin
       const virtualFsPlugin = this.createVirtualFsPlugin(files);
@@ -350,6 +469,37 @@ ${JSON.stringify(importMap, null, 2)}
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- Mermaid for Diagrams -->
+  <script type="module">
+    import mermaid from 'https://esm.sh/mermaid@10.7.0';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#8b5cf6',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#6366f1',
+        lineColor: '#6366f1',
+        secondaryColor: '#1e1e2e',
+        tertiaryColor: '#0d0d10',
+        background: '#0d0d10',
+        mainBkg: '#1e1e2e',
+        textColor: '#e5e7eb',
+        nodeBorder: '#6366f1',
+        clusterBkg: '#1e1e2e',
+        titleColor: '#fff',
+        edgeLabelBackground: '#1e1e2e',
+      },
+      flowchart: { curve: 'basis', padding: 20 },
+      sequence: { actorMargin: 50, mirrorActors: false },
+    });
+    window.mermaid = mermaid;
+    // Re-render Mermaid after dynamic content loads
+    window.renderMermaid = async () => {
+      await mermaid.run({ querySelector: '.mermaid:not([data-processed])' });
+    };
+  </script>
+
   <!-- Custom Tailwind Config -->
   <script>
     tailwind.config = {
@@ -490,18 +640,69 @@ ${bundledCode}
       imports[name] = `${ESM_CDN}/${name}@${cleanVersion}`;
     }
 
-    // Common packages with stable versions
+    // Common packages with stable versions — State of the Art 2025
     const commonPackages: Record<string, string> = {
+      // Animation
       'framer-motion': '11.0.0',
-      'lucide-react': '0.263.1',
-      'recharts': '2.12.0',
-      'zustand': '4.5.0',
+      'motion': '11.0.0',
+      'gsap': '3.12.5',
+      '@formkit/auto-animate': '0.8.1',
+
+      // 3D Graphics
+      'three': '0.160.0',
+      '@react-three/fiber': '8.15.12',
+      '@react-three/drei': '9.92.7',
+      '@react-three/postprocessing': '2.15.11',
+      'leva': '0.9.35',
+
+      // Icons
+      'lucide-react': '0.303.0',
+      '@heroicons/react': '2.1.1',
+
+      // UI / Radix
+      '@radix-ui/react-dialog': '1.0.5',
+      '@radix-ui/react-dropdown-menu': '2.0.6',
+      '@radix-ui/react-popover': '1.0.7',
+      '@radix-ui/react-select': '2.0.0',
+      '@radix-ui/react-tabs': '1.0.4',
+      '@radix-ui/react-tooltip': '1.0.7',
+      '@radix-ui/react-slot': '1.0.2',
+
+      // Styling
       'clsx': '2.1.0',
       'tailwind-merge': '2.2.0',
       'class-variance-authority': '0.7.0',
-      'three': '0.149.0',
-      '@react-three/fiber': '8.15.0',
-      '@react-three/drei': '9.88.0',
+
+      // State
+      'zustand': '4.5.0',
+      'jotai': '2.6.0',
+      '@tanstack/react-query': '5.17.0',
+      'swr': '2.2.4',
+
+      // Data Viz
+      'recharts': '2.12.0',
+      'd3': '7.8.5',
+
+      // Diagrams (Mermaid support!)
+      'mermaid': '10.7.0',
+      '@xyflow/react': '12.0.0',
+
+      // Forms
+      'react-hook-form': '7.49.3',
+      'zod': '3.22.4',
+
+      // Date
+      'date-fns': '3.2.0',
+      'dayjs': '1.11.10',
+
+      // Utilities
+      'lodash-es': '4.17.21',
+      'nanoid': '5.0.4',
+      'uuid': '9.0.1',
+
+      // Markdown
+      'react-markdown': '9.0.1',
+      'remark-gfm': '4.0.0',
     };
 
     for (const [name, version] of Object.entries(commonPackages)) {

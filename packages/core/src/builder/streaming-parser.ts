@@ -1,27 +1,10 @@
 /**
- * Multi-File Streaming Parser
+ * Multi-File Streaming Parser - STATE OF THE ART
  *
  * Parses streaming LLM output into multi-file projects.
- * Designed for real-time preview updates as files are generated.
+ * Supports DUAL FORMAT: Both <<<MARKER>>> and <boltArtifact> protocols.
  *
- * Protocol Format:
- * ```
- * <<<PROJECT_START>>>
- * name: My Project
- * framework: react
- * description: A beautiful React application
- * <<<PROJECT_START>>>
- *
- * <<<FILE: /src/App.tsx>>>
- * import React from 'react';
- * ...file content...
- * <<<END_FILE>>>
- *
- * <<<DEPENDENCY: react@18.2.0>>>
- * <<<DEPENDENCY: tailwindcss@3.4.0:dev>>>
- *
- * <<<PROJECT_END>>>
- * ```
+ * This ensures compatibility regardless of which format the LLM uses.
  */
 
 import {
@@ -42,16 +25,25 @@ import {
 import { VirtualFileSystem, createFileSystem } from './virtual-fs';
 
 // ============================================================================
-// PROTOCOL MARKERS
+// DUAL FORMAT MARKERS
 // ============================================================================
 
 const MARKERS = {
+  // <<<MARKER>>> Protocol
   PROJECT_START: '<<<PROJECT_START>>>',
   PROJECT_END: '<<<PROJECT_END>>>',
-  FILE_START: /<<<FILE:\s*([^\s>]+)(?:\s+(\w+))?\s*>>>/,
-  FILE_END: '<<<END_FILE>>>',
+  FILE_START: /<<<FILE:\s*([^\s>]+)(?:\s+([^>]+))?\s*>>>/,
+  FILE_END: /<<<\s*END_FILE\s*>>>/i,
+  FILE_END_STR: '<<<END_FILE>>>',
   DEPENDENCY: /<<<DEPENDENCY:\s*([^@>]+)@([^:>]+)(?::dev)?\s*>>>/,
   ENTRY_POINT: /<<<ENTRY:\s*([^\s>]+)\s*>>>/,
+  PROJECT_START_INLINE: /<<<PROJECT_START>>>\s*(\S+)\s+(\S+)/,
+
+  // <boltArtifact> Protocol (Bolt/Lovable style)
+  BOLT_ARTIFACT_START: /<boltArtifact[^>]*id="([^"]*)"[^>]*title="([^"]*)"[^>]*>/,
+  BOLT_ARTIFACT_END: /<\/boltArtifact>/,
+  BOLT_FILE_START: /<boltAction[^>]*type="file"[^>]*filePath="([^"]*)"[^>]*>/,
+  BOLT_FILE_END: /<\/boltAction>/,
 } as const;
 
 // ============================================================================
@@ -63,15 +55,13 @@ export class MultiFileStreamingParser {
   private buffer: string = '';
   private eventListeners: Set<(event: StreamingEvent) => void> = new Set();
   private fileSystem: VirtualFileSystem;
+  private detectedFormat: 'marker' | 'bolt' | 'unknown' = 'unknown';
 
   constructor() {
     this.state = this.createInitialState();
     this.fileSystem = createFileSystem();
   }
 
-  /**
-   * Initialize parser state
-   */
   private createInitialState(): StreamingParserState {
     return {
       completedFiles: [],
@@ -81,18 +71,13 @@ export class MultiFileStreamingParser {
     };
   }
 
-  /**
-   * Subscribe to streaming events
-   */
   onEvent(listener: (event: StreamingEvent) => void): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
   }
 
-  /**
-   * Emit event to all listeners
-   */
   private emit(event: StreamingEvent): void {
+    console.log('[Parser] 📤 Emitting event:', event.type, (event as any).path || (event as any).projectName || '');
     for (const listener of this.eventListeners) {
       try {
         listener(event);
@@ -102,56 +87,222 @@ export class MultiFileStreamingParser {
     }
   }
 
-  /**
-   * Process incoming chunk of LLM output
-   */
   processChunk(chunk: string): void {
     this.buffer += chunk;
-    this.parseBuffer();
+
+    // Debug: Log buffer length periodically
+    if (this.buffer.length % 1000 < chunk.length) {
+      console.log('[Parser] 📊 Buffer size:', this.buffer.length, '| Format:', this.detectedFormat);
+    }
+
+    // Auto-detect format on first significant content
+    if (this.detectedFormat === 'unknown') {
+      if (this.buffer.includes('<boltArtifact') || this.buffer.includes('<boltAction')) {
+        this.detectedFormat = 'bolt';
+        console.log('[Parser] 🔍 Detected BOLT format');
+      } else if (this.buffer.includes('<<<PROJECT_START') || this.buffer.includes('<<<FILE:')) {
+        this.detectedFormat = 'marker';
+        console.log('[Parser] 🔍 Detected MARKER format');
+      }
+
+      // Debug: If we have a lot of buffer but no format detected, log it
+      if (this.buffer.length > 200 && this.detectedFormat === 'unknown') {
+        console.log('[Parser] ⚠️ Large buffer but no format detected. Preview:', this.buffer.slice(0, 150));
+      }
+    }
+
+    // Parse buffer repeatedly until no more complete markers are found
+    let lastBufferLength = -1;
+    let iterations = 0;
+    const maxIterations = 100; // Safety limit
+
+    while (this.buffer.length !== lastBufferLength && iterations < maxIterations) {
+      lastBufferLength = this.buffer.length;
+      iterations++;
+
+      if (this.detectedFormat === 'bolt') {
+        this.parseBoltFormat();
+      } else {
+        this.parseMarkerFormat();
+      }
+    }
   }
 
-  /**
-   * Parse the current buffer for complete tokens
-   */
-  private parseBuffer(): void {
-    // Project Start
-    if (this.buffer.includes(MARKERS.PROJECT_START) && !this.state.currentProject) {
-      const startIdx = this.buffer.indexOf(MARKERS.PROJECT_START);
-      const endIdx = this.buffer.indexOf(MARKERS.PROJECT_START, startIdx + MARKERS.PROJECT_START.length);
+  // ==========================================================================
+  // BOLT FORMAT PARSING (<boltArtifact>)
+  // ==========================================================================
 
-      if (endIdx > startIdx) {
-        const projectMeta = this.buffer.slice(startIdx + MARKERS.PROJECT_START.length, endIdx).trim();
-        this.parseProjectStart(projectMeta);
-        this.buffer = this.buffer.slice(endIdx + MARKERS.PROJECT_START.length);
+  private parseBoltFormat(): void {
+    // Artifact Start
+    if (!this.state.currentProject) {
+      const artifactMatch = this.buffer.match(MARKERS.BOLT_ARTIFACT_START);
+      if (artifactMatch) {
+        const projectName = artifactMatch[2] || artifactMatch[1] || 'Project';
+        this.state.currentProject = {
+          name: projectName,
+          framework: 'react',
+          description: undefined,
+        };
+
+        const event: ProjectStartEvent = {
+          type: 'project_start',
+          projectName,
+          framework: 'react',
+          timestamp: Date.now(),
+        };
+        this.emit(event);
+
+        // Remove the matched artifact start
+        this.buffer = this.buffer.slice(artifactMatch.index! + artifactMatch[0].length);
       }
     }
 
     // File Start
-    const fileMatch = this.buffer.match(MARKERS.FILE_START);
+    const fileMatch = this.buffer.match(MARKERS.BOLT_FILE_START);
     if (fileMatch && fileMatch.index !== undefined && fileMatch[1]) {
-      // If we have a current file, something went wrong - close it
+      // Close any open file first
       if (this.state.currentFile) {
         this.closeCurrentFile();
       }
 
       const filePath = fileMatch[1];
-      const fileType = fileMatch[2] as ProjectFileType | undefined;
+      const normalizedPath = filePath.startsWith('/') ? filePath : '/' + filePath;
+      const detection = detectLanguage(normalizedPath);
 
-      this.startFile(filePath, fileType);
+      this.state.currentFile = {
+        path: normalizedPath,
+        chunks: [],
+        language: detection.language,
+        fileType: detection.fileType,
+        isEntryPoint: normalizedPath.includes('main.tsx') || normalizedPath.includes('index.tsx'),
+      };
+
+      const event: FileStartEvent = {
+        type: 'file_start',
+        path: normalizedPath,
+        language: detection.language,
+        fileType: detection.fileType,
+        isEntryPoint: this.state.currentFile.isEntryPoint || false,
+        timestamp: Date.now(),
+      };
+      this.emit(event);
+
       this.buffer = this.buffer.slice(fileMatch.index + fileMatch[0].length);
     }
 
     // File End
-    if (this.buffer.includes(MARKERS.FILE_END) && this.state.currentFile) {
-      const endIdx = this.buffer.indexOf(MARKERS.FILE_END);
-      const content = this.buffer.slice(0, endIdx);
-
-      this.state.currentFile.chunks.push(content);
-      this.closeCurrentFile();
-      this.buffer = this.buffer.slice(endIdx + MARKERS.FILE_END.length);
+    if (this.state.currentFile) {
+      const fileEndIdx = this.buffer.indexOf('</boltAction>');
+      if (fileEndIdx !== -1) {
+        const content = this.buffer.slice(0, fileEndIdx);
+        // CRITICAL: Emit file_content so PreviewManager can sync its file system
+        if (content.length > 0) {
+          this.emitFileContent(content);
+          this.state.currentFile.chunks.push(content);
+        }
+        this.closeCurrentFile();
+        this.buffer = this.buffer.slice(fileEndIdx + '</boltAction>'.length);
+      }
     }
 
-    // Dependency
+    // Artifact End
+    const artifactEndIdx = this.buffer.indexOf('</boltArtifact>');
+    if (artifactEndIdx !== -1) {
+      if (this.state.currentFile) {
+        // Emit any remaining content before closing
+        const remainingContent = this.buffer.slice(0, artifactEndIdx);
+        if (remainingContent.length > 0) {
+          this.emitFileContent(remainingContent);
+          this.state.currentFile.chunks.push(remainingContent);
+        }
+        this.closeCurrentFile();
+      }
+      this.finalizeProject();
+      this.buffer = this.buffer.slice(artifactEndIdx + '</boltArtifact>'.length);
+    }
+
+    // Buffer content for current file
+    if (this.state.currentFile && this.buffer.length > 0) {
+      const nextTagIdx = this.findNextBoltTag();
+      if (nextTagIdx === -1) {
+        // Check for partial tag
+        const partialIdx = this.buffer.lastIndexOf('<');
+        if (partialIdx > 0 && partialIdx > this.buffer.length - 50) {
+          const content = this.buffer.slice(0, partialIdx);
+          if (content.length > 0) {
+            this.emitFileContent(content);
+            this.state.currentFile.chunks.push(content);
+          }
+          this.buffer = this.buffer.slice(partialIdx);
+        }
+      } else if (nextTagIdx > 0) {
+        const content = this.buffer.slice(0, nextTagIdx);
+        this.emitFileContent(content);
+        this.state.currentFile.chunks.push(content);
+        this.buffer = this.buffer.slice(nextTagIdx);
+      }
+    }
+  }
+
+  private findNextBoltTag(): number {
+    const indices = [
+      this.buffer.indexOf('</boltAction>'),
+      this.buffer.indexOf('<boltAction'),
+      this.buffer.indexOf('</boltArtifact>'),
+    ].filter(i => i >= 0);
+
+    return indices.length > 0 ? Math.min(...indices) : -1;
+  }
+
+  // ==========================================================================
+  // MARKER FORMAT PARSING (<<<MARKER>>>)
+  // ==========================================================================
+
+  private parseMarkerFormat(): void {
+    // Project Start
+    if (this.buffer.includes(MARKERS.PROJECT_START) && !this.state.currentProject) {
+      const inlineMatch = this.buffer.match(MARKERS.PROJECT_START_INLINE);
+
+      if (inlineMatch && inlineMatch[1] && inlineMatch[2]) {
+        const projectName = inlineMatch[1];
+        const framework = inlineMatch[2] as ProjectFramework;
+
+        const afterMatch = this.buffer.slice(inlineMatch.index! + inlineMatch[0].length);
+        const nextMarkerIdx = this.findNextMarkerIndexIn(afterMatch);
+        const description = nextMarkerIdx > 0
+          ? afterMatch.slice(0, nextMarkerIdx).trim().split('\n')[0]?.trim()
+          : undefined;
+
+        this.state.currentProject = {
+          name: projectName,
+          framework: framework,
+          description: description && description.length > 0 ? description : undefined,
+        };
+
+        const event: ProjectStartEvent = {
+          type: 'project_start',
+          projectName,
+          framework,
+          description: this.state.currentProject.description,
+          timestamp: Date.now(),
+        };
+        this.emit(event);
+
+        const consumeIdx = inlineMatch.index! + inlineMatch[0].length + (description ? description.length + 1 : 0);
+        this.buffer = this.buffer.slice(consumeIdx);
+      } else {
+        const startIdx = this.buffer.indexOf(MARKERS.PROJECT_START);
+        const endIdx = this.buffer.indexOf(MARKERS.PROJECT_START, startIdx + MARKERS.PROJECT_START.length);
+
+        if (endIdx > startIdx) {
+          const projectMeta = this.buffer.slice(startIdx + MARKERS.PROJECT_START.length, endIdx).trim();
+          this.parseProjectStart(projectMeta);
+          this.buffer = this.buffer.slice(endIdx + MARKERS.PROJECT_START.length);
+        }
+      }
+    }
+
+    // Dependencies
     let depMatch;
     while ((depMatch = this.buffer.match(MARKERS.DEPENDENCY)) !== null) {
       const name = depMatch[1];
@@ -173,25 +324,75 @@ export class MultiFileStreamingParser {
       this.buffer = this.buffer.replace(entryMatch[0], '');
     }
 
-    // Project End
-    if (this.buffer.includes(MARKERS.PROJECT_END)) {
+    // File Start
+    const fileMatch = this.buffer.match(MARKERS.FILE_START);
+    if (fileMatch && fileMatch.index !== undefined && fileMatch[1]) {
       if (this.state.currentFile) {
+        console.log('[Parser] ⚠️ Auto-closing file (no END_FILE):', this.state.currentFile.path);
         this.closeCurrentFile();
       }
-      this.finalizeProject();
-      this.buffer = this.buffer.slice(this.buffer.indexOf(MARKERS.PROJECT_END) + MARKERS.PROJECT_END.length);
+
+      const filePath = fileMatch[1];
+      const metadataStr = fileMatch[2]?.trim() || '';
+      const metadataParts = metadataStr.split(/\s+/).filter(Boolean);
+
+      const language = metadataParts[0];
+      const fileType = metadataParts[1] as ProjectFileType | undefined;
+      const isEntry = metadataParts.includes('entry');
+
+      this.startFile(filePath, fileType, language, isEntry);
+      this.buffer = this.buffer.slice(fileMatch.index + fileMatch[0].length);
     }
 
-    // If we have a current file and content before any marker, add it as a chunk
+    // File End
+    const fileEndMatch = this.buffer.match(MARKERS.FILE_END);
+    if (fileEndMatch && this.state.currentFile) {
+      const endIdx = fileEndMatch.index!;
+      const content = this.buffer.slice(0, endIdx);
+
+      console.log('[Parser] ✅ Closing file:', this.state.currentFile.path, '| Content:', content.length, 'chars');
+
+      this.state.currentFile.chunks.push(content);
+      this.closeCurrentFile();
+      this.buffer = this.buffer.slice(endIdx + fileEndMatch[0].length);
+    }
+
+    // Project End
+    if (this.buffer.includes(MARKERS.PROJECT_END)) {
+      const projectEndIdx = this.buffer.indexOf(MARKERS.PROJECT_END);
+      const fileStartIdx = this.buffer.search(/<<<FILE:/);
+
+      if (fileStartIdx === -1 || fileStartIdx > projectEndIdx) {
+        if (this.state.currentFile) {
+          console.log('[Parser] ⚠️ Auto-closing file at PROJECT_END:', this.state.currentFile.path);
+          this.closeCurrentFile();
+        }
+        console.log('[Parser] ✅ Project complete! Files:', this.state.completedFiles.length);
+        this.finalizeProject();
+        this.buffer = this.buffer.slice(projectEndIdx + MARKERS.PROJECT_END.length);
+      }
+    }
+
+    // Buffer content for current file
     if (this.state.currentFile && this.buffer.length > 0) {
       const nextMarkerIdx = this.findNextMarkerIndex();
+
       if (nextMarkerIdx === -1) {
-        // No marker found, emit all content as chunk
-        this.emitFileContent(this.buffer);
-        this.state.currentFile.chunks.push(this.buffer);
-        this.buffer = '';
+        const partialMarkerIdx = this.findPartialMarkerIndex();
+
+        if (partialMarkerIdx >= 0 && partialMarkerIdx < this.buffer.length) {
+          const content = this.buffer.slice(0, partialMarkerIdx);
+          if (content.length > 0) {
+            this.emitFileContent(content);
+            this.state.currentFile.chunks.push(content);
+          }
+          this.buffer = this.buffer.slice(partialMarkerIdx);
+        } else {
+          this.emitFileContent(this.buffer);
+          this.state.currentFile.chunks.push(this.buffer);
+          this.buffer = '';
+        }
       } else if (nextMarkerIdx > 0) {
-        // Content before next marker
         const content = this.buffer.slice(0, nextMarkerIdx);
         this.emitFileContent(content);
         this.state.currentFile.chunks.push(content);
@@ -200,23 +401,46 @@ export class MultiFileStreamingParser {
     }
   }
 
-  /**
-   * Find the index of the next marker in buffer
-   */
+  private findPartialMarkerIndex(): number {
+    const markerStarts = ['<<<', '<<', '<'];
+
+    for (const start of markerStarts) {
+      const idx = this.buffer.lastIndexOf(start);
+      if (idx >= 0 && idx >= this.buffer.length - 30) {
+        const remainder = this.buffer.slice(idx);
+        if (remainder.includes('<<<') && !remainder.includes('>>>')) {
+          return idx;
+        }
+      }
+    }
+    return -1;
+  }
+
   private findNextMarkerIndex(): number {
+    return this.findNextMarkerIndexIn(this.buffer);
+  }
+
+  private findNextMarkerIndexIn(str: string): number {
+    const fileEndMatch = str.match(MARKERS.FILE_END);
+    const fileEndIdx = fileEndMatch?.index ?? -1;
+
     const indices = [
-      this.buffer.indexOf(MARKERS.FILE_END),
-      this.buffer.indexOf('<<<FILE:'),
-      this.buffer.indexOf('<<<DEPENDENCY:'),
-      this.buffer.indexOf(MARKERS.PROJECT_END),
+      fileEndIdx,
+      str.indexOf('<<<FILE:'),
+      str.indexOf('<<<DEPENDENCY:'),
+      str.indexOf(MARKERS.PROJECT_END),
+      str.indexOf('<<<ENTRY:'),
+      str.search(/<<<\s*file:/i),
+      str.search(/<<<\s*project_end\s*>>>/i),
     ].filter(i => i >= 0);
 
     return indices.length > 0 ? Math.min(...indices) : -1;
   }
 
-  /**
-   * Parse project start metadata
-   */
+  // ==========================================================================
+  // SHARED METHODS
+  // ==========================================================================
+
   private parseProjectStart(meta: string): void {
     const lines = meta.split('\n');
     const project: Partial<StreamingParserState['currentProject']> = {};
@@ -254,38 +478,44 @@ export class MultiFileStreamingParser {
       description: this.state.currentProject.description,
       timestamp: Date.now(),
     };
-
     this.emit(event);
   }
 
-  /**
-   * Start a new file
-   */
-  private startFile(path: string, fileType?: ProjectFileType): void {
-    const normalizedPath = path.startsWith('/') ? path : '/' + path;
+  private startFile(path: string, fileType?: ProjectFileType, language?: string, isEntry?: boolean): void {
+    // Validate path - must start with / or be a valid relative path
+    const cleanPath = path.trim();
+    if (!cleanPath || cleanPath.length < 2 || !cleanPath.match(/^[\/.]?[a-zA-Z0-9_\-\/\.]+$/)) {
+      console.warn('[Parser] ⚠️ Invalid file path, skipping:', path);
+      return;
+    }
+
+    const normalizedPath = cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath;
     const detection = detectLanguage(normalizedPath);
+
+    const finalLanguage = language || detection.language;
+    const finalFileType = fileType || detection.fileType;
 
     this.state.currentFile = {
       path: normalizedPath,
       chunks: [],
-      language: detection.language,
-      fileType: fileType || detection.fileType,
+      language: finalLanguage,
+      fileType: finalFileType,
+      isEntryPoint: isEntry || false,
     };
+
+    console.log('[Parser] 📂 Starting file:', normalizedPath);
 
     const event: FileStartEvent = {
       type: 'file_start',
       path: normalizedPath,
-      language: detection.language,
-      fileType: fileType || detection.fileType,
+      language: finalLanguage,
+      fileType: finalFileType,
+      isEntryPoint: isEntry || false,
       timestamp: Date.now(),
     };
-
     this.emit(event);
   }
 
-  /**
-   * Emit file content chunk
-   */
   private emitFileContent(content: string): void {
     if (!this.state.currentFile || !content) return;
 
@@ -295,13 +525,9 @@ export class MultiFileStreamingParser {
       chunk: content,
       timestamp: Date.now(),
     };
-
     this.emit(event);
   }
 
-  /**
-   * Close current file
-   */
   private closeCurrentFile(): void {
     if (!this.state.currentFile) return;
 
@@ -325,6 +551,8 @@ export class MultiFileStreamingParser {
       updatedAt: new Date(),
     };
 
+    console.log('[Parser] 📁 File completed:', file.path, '| Size:', file.size, '| Lines:', file.lineCount);
+
     this.state.completedFiles.push(file);
     this.fileSystem.createFile({
       path: file.path,
@@ -341,35 +569,50 @@ export class MultiFileStreamingParser {
       totalSize: file.size,
       timestamp: Date.now(),
     };
-
     this.emit(event);
     this.state.currentFile = undefined;
   }
 
-  /**
-   * Add a dependency
-   */
   private addDependency(name: string, version: string, isDev: boolean): void {
-    if (isDev) {
-      this.state.devDependencies[name] = version;
-    } else {
-      this.state.dependencies[name] = version;
+    // Validate dependency name and version
+    const cleanName = name?.trim();
+    const cleanVersion = version?.trim();
+
+    if (!cleanName || !cleanVersion) {
+      console.warn('[Parser] ⚠️ Invalid dependency, skipping:', name, version);
+      return;
     }
+
+    // Valid npm package name pattern
+    if (!cleanName.match(/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i)) {
+      console.warn('[Parser] ⚠️ Invalid package name, skipping:', cleanName);
+      return;
+    }
+
+    // Valid version pattern (semver-like)
+    if (!cleanVersion.match(/^[\^~>=<]?[0-9]/)) {
+      console.warn('[Parser] ⚠️ Invalid version, skipping:', cleanVersion);
+      return;
+    }
+
+    if (isDev) {
+      this.state.devDependencies[cleanName] = cleanVersion;
+    } else {
+      this.state.dependencies[cleanName] = cleanVersion;
+    }
+
+    console.log('[Parser] 📦 Adding dependency:', cleanName, '@', cleanVersion);
 
     const event: DependencyEvent = {
       type: 'dependency',
-      name,
-      version,
+      name: cleanName,
+      version: cleanVersion,
       isDev,
       timestamp: Date.now(),
     };
-
     this.emit(event);
   }
 
-  /**
-   * Finalize the project
-   */
   private finalizeProject(): void {
     const event: ProjectEndEvent = {
       type: 'project_end',
@@ -377,34 +620,25 @@ export class MultiFileStreamingParser {
       totalSize: this.state.completedFiles.reduce((sum, f) => sum + f.size, 0),
       timestamp: Date.now(),
     };
-
     this.emit(event);
   }
 
-  /**
-   * Get current parser state
-   */
+  // ==========================================================================
+  // PUBLIC API
+  // ==========================================================================
+
   getState(): StreamingParserState {
     return { ...this.state };
   }
 
-  /**
-   * Get the file system
-   */
   getFileSystem(): VirtualFileSystem {
     return this.fileSystem;
   }
 
-  /**
-   * Get all completed files
-   */
   getFiles(): VirtualFile[] {
     return [...this.state.completedFiles];
   }
 
-  /**
-   * Get dependencies
-   */
   getDependencies(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
     return {
       dependencies: { ...this.state.dependencies },
@@ -412,162 +646,30 @@ export class MultiFileStreamingParser {
     };
   }
 
-  /**
-   * Check if parsing is complete
-   */
   isComplete(): boolean {
     return this.state.completedFiles.length > 0 && !this.state.currentFile;
   }
 
-  /**
-   * Get any parsing errors
-   */
   getErrors(): StreamingError[] {
     return [...this.state.errors];
   }
 
-  /**
-   * Reset parser state
-   */
   reset(): void {
     this.state = this.createInitialState();
     this.buffer = '';
     this.fileSystem = createFileSystem();
+    this.detectedFormat = 'unknown';
   }
 }
 
 // ============================================================================
-// STREAMING PROTOCOL BUILDER
+// EXPORTS
 // ============================================================================
 
-/**
- * Build streaming protocol output from a virtual file system
- * Used for serializing projects back to LLM format
- */
-export class StreamingProtocolBuilder {
-  private output: string[] = [];
-
-  /**
-   * Start a project
-   */
-  startProject(name: string, framework: ProjectFramework, description?: string): this {
-    this.output.push(MARKERS.PROJECT_START);
-    this.output.push(`name: ${name}`);
-    this.output.push(`framework: ${framework}`);
-    if (description) {
-      this.output.push(`description: ${description}`);
-    }
-    this.output.push(MARKERS.PROJECT_START);
-    this.output.push('');
-    return this;
-  }
-
-  /**
-   * Add a file
-   */
-  addFile(path: string, content: string, fileType?: ProjectFileType): this {
-    const marker = fileType
-      ? `<<<FILE: ${path} ${fileType}>>>`
-      : `<<<FILE: ${path}>>>`;
-    this.output.push(marker);
-    this.output.push(content);
-    this.output.push(MARKERS.FILE_END);
-    this.output.push('');
-    return this;
-  }
-
-  /**
-   * Add a dependency
-   */
-  addDependency(name: string, version: string, isDev: boolean = false): this {
-    const marker = isDev
-      ? `<<<DEPENDENCY: ${name}@${version}:dev>>>`
-      : `<<<DEPENDENCY: ${name}@${version}>>>`;
-    this.output.push(marker);
-    return this;
-  }
-
-  /**
-   * Set entry point
-   */
-  setEntryPoint(path: string): this {
-    this.output.push(`<<<ENTRY: ${path}>>>`);
-    return this;
-  }
-
-  /**
-   * End the project
-   */
-  endProject(): this {
-    this.output.push('');
-    this.output.push(MARKERS.PROJECT_END);
-    return this;
-  }
-
-  /**
-   * Build the final output string
-   */
-  build(): string {
-    return this.output.join('\n');
-  }
-
-  /**
-   * Build from a file system
-   */
-  static fromFileSystem(
-    fs: VirtualFileSystem,
-    name: string,
-    framework: ProjectFramework,
-    dependencies?: Record<string, string>,
-    devDependencies?: Record<string, string>,
-    description?: string
-  ): string {
-    const builder = new StreamingProtocolBuilder();
-    builder.startProject(name, framework, description);
-
-    // Add dependencies
-    if (dependencies) {
-      for (const [dep, version] of Object.entries(dependencies)) {
-        builder.addDependency(dep, version, false);
-      }
-    }
-    if (devDependencies) {
-      for (const [dep, version] of Object.entries(devDependencies)) {
-        builder.addDependency(dep, version, true);
-      }
-    }
-
-    // Add files
-    const files = fs.getAllFiles();
-    const entryPoint = files.find(f => f.isEntryPoint);
-
-    if (entryPoint) {
-      builder.setEntryPoint(entryPoint.path);
-    }
-
-    for (const file of files) {
-      builder.addFile(file.path, file.content, file.fileType);
-    }
-
-    builder.endProject();
-    return builder.build();
-  }
-}
-
-// ============================================================================
-// FACTORY FUNCTIONS
-// ============================================================================
-
-/**
- * Create a new streaming parser
- */
 export function createStreamingParser(): MultiFileStreamingParser {
   return new MultiFileStreamingParser();
 }
 
-/**
- * Parse complete LLM output (non-streaming)
- */
 export function parseMultiFileOutput(output: string): {
   fileSystem: VirtualFileSystem;
   dependencies: Record<string, string>;
@@ -583,48 +685,4 @@ export function parseMultiFileOutput(output: string): {
     devDependencies: parser.getDependencies().devDependencies,
     errors: parser.getErrors(),
   };
-}
-
-/**
- * Generate LLM prompt for multi-file project generation
- */
-export function generateMultiFilePrompt(requirements: string, framework: ProjectFramework = 'react'): string {
-  return `You are a world-class software engineer. Generate a complete multi-file project based on the following requirements.
-
-## Requirements
-${requirements}
-
-## Output Format
-Use this exact format for your response:
-
-<<<PROJECT_START>>>
-name: [Project Name]
-framework: ${framework}
-description: [Brief description]
-<<<PROJECT_START>>>
-
-<<<DEPENDENCY: package-name@version>>>
-<<<DEPENDENCY: dev-package@version:dev>>>
-
-<<<ENTRY: /src/main.tsx>>>
-
-<<<FILE: /src/main.tsx>>>
-[File content here]
-<<<END_FILE>>>
-
-<<<FILE: /src/App.tsx>>>
-[File content here]
-<<<END_FILE>>>
-
-<<<PROJECT_END>>>
-
-## Guidelines
-1. Create a complete, working project structure
-2. Include all necessary files (components, styles, configs)
-3. Use modern best practices
-4. Include proper TypeScript types where applicable
-5. Add helpful comments for complex logic
-6. Make the code clean and maintainable
-
-Generate the complete project now:`;
 }

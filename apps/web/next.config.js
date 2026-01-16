@@ -65,14 +65,16 @@ const nextConfig = {
               "default-src 'self'",
               // Scripts: self + trusted CDNs for preview iframe + inline for Next.js
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.tailwindcss.com https://www.googletagmanager.com",
+              // Workers: allow blob URLs for ESBuild/Monaco workers
+              "worker-src 'self' blob:",
               // Styles: self + inline (required for styled-jsx and Tailwind)
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // Images: self + data URIs + blob + common image hosts
               "img-src 'self' data: blob: https: http:",
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com data:",
-              // Connect: API calls, WebSocket, and Sentry
-              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://*.vercel-storage.com wss://*.vercel.app https://*.sentry.io https://*.ingest.sentry.io",
+              // Connect: API calls, WebSocket, Sentry, and CDNs for ESBuild WASM
+              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://*.vercel-storage.com wss://*.vercel.app https://*.sentry.io https://*.ingest.sentry.io https://unpkg.com https://cdn.jsdelivr.net https://esm.sh",
               // Media: self + blob + Vercel Blob storage
               "media-src 'self' blob: https://*.vercel-storage.com https://*.blob.vercel-storage.com",
               // Frame: allow iframes for preview

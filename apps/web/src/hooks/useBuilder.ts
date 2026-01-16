@@ -25,7 +25,6 @@ import type {
 import {
   PreviewManager,
   createPreviewManager,
-  initializePreviewSystem,
 } from '../lib/builder/preview-manager';
 
 // ============================================================================
@@ -69,6 +68,7 @@ export interface UseBuilderResult {
   // LLM Integration
   processChunk: (chunk: string) => void;
   processComplete: (output: string) => void;
+  syncFiles: () => void;
 
   // Manager access for advanced usage
   manager: PreviewManager | null;
@@ -88,6 +88,10 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
 
   // Manager ref (stable across renders)
   const managerRef = useRef<PreviewManager | null>(null);
+
+  // Store onStreamEvent in a ref to avoid dependency issues
+  const onStreamEventRef = useRef(onStreamEvent);
+  onStreamEventRef.current = onStreamEvent;
 
   // State
   const [fileTree, setFileTree] = useState<VirtualDirectory | null>(null);
@@ -119,7 +123,9 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
             if (mounted) {
               // Update files and tree
               const fs = manager.getFileSystem();
-              setFiles(fs.getAllFiles());
+              const allFiles = fs.getAllFiles();
+              console.log('[useBuilder] 📁 File changed:', file.path, '| Total files:', allFiles.length);
+              setFiles(allFiles);
               setFileTree(fs.getTree());
             }
           },
@@ -133,19 +139,31 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
           },
           onStreamEvent: (event) => {
             if (mounted) {
+              console.log('[useBuilder] 🔔 Event:', event.type, (event as any).path || (event as any).projectName || '');
+
               // Update project name from stream
               if (event.type === 'project_start') {
-                setProjectName(event.projectName);
+                setProjectName((event as any).projectName);
               }
-              onStreamEvent?.(event);
+
+              // On project_end, force a final state sync
+              if (event.type === 'project_end') {
+                const fs = manager.getFileSystem();
+                const allFiles = fs.getAllFiles();
+                console.log('[useBuilder] 🏁 Project complete! Files:', allFiles.length);
+                setFiles(allFiles);
+                setFileTree(fs.getTree());
+              }
+
+              onStreamEventRef.current?.(event);
             }
           },
         });
 
         managerRef.current = manager;
 
-        // Initialize ESBuild
-        await initializePreviewSystem();
+        // Initialize ESBuild on OUR manager instance (not the singleton!)
+        await manager.initialize();
 
         if (mounted) {
           setIsInitialized(true);
@@ -160,7 +178,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     return () => {
       mounted = false;
     };
-  }, [autoRefresh, debounceMs, onStreamEvent]);
+  }, [autoRefresh, debounceMs]); // onStreamEvent accessed via ref to prevent recreation
 
   // Derive selected file from path
   const selectedFile = useMemo(() => {
@@ -245,10 +263,26 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
 
   const processChunk = useCallback((chunk: string) => {
     const manager = managerRef.current;
-    if (!manager) return;
+    if (!manager) {
+      console.warn('[useBuilder] ❌ Manager not initialized!');
+      return;
+    }
 
     setIsBuilding(true);
+
+    // Debug: Log chunk preview for marker detection
+    if (chunk.includes('<<<') || chunk.includes('>>>') || chunk.includes('<bolt')) {
+      console.log('[useBuilder] 🔍 Chunk with markers:', JSON.stringify(chunk.slice(0, 100)));
+    }
+
     manager.processChunk(chunk);
+
+    // Debug: Check manager's file system after each chunk
+    const fs = manager.getFileSystem();
+    const currentFiles = fs.getAllFiles();
+    if (currentFiles.length > 0) {
+      console.log('[useBuilder] 📁 Manager has', currentFiles.length, 'files after chunk');
+    }
   }, []);
 
   const processComplete = useCallback((output: string) => {
@@ -258,6 +292,26 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     setIsBuilding(true);
     manager.processComplete(output);
   }, []);
+
+  /**
+   * Force sync files from manager to React state
+   * Call this after streaming completes to ensure UI updates
+   */
+  const syncFiles = useCallback(() => {
+    const manager = managerRef.current;
+    if (!manager) return;
+
+    const fs = manager.getFileSystem();
+    const allFiles = fs.getAllFiles();
+    console.log('[useBuilder] 🔄 Forcing file sync, files:', allFiles.length);
+
+    setFiles(allFiles);
+    setFileTree(fs.getTree());
+
+    if (allFiles.length > 0 && !selectedPath) {
+      setSelectedPath(allFiles[0].path);
+    }
+  }, [selectedPath]);
 
   // -------------------------------------------------------------------------
   // RETURN
@@ -286,6 +340,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     // LLM Integration
     processChunk,
     processComplete,
+    syncFiles,
 
     // Manager access
     manager: managerRef.current,

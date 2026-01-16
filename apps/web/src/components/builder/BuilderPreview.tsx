@@ -530,6 +530,21 @@ export function BuilderPreview({
                 </div>
               )}
 
+              {/* Empty State - No Preview Yet */}
+              {!preview && !isBuilding && !hasErrors && (
+                <div className="preview-empty">
+                  <div className="empty-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                      <polyline points="2 17 12 22 22 17" />
+                      <polyline points="2 12 12 17 22 12" />
+                    </svg>
+                  </div>
+                  <div className="empty-title">Ready to Build</div>
+                  <div className="empty-message">Describe what you want to create and Alfred will generate the code.</div>
+                </div>
+              )}
+
               {/* Error State */}
               {hasErrors && (
                 <div className="preview-error">
@@ -723,6 +738,37 @@ export function BuilderPreview({
           text-transform: uppercase;
           color: rgba(255, 255, 255, 0.4);
           animation: fadeInOut 1.5s ease-in-out infinite;
+        }
+
+        .preview-empty {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          background: linear-gradient(180deg, #0f0f14 0%, #0c0c10 100%);
+          padding: 32px;
+          text-align: center;
+        }
+
+        .empty-icon {
+          color: rgba(139, 92, 246, 0.5);
+          margin-bottom: 8px;
+        }
+
+        .empty-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        .empty-message {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.4);
+          max-width: 280px;
+          line-height: 1.5;
         }
 
         .preview-error {

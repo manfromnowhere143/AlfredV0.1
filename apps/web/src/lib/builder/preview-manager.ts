@@ -189,7 +189,22 @@ export class PreviewManager {
     const adapter = getEsbuildAdapter();
     const project = this.createProject();
 
+    console.log('[PreviewManager] 🔨 Rebuilding project:', project.name);
+    console.log('[PreviewManager] 📁 Files in project:', project.fileCount);
+    console.log('[PreviewManager] 🎯 Entry point:', project.entryPoint);
+
+    if (project.fileCount > 0) {
+      const filePaths = Array.from(project.files.keys());
+      console.log('[PreviewManager] Files:', filePaths.join(', '));
+    }
+
     const result = await adapter.preview(project);
+
+    console.log('[PreviewManager] Build result:', result.success ? '✅ Success' : '❌ Failed');
+    if (!result.success && result.errors?.length) {
+      console.log('[PreviewManager] Errors:', result.errors.map(e => e.message).join('; '));
+    }
+
     this.lastPreviewResult = result;
     this.options.onPreviewUpdate(result);
 
@@ -247,6 +262,7 @@ export class PreviewManager {
    */
   private setupParserEvents(): void {
     this.parser.onEvent((event) => {
+      console.log('[PreviewManager] 🔔 Event received:', event.type);
       this.options.onStreamEvent(event);
 
       switch (event.type) {
@@ -277,7 +293,29 @@ export class PreviewManager {
           break;
 
         case 'file_end':
-          // File complete, trigger preview update
+          // File complete - sync from parser's completed files
+          const parserFiles = this.parser.getFiles();
+          const parsedFile = parserFiles.find(f => f.path === event.path);
+
+          if (parsedFile) {
+            // Update our file system with the complete content from parser
+            const existingFile = this.fileSystem.getFile(event.path);
+            if (existingFile) {
+              this.fileSystem.updateFile(event.path, parsedFile.content);
+            } else {
+              this.fileSystem.createFile({
+                path: parsedFile.path,
+                content: parsedFile.content,
+                language: parsedFile.language,
+                fileType: parsedFile.fileType,
+                isEntryPoint: parsedFile.isEntryPoint,
+                generatedBy: 'llm',
+              });
+            }
+            console.log('[PreviewManager] 📁 File synced:', event.path, '| Size:', parsedFile.content.length);
+          }
+
+          // Trigger update
           const completedFile = this.fileSystem.getFile(event.path);
           if (completedFile) {
             this.options.onFileChange(completedFile);
@@ -294,7 +332,35 @@ export class PreviewManager {
           break;
 
         case 'project_end':
-          // Final rebuild when project completes
+          // Final sync: ensure all files from parser are in our file system
+          const allParserFiles = this.parser.getFiles();
+          console.log('[PreviewManager] 🏁 Project complete! Syncing', allParserFiles.length, 'files');
+
+          for (const pFile of allParserFiles) {
+            const existing = this.fileSystem.getFile(pFile.path);
+            if (!existing || existing.content !== pFile.content) {
+              if (existing) {
+                this.fileSystem.updateFile(pFile.path, pFile.content);
+              } else {
+                this.fileSystem.createFile({
+                  path: pFile.path,
+                  content: pFile.content,
+                  language: pFile.language,
+                  fileType: pFile.fileType,
+                  isEntryPoint: pFile.isEntryPoint,
+                  generatedBy: 'llm',
+                });
+              }
+              console.log('[PreviewManager] ✅ Synced:', pFile.path);
+            }
+          }
+
+          // Notify about all files
+          for (const file of this.fileSystem.getAllFiles()) {
+            this.options.onFileChange(file);
+          }
+
+          // Final rebuild
           this.rebuild();
           break;
       }
