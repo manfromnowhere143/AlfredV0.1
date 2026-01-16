@@ -124,9 +124,12 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
               // Update files and tree
               const fs = manager.getFileSystem();
               const allFiles = fs.getAllFiles();
+              const tree = fs.getTree();
               console.log('[useBuilder] 📁 File changed:', file.path, '| Total files:', allFiles.length);
-              setFiles(allFiles);
-              setFileTree(fs.getTree());
+              console.log('[useBuilder] 📁 Setting files state with', allFiles.length, 'files');
+              // CRITICAL: Force new array reference to trigger re-render
+              setFiles([...allFiles]);
+              setFileTree(tree);
             }
           },
           onConsole: (entry) => {
@@ -150,9 +153,14 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
               if (event.type === 'project_end') {
                 const fs = manager.getFileSystem();
                 const allFiles = fs.getAllFiles();
+                const tree = fs.getTree();
                 console.log('[useBuilder] 🏁 Project complete! Files:', allFiles.length);
-                setFiles(allFiles);
-                setFileTree(fs.getTree());
+                console.log('[useBuilder] 🏁 Setting files state with', allFiles.length, 'files');
+                // CRITICAL: Force new array reference to trigger re-render
+                setFiles([...allFiles]);
+                setFileTree(tree);
+                // Also force isBuilding false after project_end
+                setIsBuilding(false);
               }
 
               onStreamEventRef.current?.(event);
