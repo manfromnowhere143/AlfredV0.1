@@ -258,17 +258,66 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
             format: 'esm',
           });
 
-          // Strip import/export for inline execution
+          // Process imports and exports for browser execution
           let code = result.code;
-          // Remove import statements (will be loaded from CDN)
-          code = code.replace(/^import\s+.*?from\s+['"][^'"]+['"];?\s*$/gm, '');
-          code = code.replace(/^import\s+['"][^'"]+['"];?\s*$/gm, '');
-          // Convert export default to variable assignment
-          code = code.replace(/export\s+default\s+function\s+(\w+)/g, 'const $1 = function $1');
-          code = code.replace(/export\s+default\s+/g, 'const _default = ');
-          // Remove other exports
-          code = code.replace(/^export\s+\{[^}]*\};?\s*$/gm, '');
-          code = code.replace(/^export\s+(const|let|var|function|class)\s+/gm, '$1 ');
+
+          // KEEP imports from npm packages (will be resolved via import map)
+          // REMOVE imports from local files (already bundled inline)
+
+          // Split code into lines for processing
+          const lines = code.split('\n');
+          const processedLines: string[] = [];
+
+          for (const line of lines) {
+            // Check if it's an import statement
+            const importMatch = line.match(/^import\s+.*?from\s+['"]([^'"]+)['"]/);
+            if (importMatch) {
+              const importPath = importMatch[1];
+              // Keep npm package imports (don't start with . or /)
+              if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+                processedLines.push(line); // Keep CDN imports
+              }
+              // Skip local imports (already inlined)
+              continue;
+            }
+
+            // Skip side-effect only imports from local files
+            const sideEffectImport = line.match(/^import\s+['"]([^'"]+)['"]/);
+            if (sideEffectImport) {
+              const importPath = sideEffectImport[1];
+              if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+                processedLines.push(line); // Keep CDN side-effect imports
+              }
+              continue;
+            }
+
+            // Convert export default function
+            if (line.match(/export\s+default\s+function\s+(\w+)/)) {
+              processedLines.push(line.replace(/export\s+default\s+function\s+(\w+)/, 'const $1 = function $1'));
+              continue;
+            }
+
+            // Convert export default (other)
+            if (line.match(/export\s+default\s+/)) {
+              processedLines.push(line.replace(/export\s+default\s+/, 'const _default = '));
+              continue;
+            }
+
+            // Remove export { ... } statements
+            if (line.match(/^export\s+\{[^}]*\};?\s*$/)) {
+              continue;
+            }
+
+            // Convert export const/let/var/function/class
+            if (line.match(/^export\s+(const|let|var|function|class)\s+/)) {
+              processedLines.push(line.replace(/^export\s+(const|let|var|function|class)\s+/, '$1 '));
+              continue;
+            }
+
+            processedLines.push(line);
+          }
+
+          code = processedLines.join('\n');
 
           transformedFiles.push({ path: file.path, code });
           console.log('[ESBuild] ✅ Transformed:', file.path, '| Size:', code.length);
@@ -292,6 +341,11 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         };
       }
 
+      // Extract CSS files
+      const cssFiles = files.filter(f => f.path.endsWith('.css'));
+      const cssCode = cssFiles.map(f => `/* ${f.path} */\n${f.content}`).join('\n\n');
+      console.log('[ESBuild] 🎨 CSS files:', cssFiles.length, '| Total CSS size:', cssCode.length);
+
       // Combine transformed code
       // Order: utilities first, then components, then App, then entry point
       const orderedFiles = this.orderFiles(transformedFiles, entryPoint);
@@ -303,7 +357,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       const warnings: FileError[] = [];
 
       // Generate preview HTML
-      const html = this.generatePreviewHTML(bundledCode, project);
+      const html = this.generatePreviewHTML(bundledCode, project, cssCode);
 
       return {
         success: errors.length === 0,
@@ -509,7 +563,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
   /**
    * Generate preview HTML with bundled code
    */
-  private generatePreviewHTML(bundledCode: string, project: AlfredProject): string {
+  private generatePreviewHTML(bundledCode: string, project: AlfredProject, cssCode: string = ''): string {
     const deps = project.dependencies || {};
     const importMap = this.generateImportMap(deps);
 
@@ -527,6 +581,11 @@ ${JSON.stringify(importMap, null, 2)}
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Project CSS -->
+  <style>
+${cssCode}
+  </style>
 
   <!-- Mermaid for Diagrams -->
   <script type="module">

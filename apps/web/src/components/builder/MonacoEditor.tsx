@@ -7,7 +7,7 @@
  * Features syntax highlighting, IntelliSense-lite, and themes.
  */
 
-import React, { useCallback, useRef, useEffect, useState, memo } from 'react';
+import React, { useCallback, useRef, useEffect, useState, memo, Suspense } from 'react';
 import Editor, { OnMount, OnChange, loader, Monaco } from '@monaco-editor/react';
 
 // Use Monaco's own types from the wrapper package
@@ -151,12 +151,29 @@ export const MonacoEditor = memo(function MonacoEditor({
 }: MonacoEditorProps) {
   const editorRef = useRef<IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const [monacoReady, setMonacoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadTimeout, setLoadTimeout] = useState(false);
+
+  // Timeout fallback - if Monaco doesn't load in 5 seconds, show plain textarea
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!monacoReady) {
+        console.warn('[Monaco] ⏰ Timeout - Monaco failed to load in 5s');
+        setLoadTimeout(true);
+      }
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [monacoReady]);
 
   // Handle editor mount
   const handleMount: OnMount = useCallback((editor, monaco) => {
     console.log('[Monaco] 🎉 Editor mounted successfully');
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setMonacoReady(true);
+    setLoadTimeout(false); // Cancel timeout fallback
 
     // Register custom theme
     monaco.editor.defineTheme('alfred-dark', ALFRED_DARK_THEME);
@@ -224,6 +241,17 @@ export const MonacoEditor = memo(function MonacoEditor({
     }
   }, [value]);
 
+  // Fallback textarea for when Monaco fails to load
+  const FallbackEditor = () => (
+    <textarea
+      value={value}
+      onChange={(e) => onChange?.(e.target.value)}
+      readOnly={readOnly}
+      className="fallback-textarea"
+      spellCheck={false}
+    />
+  );
+
   return (
     <div className={`monaco-editor-container ${className}`}>
       {path && (
@@ -234,58 +262,63 @@ export const MonacoEditor = memo(function MonacoEditor({
       )}
 
       <div className="editor-wrapper">
-        <Editor
-          height="100%"
-          language={getMonacoLanguage(language)}
-          value={value}
-          theme={theme === 'dark' ? 'alfred-dark' : 'light'}
-          onChange={handleChange}
-          onMount={handleMount}
-          options={{
-            readOnly,
-            minimap: { enabled: showMinimap },
-            fontSize: 13,
-            fontFamily: "'Fira Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
-            fontLigatures: true,
-            lineNumbers: 'on',
-            renderLineHighlight: 'line',
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            cursorSmoothCaretAnimation: 'on',
-            padding: { top: 16, bottom: 16 },
-            automaticLayout: true,
-            wordWrap: 'on',
-            tabSize: 2,
-            insertSpaces: true,
-            formatOnPaste: true,
-            formatOnType: true,
-            bracketPairColorization: { enabled: true },
-            guides: {
-              bracketPairs: true,
-              indentation: true,
-            },
-            scrollbar: {
-              vertical: 'auto',
-              horizontal: 'auto',
-              verticalScrollbarSize: 8,
-              horizontalScrollbarSize: 8,
-            },
-            suggest: {
-              showMethods: true,
-              showFunctions: true,
-              showVariables: true,
-              showClasses: true,
-              showKeywords: true,
-            },
-          }}
-          loading={
-            <div className="editor-loading">
-              <div className="loading-spinner" />
-              <span>Loading editor...</span>
-            </div>
-          }
-        />
+        {/* Show fallback if Monaco times out */}
+        {loadTimeout && !monacoReady ? (
+          <FallbackEditor />
+        ) : (
+          <Editor
+            height="100%"
+            language={getMonacoLanguage(language)}
+            value={value}
+            theme={theme === 'dark' ? 'alfred-dark' : 'light'}
+            onChange={handleChange}
+            onMount={handleMount}
+            options={{
+              readOnly,
+              minimap: { enabled: showMinimap },
+              fontSize: 13,
+              fontFamily: "'Fira Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
+              fontLigatures: true,
+              lineNumbers: 'on',
+              renderLineHighlight: 'line',
+              scrollBeyondLastLine: false,
+              smoothScrolling: true,
+              cursorBlinking: 'smooth',
+              cursorSmoothCaretAnimation: 'on',
+              padding: { top: 16, bottom: 16 },
+              automaticLayout: true,
+              wordWrap: 'on',
+              tabSize: 2,
+              insertSpaces: true,
+              formatOnPaste: true,
+              formatOnType: true,
+              bracketPairColorization: { enabled: true },
+              guides: {
+                bracketPairs: true,
+                indentation: true,
+              },
+              scrollbar: {
+                vertical: 'auto',
+                horizontal: 'auto',
+                verticalScrollbarSize: 8,
+                horizontalScrollbarSize: 8,
+              },
+              suggest: {
+                showMethods: true,
+                showFunctions: true,
+                showVariables: true,
+                showClasses: true,
+                showKeywords: true,
+              },
+            }}
+            loading={
+              <div className="editor-loading">
+                <div className="loading-spinner" />
+                <span>Loading editor...</span>
+              </div>
+            }
+          />
+        )}
       </div>
 
       <style jsx>{`
@@ -346,6 +379,27 @@ export const MonacoEditor = memo(function MonacoEditor({
           to {
             transform: rotate(360deg);
           }
+        }
+
+        .fallback-textarea {
+          width: 100%;
+          height: 100%;
+          background: #0f0f12;
+          color: #e5e7eb;
+          font-family: 'Fira Code', 'JetBrains Mono', Menlo, Monaco, monospace;
+          font-size: 13px;
+          line-height: 1.6;
+          padding: 16px;
+          border: none;
+          outline: none;
+          resize: none;
+          tab-size: 2;
+          white-space: pre;
+          overflow: auto;
+        }
+
+        .fallback-textarea:focus {
+          outline: none;
         }
       `}</style>
     </div>

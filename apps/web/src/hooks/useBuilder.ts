@@ -189,29 +189,30 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
   }, [autoRefresh, debounceMs]); // onStreamEvent accessed via ref to prevent recreation
 
   // Derive selected file from path
-  // CRITICAL: Read from manager as fallback to handle React async state timing
-  // The files array might not be updated yet when selectedPath changes
+  // CRITICAL: ALWAYS read from manager first - React state can be stale
+  // This ensures file content is always up-to-date
   const selectedFile = useMemo(() => {
     if (!selectedPath) return null;
 
-    // First try from React state (fast path)
-    const fromState = files.find((f) => f.path === selectedPath);
-    if (fromState) {
-      console.log('[useBuilder] 📄 Selected file from state:', selectedPath);
-      return fromState;
-    }
-
-    // Fallback: read directly from manager (handles async timing)
     const manager = managerRef.current;
+
+    // ALWAYS try manager first - it's the source of truth
     if (manager) {
       const fromManager = manager.getFile(selectedPath);
       if (fromManager) {
-        console.log('[useBuilder] 📄 Selected file from manager (fallback):', selectedPath);
+        console.log('[useBuilder] 📄 Selected file from manager:', selectedPath, '| Content length:', fromManager.content?.length || 0);
         return fromManager;
       }
     }
 
-    console.log('[useBuilder] ⚠️ Selected file not found:', selectedPath);
+    // Fallback to React state (might be stale but better than nothing)
+    const fromState = files.find((f) => f.path === selectedPath);
+    if (fromState) {
+      console.log('[useBuilder] 📄 Selected file from state (fallback):', selectedPath);
+      return fromState;
+    }
+
+    console.log('[useBuilder] ⚠️ Selected file not found:', selectedPath, '| Files in state:', files.length, '| Manager files:', manager?.getFiles()?.length || 0);
     return null;
   }, [selectedPath, files]);
 
@@ -220,8 +221,25 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
   // -------------------------------------------------------------------------
 
   const selectFile = useCallback((path: string) => {
+    console.log('[useBuilder] 📂 Selecting file:', path);
+
+    // CRITICAL: Force sync files from manager BEFORE setting selected path
+    // This ensures the file exists in React state when useMemo runs
+    const manager = managerRef.current;
+    if (manager) {
+      const allFiles = manager.getFiles();
+      const tree = manager.getFileSystem().getTree();
+
+      // Check if files need syncing
+      if (allFiles.length !== files.length) {
+        console.log('[useBuilder] 🔄 Syncing files before selection. Manager:', allFiles.length, '| State:', files.length);
+        setFiles([...allFiles]);
+        setFileTree(tree);
+      }
+    }
+
     setSelectedPath(path);
-  }, []);
+  }, [files.length]);
 
   const updateFile = useCallback((path: string, content: string) => {
     const manager = managerRef.current;

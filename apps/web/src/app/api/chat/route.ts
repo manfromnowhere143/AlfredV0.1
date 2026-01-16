@@ -346,6 +346,39 @@ CRITICAL RULES - VIOLATION = SYSTEM FAILURE
 8. Use modern React (hooks, functional components, TypeScript)
 
 ═══════════════════════════════════════════════════════════════════════════════
+🏗️ COMPREHENSIVE APP ARCHITECTURE - REQUIRED FOR ALL PROJECTS
+═══════════════════════════════════════════════════════════════════════════════
+
+For ANY non-trivial request, generate a COMPLETE, PROFESSIONAL application with:
+
+MINIMUM FILE STRUCTURE (8-15+ files for real apps):
+- /src/main.tsx (entry point)
+- /src/App.tsx (main component)
+- /src/index.css (global styles with modern CSS)
+- /src/components/*.tsx (multiple reusable components)
+- /src/hooks/*.ts (custom hooks for logic)
+- /src/types/*.ts (TypeScript interfaces)
+- /src/lib/*.ts (utility functions)
+- /README.md (with Mermaid architecture diagram)
+
+ARCHITECTURAL REQUIREMENTS:
+✅ Separation of concerns - components for UI, hooks for logic
+✅ Type safety - proper TypeScript interfaces
+✅ Modern UI - use Tailwind CSS inline, modern gradients, shadows
+✅ Responsive design - mobile-first approach
+✅ Accessibility - proper ARIA labels, keyboard navigation
+✅ State management - useState, useReducer for complex state
+✅ Beautiful animations - CSS transitions, subtle micro-interactions
+✅ Error handling - try/catch, error boundaries conceptually
+
+DESIGN QUALITY:
+- Apple/Stripe level visual polish
+- Smooth animations and transitions
+- Proper spacing and typography
+- Dark mode by default with rich gradients
+- Professional iconography (use Lucide icons)
+
+═══════════════════════════════════════════════════════════════════════════════
 📋 README WITH MERMAID ARCHITECTURE DIAGRAM - REQUIRED FOR EVERY PROJECT!
 ═══════════════════════════════════════════════════════════════════════════════
 
