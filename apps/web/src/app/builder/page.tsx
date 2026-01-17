@@ -19,11 +19,13 @@ import nextDynamic from 'next/dynamic';
 import { useSession, signIn } from 'next-auth/react';
 import { useBuilder } from '@/hooks/useBuilder';
 import { useDeviceType } from '@/hooks/useDeviceType';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
 import { DeploymentCard } from '@/components/DeploymentCard';
 import MessageAttachments from '@/components/MessageAttachments';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
+import type { FileAttachment } from '@/lib/types';
 
 const MonacoEditor = nextDynamic(
   () => import('@/components/builder/MonacoEditor').then(mod => mod.MonacoEditor),
@@ -45,7 +47,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
-  attachments?: Attachment[];
+  files?: FileAttachment[];
 }
 
 interface StreamingStep {
@@ -55,34 +57,7 @@ interface StreamingStep {
   status: 'active' | 'done';
 }
 
-// File attachment for upload
-interface Attachment {
-  id: string;
-  type: 'image' | 'video' | 'document' | 'code';
-  name: string;
-  file: File;
-  size: number;
-  preview?: string;
-  base64?: string;
-  url?: string;
-  status: 'pending' | 'uploading' | 'ready' | 'error';
-  progress: number;
-  error?: string;
-}
-
 type ViewMode = 'editor' | 'preview' | 'split';
-
-// File upload config
-const UPLOAD_CONFIG = {
-  MAX_FILES: 10,
-  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
-  SUPPORTED_TYPES: {
-    image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
-    video: ['video/mp4', 'video/webm', 'video/quicktime'],
-    document: ['application/pdf'],
-    code: ['text/plain', 'text/markdown', 'text/csv', 'text/html', 'text/css', 'application/json', 'text/javascript', 'application/javascript'],
-  },
-};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ICONS — Elegant SVG iconography (no generic emojis)
@@ -180,16 +155,16 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
           <span className="message-role">{message.role === 'user' ? 'You' : 'Alfred'}</span>
           <span className="message-time">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
-        {/* Show attachments for user messages using MessageAttachments component */}
-        {message.attachments && message.attachments.length > 0 && (
+        {/* Show files for user messages using MessageAttachments component */}
+        {message.files && message.files.length > 0 && (
           <MessageAttachments
-            attachments={message.attachments.map(att => ({
-              id: att.id,
-              type: att.type,
-              name: att.name,
-              size: att.size,
-              url: att.url,
-              preview: att.preview,
+            attachments={message.files.map(file => ({
+              id: file.id,
+              type: file.category as 'image' | 'video' | 'document' | 'code',
+              name: file.name,
+              size: file.size,
+              url: file.url,
+              preview: file.preview,
             }))}
             isUser={message.role === 'user'}
           />
@@ -290,12 +265,11 @@ export default function BuilderPage() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
-  // File attachment state
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-
   // Refs
   const conversationId = useRef<string | null>(null);
+
+  // File upload hook (same as regular Alfred)
+  const fileUpload = useFileUpload({ maxFiles: 10 });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -631,107 +605,13 @@ export default function BuilderPage() {
     console.log('[Builder:Deploy] Deployed to:', url);
   }, []);
 
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // FILE ATTACHMENTS — Perplexity-inspired file upload
-  // ═══════════════════════════════════════════════════════════════════════════════
-
-  // Get file type category
-  const getFileType = useCallback((mimeType: string): Attachment['type'] => {
-    if (UPLOAD_CONFIG.SUPPORTED_TYPES.image.includes(mimeType)) return 'image';
-    if (UPLOAD_CONFIG.SUPPORTED_TYPES.video.includes(mimeType)) return 'video';
-    if (UPLOAD_CONFIG.SUPPORTED_TYPES.document.includes(mimeType)) return 'document';
-    if (UPLOAD_CONFIG.SUPPORTED_TYPES.code.includes(mimeType)) return 'code';
-    return 'document';
-  }, []);
-
-  // Generate preview for images/videos
-  const generatePreview = useCallback(async (file: File): Promise<string | undefined> => {
-    if (file.type.startsWith('image/')) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
-        reader.onerror = () => resolve(undefined);
-        reader.readAsDataURL(file);
-      });
+  // File handling uses useFileUpload hook (same as regular Alfred)
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      fileUpload.addFiles(Array.from(e.target.files));
+      e.target.value = ''; // Reset input
     }
-    if (file.type.startsWith('video/')) {
-      return new Promise((resolve) => {
-        const video = document.createElement('video');
-        const canvas = document.createElement('canvas');
-        video.onloadeddata = () => {
-          canvas.width = 120;
-          canvas.height = 80;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(video, 0, 0, 120, 80);
-          resolve(canvas.toDataURL('image/jpeg'));
-          URL.revokeObjectURL(video.src);
-        };
-        video.onerror = () => resolve(undefined);
-        video.src = URL.createObjectURL(file);
-      });
-    }
-    return undefined;
-  }, []);
-
-  // Handle file upload selection
-  const handleFileUpload = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    const fileArray = Array.from(files);
-
-    // Validate count
-    if (attachments.length + fileArray.length > UPLOAD_CONFIG.MAX_FILES) {
-      alert(`Maximum ${UPLOAD_CONFIG.MAX_FILES} files allowed`);
-      return;
-    }
-
-    setIsUploading(true);
-
-    for (const file of fileArray) {
-      // Validate size
-      if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-        alert(`${file.name} is too large. Maximum size is 50MB.`);
-        continue;
-      }
-
-      // Validate type
-      const fileType = getFileType(file.type);
-
-      // Create attachment with preview
-      const preview = await generatePreview(file);
-      const attachment: Attachment = {
-        id: crypto.randomUUID(),
-        type: fileType,
-        name: file.name,
-        file,
-        size: file.size,
-        preview,
-        status: 'ready',
-        progress: 100,
-      };
-
-      setAttachments(prev => [...prev, attachment]);
-    }
-
-    setIsUploading(false);
-  }, [attachments.length, getFileType, generatePreview]);
-
-  // Remove attachment
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  }, []);
-
-  // Clear all attachments
-  const clearAttachments = useCallback(() => {
-    setAttachments([]);
-  }, []);
-
-  // Format file size
-  const formatFileSize = useCallback((bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }, []);
+  }, [fileUpload]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // VOICE RECORDING
@@ -888,42 +768,35 @@ export default function BuilderPage() {
     builder.reset();
     if (chatMinimized) setChatMinimized(false);
 
-    // Capture current attachments and clear them
-    const currentAttachments = [...attachments];
-    clearAttachments();
+    // Get ready files from upload hook and clear them
+    const readyFiles = fileUpload.getReadyFiles();
+    const currentFiles = [...readyFiles];
+    fileUpload.clearFiles();
 
     const userMessage: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
       content,
       timestamp: new Date(),
-      attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
+      files: currentFiles.length > 0 ? currentFiles : undefined,
     };
     const streamingMessage: ChatMessage = { id: `a-${Date.now()}`, role: 'alfred', content: '', timestamp: new Date(), isStreaming: true };
     setMessages(prev => [...prev, userMessage, streamingMessage]);
     setIsStreaming(true);
 
     try {
-      // Convert attachments to base64 for API
-      const attachmentData = await Promise.all(
-        currentAttachments.map(async (attachment) => {
-          const reader = new FileReader();
-          const base64 = await new Promise<string>((resolve) => {
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(attachment.file);
-          });
-          return {
-            id: attachment.id,
-            type: attachment.type,
-            name: attachment.name,
-            size: attachment.size,
-            mimeType: attachment.file.type,
-            base64,
-          };
-        })
-      );
+      // Format files for API (matching regular Alfred format)
+      const filesData = currentFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: file.url,
+        base64: file.category === 'video' ? undefined : file.base64,
+      }));
 
-      console.log('[Builder] 🚀 Sending request to /api/chat in builder mode...');
+      console.log('[Builder] 🚀 Sending request to /api/chat in builder mode...',
+        filesData.length > 0 ? `with ${filesData.length} file(s)` : '');
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -931,7 +804,7 @@ export default function BuilderPage() {
           message: content,
           conversationId: conversationId.current,
           mode: 'builder',
-          attachments: attachmentData.length > 0 ? attachmentData : undefined,
+          files: filesData.length > 0 ? filesData : undefined,
         }),
       });
 
@@ -1360,48 +1233,52 @@ export default function BuilderPage() {
                 <input
                   ref={imageInputRef}
                   type="file"
-                  accept={UPLOAD_CONFIG.SUPPORTED_TYPES.image.join(',')}
+                  accept="image/*"
                   multiple
                   style={{ display: 'none' }}
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  onChange={handleFileInputChange}
                 />
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept={UPLOAD_CONFIG.SUPPORTED_TYPES.video.join(',')}
+                  accept="video/*"
                   multiple
                   style={{ display: 'none' }}
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  onChange={handleFileInputChange}
                 />
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept={[...UPLOAD_CONFIG.SUPPORTED_TYPES.document, ...UPLOAD_CONFIG.SUPPORTED_TYPES.code].join(',')}
+                  accept=".pdf,.txt,.md,.csv,.html,.css,.json,.js,.ts,.tsx,.jsx"
                   multiple
                   style={{ display: 'none' }}
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  onChange={handleFileInputChange}
                 />
 
                 {/* File Preview Bar */}
-                {attachments.length > 0 && (
+                {fileUpload.files.length > 0 && (
                   <div className="attachments-preview">
-                    {attachments.map((attachment) => (
-                      <div key={attachment.id} className={`attachment-chip ${attachment.type}`}>
-                        {attachment.preview ? (
-                          <img src={attachment.preview} alt={attachment.name} className="attachment-thumb" />
+                    {fileUpload.files.map((file) => (
+                      <div key={file.id} className={`attachment-chip ${file.category}`}>
+                        {file.preview ? (
+                          <img src={file.preview} alt={file.name} className="attachment-thumb" />
                         ) : (
                           <span className="attachment-icon">
-                            {attachment.type === 'document' && Icons.document}
-                            {attachment.type === 'code' && Icons.code}
-                            {attachment.type === 'video' && Icons.video}
+                            {file.category === 'document' && Icons.document}
+                            {file.category === 'code' && Icons.code}
+                            {file.category === 'video' && Icons.video}
                           </span>
                         )}
-                        <span className="attachment-name">{attachment.name}</span>
-                        <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                        <span className="attachment-name">{file.name}</span>
+                        <span className="attachment-size">
+                          {file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
+                        </span>
+                        {file.status === 'uploading' && <span className="attachment-progress">{file.progress}%</span>}
+                        {file.status === 'error' && <span className="attachment-error">!</span>}
                         <button
                           className="attachment-remove"
-                          onClick={() => removeAttachment(attachment.id)}
-                          aria-label="Remove attachment"
+                          onClick={() => fileUpload.removeFile(file.id)}
+                          aria-label="Remove file"
                         >
                           {Icons.x}
                         </button>
@@ -1430,7 +1307,7 @@ export default function BuilderPage() {
                       <button
                         className="btn-upload"
                         onClick={() => imageInputRef.current?.click()}
-                        disabled={isStreaming || isUploading}
+                        disabled={isStreaming || fileUpload.isUploading}
                         title="Add image"
                       >
                         {Icons.image}
@@ -1438,7 +1315,7 @@ export default function BuilderPage() {
                       <button
                         className="btn-upload"
                         onClick={() => videoInputRef.current?.click()}
-                        disabled={isStreaming || isUploading}
+                        disabled={isStreaming || fileUpload.isUploading}
                         title="Add video"
                       >
                         {Icons.video}
@@ -1446,7 +1323,7 @@ export default function BuilderPage() {
                       <button
                         className="btn-upload"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isStreaming || isUploading}
+                        disabled={isStreaming || fileUpload.isUploading}
                         title="Add file"
                       >
                         {Icons.paperclip}
