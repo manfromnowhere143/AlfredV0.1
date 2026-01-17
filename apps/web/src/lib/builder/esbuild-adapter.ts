@@ -411,164 +411,108 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         return this.createErrorResult('ESBuild not properly initialized. Please refresh the page.', startTime);
       }
 
-      // Use transform API instead of build - more reliable, no plugins needed
-      // Transform each file individually, then combine
-      console.log('[ESBuild] 🔄 Transforming files with ESBuild...');
-      console.log('[ESBuild] 🔧 ESBuild ready:', !!this.esbuild, '| Transform fn:', !!this.esbuild.transform);
+      // STATE-OF-THE-ART: Use ESBuild's build() API with virtual filesystem
+      // This handles bundling, imports, and tree-shaking properly
+      console.log('[ESBuild] 🔄 Building with ESBuild build() API...');
+      console.log('[ESBuild] 🔧 ESBuild ready:', !!this.esbuild, '| Build fn:', !!this.esbuild.build);
 
-      const transformedFiles: { path: string; code: string }[] = [];
-      const transformErrors: FileError[] = [];
-
-      // TOTAL transform timeout - all files must complete in 25s
-      const TOTAL_TRANSFORM_TIMEOUT = 25000;
-      const PER_FILE_TIMEOUT = 8000; // 8s per file max
-      const transformStartTotal = performance.now();
-
-      for (const file of files) {
-        if (!file.path.match(/\.(tsx?|jsx?)$/)) continue;
-
-        // Check total time elapsed
-        const elapsed = performance.now() - transformStartTotal;
-        if (elapsed > TOTAL_TRANSFORM_TIMEOUT) {
-          console.error('[ESBuild] ⏱️ TOTAL transform timeout exceeded after', Math.round(elapsed), 'ms');
-          transformErrors.push({
-            line: 0,
-            column: 0,
-            message: `Build timeout: transforms took too long (${Math.round(elapsed)}ms). Try refreshing.`,
-            severity: 'error' as const,
-            source: 'esbuild',
-          });
-          break;
-        }
-
-        try {
-          const transformStart = performance.now();
-          console.log('[ESBuild] 📄 Transforming:', file.path, '| Size:', file.content.length, 'chars');
-
-          // 8s timeout per file (reduced from 30s)
-          const transformPromise = this.esbuild.transform(file.content, {
-            loader: file.path.endsWith('.tsx') ? 'tsx' :
-                    file.path.endsWith('.ts') ? 'ts' :
-                    file.path.endsWith('.jsx') ? 'jsx' : 'js',
-            jsx: 'automatic',
-            jsxImportSource: 'react',
-            target: 'es2020',
-            format: 'esm',
-          });
-
-          const result = await Promise.race([
-            transformPromise,
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), PER_FILE_TIMEOUT)
-            )
-          ]);
-
-          // Process imports and exports for browser execution
-          let code = result.code;
-
-          // KEEP imports from npm packages (will be resolved via import map)
-          // REMOVE imports from local files (already bundled inline)
-
-          // Split code into lines for processing
-          const lines = code.split('\n');
-          const processedLines: string[] = [];
-
-          for (const line of lines) {
-            // Check if it's an import statement
-            const importMatch = line.match(/^import\s+.*?from\s+['"]([^'"]+)['"]/);
-            if (importMatch) {
-              const importPath = importMatch[1];
-              // Keep npm package imports (don't start with . or /)
-              if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
-                processedLines.push(line); // Keep CDN imports
-              }
-              // Skip local imports (already inlined)
-              continue;
-            }
-
-            // Skip side-effect only imports from local files
-            const sideEffectImport = line.match(/^import\s+['"]([^'"]+)['"]/);
-            if (sideEffectImport) {
-              const importPath = sideEffectImport[1];
-              if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
-                processedLines.push(line); // Keep CDN side-effect imports
-              }
-              continue;
-            }
-
-            // Convert export default function
-            if (line.match(/export\s+default\s+function\s+(\w+)/)) {
-              processedLines.push(line.replace(/export\s+default\s+function\s+(\w+)/, 'const $1 = function $1'));
-              continue;
-            }
-
-            // Convert export default (other)
-            if (line.match(/export\s+default\s+/)) {
-              processedLines.push(line.replace(/export\s+default\s+/, 'const _default = '));
-              continue;
-            }
-
-            // Remove export { ... } statements
-            if (line.match(/^export\s+\{[^}]*\};?\s*$/)) {
-              continue;
-            }
-
-            // Convert export const/let/var/function/class
-            if (line.match(/^export\s+(const|let|var|function|class)\s+/)) {
-              processedLines.push(line.replace(/^export\s+(const|let|var|function|class)\s+/, '$1 '));
-              continue;
-            }
-
-            processedLines.push(line);
-          }
-
-          code = processedLines.join('\n');
-
-          transformedFiles.push({ path: file.path, code });
-          console.log('[ESBuild] ✅ Transformed:', file.path, '| Output:', code.length, 'chars | Time:', Math.round(performance.now() - transformStart), 'ms');
-        } catch (err) {
-          console.error('[ESBuild] ❌ Transform error:', file.path, err);
-          transformErrors.push({
-            line: 0,
-            column: 0,
-            message: `${file.path}: ${err instanceof Error ? err.message : 'Transform failed'}`,
-            severity: 'error' as const,
-            source: 'esbuild',
-          });
-        }
-      }
-
-      if (transformErrors.length > 0) {
-        console.warn('[ESBuild] ⚠️ Transform errors, falling back to Babel preview...');
-
-        // FALLBACK: Use Babel-based preview when ESBuild fails
-        // This provides SOME preview rather than nothing
-        const fallbackHtml = this.generateFallbackPreview(files, project);
-
-        return {
-          success: true, // Mark as success so preview shows
-          html: fallbackHtml,
-          errors: [], // Clear errors since we recovered
-          warnings: transformErrors.map(e => ({ ...e, severity: 'warning' as const })), // Downgrade to warnings
-          buildTime: performance.now() - startTime,
-          metadata: {
-            fallbackMode: true,
-            originalErrors: transformErrors,
-          },
-        };
-      }
-
-      // Extract CSS files
+      // Extract CSS files (ESBuild will handle JS/TS/JSX/TSX)
       const cssFiles = files.filter(f => f.path.endsWith('.css'));
       const cssCode = cssFiles.map(f => `/* ${f.path} */\n${f.content}`).join('\n\n');
       console.log('[ESBuild] 🎨 CSS files:', cssFiles.length, '| Total CSS size:', cssCode.length);
 
-      // Combine transformed code
-      // Order: utilities first, then components, then App, then entry point
-      const orderedFiles = this.orderFiles(transformedFiles, entryPoint);
-      const bundledCode = orderedFiles.map(f => `// ${f.path}\n${f.code}`).join('\n\n');
+      let bundledCode = '';
 
-      console.log('[ESBuild] ✅ All files transformed! Total size:', bundledCode.length);
+      try {
+        const buildStart = performance.now();
+
+        // Create virtual filesystem plugin
+        const vfsPlugin = this.createVirtualFsPlugin(files);
+
+        // Create CDN resolver plugin - marks npm packages as external
+        const cdnPlugin: Plugin = {
+          name: 'cdn-external',
+          setup: (build) => {
+            // Match all bare imports (npm packages - don't start with . or /)
+            build.onResolve({ filter: /^[^./]/ }, (args) => {
+              // Mark as external - will be resolved via import map
+              return { path: args.path, external: true };
+            });
+          },
+        };
+
+        // Build with bundling - 15s timeout
+        const buildPromise = this.esbuild.build({
+          entryPoints: [entryPoint],
+          bundle: true,
+          write: false, // Return output in memory
+          format: 'esm',
+          target: 'es2020',
+          jsx: 'automatic',
+          jsxImportSource: 'react',
+          minify: false,
+          sourcemap: false,
+          plugins: [vfsPlugin, cdnPlugin], // VFS first, then CDN resolver
+          logLevel: 'warning',
+        });
+
+        const buildResult = await Promise.race([
+          buildPromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('ESBuild bundle timed out after 15s')), 15000)
+          )
+        ]);
+
+        console.log('[ESBuild] ✅ Build completed in', Math.round(performance.now() - buildStart), 'ms');
+
+        // Get the bundled output
+        if (buildResult.outputFiles && buildResult.outputFiles.length > 0) {
+          bundledCode = buildResult.outputFiles[0].text;
+          console.log('[ESBuild] 📦 Bundle size:', bundledCode.length, 'chars');
+        } else {
+          throw new Error('ESBuild produced no output files');
+        }
+
+        // Check for build errors
+        if (buildResult.errors && buildResult.errors.length > 0) {
+          console.error('[ESBuild] ❌ Build errors:', buildResult.errors);
+          return {
+            success: false,
+            errors: buildResult.errors.map(e => ({
+              line: e.location?.line || 0,
+              column: e.location?.column || 0,
+              message: e.text,
+              severity: 'error' as const,
+              source: 'esbuild',
+            })),
+            buildTime: performance.now() - startTime,
+          };
+        }
+
+      } catch (buildError) {
+        console.error('[ESBuild] ❌ Build failed:', buildError);
+
+        // FALLBACK: Use Babel-based preview when ESBuild fails
+        console.warn('[ESBuild] ⚠️ Falling back to Babel preview...');
+        const fallbackHtml = this.generateFallbackPreview(files, project);
+
+        return {
+          success: true,
+          html: fallbackHtml,
+          errors: [],
+          warnings: [{
+            line: 0,
+            column: 0,
+            message: `ESBuild failed: ${buildError instanceof Error ? buildError.message : 'Unknown error'}. Using fallback preview.`,
+            severity: 'warning' as const,
+            source: 'esbuild',
+          }],
+          buildTime: performance.now() - startTime,
+          metadata: { fallbackMode: true },
+        };
+      }
+
+      console.log('[ESBuild] ✅ Bundle ready! Size:', bundledCode.length);
 
       const errors: FileError[] = [];
       const warnings: FileError[] = [];
@@ -936,10 +880,13 @@ ${cssCode}
 
   <!-- Application Bundle -->
   <script type="module">
+    console.log('[Preview] 🚀 Bundle script starting...');
+    console.log('[Preview] 📊 Bundle size:', ${bundledCode.length}, 'chars');
     try {
 ${bundledCode}
+      console.log('[Preview] ✅ Bundle executed successfully');
     } catch (error) {
-      console.error('Bundle execution error:', error);
+      console.error('[Preview] ❌ Bundle execution error:', error);
       const overlay = document.createElement('div');
       overlay.className = 'alfred-error-overlay';
       overlay.innerHTML = \`
