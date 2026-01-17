@@ -467,18 +467,38 @@ export default function BuilderPage() {
         deployedUrl: deployedUrl || undefined,
       };
 
+      const payloadSize = JSON.stringify(payload).length;
       console.log('[Builder:Save] Saving payload:', {
         name: payload.name,
         fileCount: files.length,
         totalSize: files.reduce((s, f) => s + (f.content?.length || 0), 0),
+        payloadSize: `${(payloadSize / 1024).toFixed(1)} KB`,
         firstFile: files[0]?.path,
       });
 
-      const res = await fetch('/api/builder/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      // Add timeout for slow connections (60 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      let res: Response;
+      try {
+        res = await fetch('/api/builder/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        const errorName = (fetchError as Error).name;
+        if (errorName === 'AbortError') {
+          throw new Error('Save timed out. Please try again.');
+        }
+        // Network error - provide helpful message
+        console.error('[Builder:Save] Network error:', fetchError);
+        throw new Error(`Network error - check your connection (payload: ${(payloadSize / 1024).toFixed(0)}KB)`);
+      }
+      clearTimeout(timeoutId);
 
       const data = await res.json();
 

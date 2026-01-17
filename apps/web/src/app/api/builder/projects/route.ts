@@ -13,7 +13,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db, projects, artifacts, eq, desc, and, isNull } from '@alfred/database';
 
-export const maxDuration = 30;
+export const maxDuration = 60; // Extended duration for large saves
 
 // ============================================================================
 // GET - List Builder Projects

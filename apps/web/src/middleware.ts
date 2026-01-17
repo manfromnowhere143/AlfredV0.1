@@ -53,6 +53,8 @@ export const config = {
     '/api/projects/:path*',
     '/api/files/:path*',
     '/api/usage/:path*',
+    '/api/builder/:path*',
+    '/api/deploy/:path*',
     // Protected pages (add if needed)
     // '/dashboard/:path*',
   ],

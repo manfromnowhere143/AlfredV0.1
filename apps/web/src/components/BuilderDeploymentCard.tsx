@@ -291,7 +291,7 @@ export function BuilderDeploymentCard({
                         type="text"
                         value={customDomain}
                         onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, ''))}
-                        placeholder="yourdomain.com"
+                        placeholder="mysite.com"
                       />
                     </div>
                     <div className="dns-info">
@@ -299,7 +299,10 @@ export function BuilderDeploymentCard({
                         <circle cx="12" cy="12" r="10"/>
                         <path d="M12 16v-4M12 8h.01"/>
                       </svg>
-                      <span>Add a CNAME record pointing to <code>cname.vercel-dns.com</code></span>
+                      <div className="dns-steps">
+                        <span><strong>After deploying:</strong> Go to your domain provider and add:</span>
+                        <code>CNAME → cname.vercel-dns.com</code>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -384,6 +387,9 @@ export function BuilderDeploymentCard({
         .dns-info { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; font-size: 11px; color: rgba(245,158,11,0.9); }
         .dns-info svg { flex-shrink: 0; margin-top: 1px; }
         .dns-info code { background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; }
+        .dns-steps { display: flex; flex-direction: column; gap: 6px; }
+        .dns-steps span { line-height: 1.4; }
+        .dns-steps code { display: block; margin-top: 4px; font-size: 12px; }
         .info-section { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
         .info-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
         .info-item svg { opacity: 0.5; }
