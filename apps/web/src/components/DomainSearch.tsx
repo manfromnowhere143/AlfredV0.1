@@ -361,8 +361,8 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
 
         .mode-toggle {
           display: flex;
-          gap: 8px;
-          margin-bottom: 16px;
+          gap: 6px;
+          margin-bottom: 12px;
         }
 
         .mode-btn {
@@ -370,13 +370,13 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          padding: 10px 16px;
+          gap: 6px;
+          padding: 8px 12px;
           background: var(--bg);
           border: 1px solid var(--border);
-          border-radius: 10px;
+          border-radius: 8px;
           color: var(--text-secondary);
-          font-size: 13px;
+          font-size: 11px;
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s ease;
@@ -399,7 +399,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
           align-items: center;
           background: var(--bg);
           border: 1px solid var(--border);
-          border-radius: 12px;
+          border-radius: 10px;
           transition: border-color 0.2s;
         }
 
@@ -408,7 +408,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         }
 
         .search-icon {
-          padding: 0 12px 0 14px;
+          padding: 0 10px 0 12px;
           color: var(--text-muted);
           display: flex;
           align-items: center;
@@ -416,12 +416,12 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
 
         .search-input {
           flex: 1;
-          padding: 14px 12px 14px 0;
+          padding: 10px 10px 10px 0;
           background: transparent;
           border: none;
           outline: none;
           color: var(--text);
-          font-size: 15px;
+          font-size: 13px;
         }
 
         .search-input::placeholder {
@@ -429,7 +429,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         }
 
         .clear-btn {
-          padding: 8px 14px;
+          padding: 6px 10px;
           background: transparent;
           border: none;
           color: var(--text-muted);
@@ -463,12 +463,12 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         .result {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 16px;
-          margin-top: 12px;
+          gap: 10px;
+          padding: 12px;
+          margin-top: 10px;
           background: var(--bg);
           border: 1px solid var(--border);
-          border-radius: 12px;
+          border-radius: 10px;
           animation: slideIn 0.2s ease;
         }
 
@@ -488,12 +488,13 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         }
 
         .result-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
         }
 
         .result-icon.success {
@@ -508,20 +509,24 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
 
         .result-info {
           flex: 1;
+          min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 1px;
         }
 
         .domain-name {
-          font-size: 15px;
+          font-size: 13px;
           font-weight: 600;
           color: var(--text);
           font-family: 'SF Mono', Monaco, monospace;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .status {
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 500;
         }
 
@@ -536,16 +541,17 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         .purchase-btn, .use-btn {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
+          gap: 6px;
+          padding: 8px 12px;
           background: linear-gradient(135deg, var(--purple), #6366f1);
           border: none;
-          border-radius: 10px;
+          border-radius: 8px;
           color: white;
-          font-size: 13px;
+          font-size: 11px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
+          flex-shrink: 0;
         }
 
         .purchase-btn:hover:not(:disabled), .use-btn:hover {
@@ -566,46 +572,65 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
         }
 
         .suggestions {
-          margin-top: 16px;
-          padding: 12px;
+          margin-top: 10px;
+          padding: 8px;
           background: var(--bg);
           border: 1px solid var(--border);
-          border-radius: 12px;
+          border-radius: 10px;
+          max-height: 120px;
+          overflow-y: auto;
+        }
+
+        .suggestions::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .suggestions::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .suggestions::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.1);
+          border-radius: 2px;
         }
 
         .suggestions-title {
           display: block;
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--text-secondary);
-          margin-bottom: 10px;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--text-muted);
+          margin-bottom: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .suggestion-item {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 0;
-          border-top: 1px solid var(--border);
+          padding: 6px 8px;
+          margin: 2px 0;
+          border-radius: 6px;
+          transition: background 0.15s;
         }
 
-        .suggestion-item:first-of-type {
-          border-top: none;
+        .suggestion-item:hover {
+          background: rgba(255,255,255,0.03);
         }
 
         .suggestion-domain {
-          font-size: 14px;
+          font-size: 12px;
           color: var(--text);
           font-family: 'SF Mono', Monaco, monospace;
         }
 
         .suggestion-btn {
-          padding: 6px 12px;
-          background: rgba(16,185,129,0.1);
-          border: 1px solid rgba(16,185,129,0.3);
-          border-radius: 6px;
-          color: var(--success);
-          font-size: 12px;
+          padding: 4px 10px;
+          background: rgba(139,92,246,0.1);
+          border: 1px solid rgba(139,92,246,0.25);
+          border-radius: 5px;
+          color: var(--purple);
+          font-size: 10px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.15s;
@@ -614,22 +639,26 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
           flex-shrink: 0;
         }
 
-        .suggestion-btn:hover {
-          background: rgba(16,185,129,0.2);
-          transform: scale(1.02);
+        .suggestion-btn:hover:not(:disabled) {
+          background: rgba(139,92,246,0.2);
         }
 
-        .suggestion-btn:active {
+        .suggestion-btn:active:not(:disabled) {
           transform: scale(0.98);
+        }
+
+        .suggestion-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .suggestion-btn.purchase {
           background: rgba(139,92,246,0.1);
-          border-color: rgba(139,92,246,0.3);
+          border-color: rgba(139,92,246,0.25);
           color: var(--purple);
         }
 
-        .suggestion-btn.purchase:hover {
+        .suggestion-btn.purchase:hover:not(:disabled) {
           background: rgba(139,92,246,0.2);
         }
 
