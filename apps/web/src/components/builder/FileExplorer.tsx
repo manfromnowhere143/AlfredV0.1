@@ -271,7 +271,7 @@ const FileItem = memo(function FileItem({
         }
 
         .file-item:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.05));
         }
 
         .file-item.selected {
@@ -326,7 +326,7 @@ const FileItem = memo(function FileItem({
 
         .file-name {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.8);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.8));
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -334,7 +334,7 @@ const FileItem = memo(function FileItem({
         }
 
         .file-item.selected .file-name {
-          color: #fff;
+          color: var(--text, #fff);
         }
 
         .entry-badge {
@@ -673,10 +673,11 @@ export function FileExplorer({
           display: flex;
           flex-direction: column;
           height: 100%;
-          background: linear-gradient(180deg, #0f0f12 0%, #111115 100%);
-          border-right: 1px solid rgba(255, 255, 255, 0.06);
+          background: var(--surface, linear-gradient(180deg, #0f0f12 0%, #111115 100%));
+          border-right: 1px solid var(--border, rgba(255, 255, 255, 0.06));
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
             'Helvetica Neue', Arial, sans-serif;
+          color: var(--text, rgba(255, 255, 255, 0.9));
         }
 
         .explorer-header {
@@ -684,7 +685,7 @@ export function FileExplorer({
           align-items: center;
           justify-content: space-between;
           padding: 12px 16px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
         }
 
         .project-name {
@@ -692,12 +693,12 @@ export function FileExplorer({
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          color: rgba(255, 255, 255, 0.5);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.5));
         }
 
         .file-count {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.3);
+          color: var(--text-muted, rgba(255, 255, 255, 0.3));
         }
 
         .explorer-tree {
@@ -732,7 +733,7 @@ export function FileExplorer({
           justify-content: center;
           gap: 12px;
           padding: 40px 20px;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           font-size: 13px;
         }
 

@@ -217,10 +217,10 @@ function ViewToggle({ mode, onModeChange }: { mode: ViewMode; onModeChange: (m: 
         </button>
       ))}
       <style jsx>{`
-        .view-toggle { display: flex; padding: 3px; gap: 2px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; }
-        button { padding: 5px 12px; background: transparent; border: none; border-radius: 6px; color: rgba(255, 255, 255, 0.5); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-        button:hover { color: rgba(255, 255, 255, 0.8); }
-        button.active { color: white; background: rgba(139, 92, 246, 0.2); }
+        .view-toggle { display: flex; padding: 3px; gap: 2px; background: var(--surface, rgba(255,255,255,0.03)); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 8px; }
+        button { padding: 5px 12px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary, rgba(255,255,255,0.5)); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+        button:hover { color: var(--text, rgba(255,255,255,0.8)); }
+        button.active { color: var(--text, white); background: rgba(139, 92, 246, 0.2); }
       `}</style>
     </div>
   );
@@ -269,17 +269,32 @@ export default function BuilderPage() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
-  // Preview background color - State of the Art
-  const [previewBgColor, setPreviewBgColor] = useState('#0a0a0c');
-  const [showBgColorPicker, setShowBgColorPicker] = useState(false);
-  const bgColors = [
-    { id: 'dark', color: '#0a0a0c', label: 'Dark' },
-    { id: 'darker', color: '#050506', label: 'Darker' },
-    { id: 'light', color: '#f8f9fa', label: 'Light' },
-    { id: 'white', color: '#ffffff', label: 'White' },
-    { id: 'purple', color: '#1a1025', label: 'Purple' },
-    { id: 'blue', color: '#0a1628', label: 'Blue' },
+  // Theme System - State of the Art
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const themes = [
+    { id: 'dark', bg: '#0a0a0c', label: 'Dark', mode: 'dark' as const },
+    { id: 'darker', bg: '#050506', label: 'Darker', mode: 'dark' as const },
+    { id: 'purple', bg: '#1a1025', label: 'Purple', mode: 'dark' as const },
+    { id: 'blue', bg: '#0a1628', label: 'Blue', mode: 'dark' as const },
+    { id: 'light', bg: '#f5f5f7', label: 'Light', mode: 'light' as const },
+    { id: 'white', bg: '#ffffff', label: 'White', mode: 'light' as const },
   ];
+  const [currentTheme, setCurrentTheme] = useState(themes[0]);
+
+  // Computed theme values
+  const isLightTheme = currentTheme.mode === 'light';
+  const themeVars = {
+    '--bg': currentTheme.bg,
+    '--text': isLightTheme ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.9)',
+    '--text-secondary': isLightTheme ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)',
+    '--text-muted': isLightTheme ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
+    '--border': isLightTheme ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)',
+    '--border-light': isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)',
+    '--surface': isLightTheme ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+    '--surface-hover': isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+    '--icon': isLightTheme ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)',
+  } as React.CSSProperties;
 
   // Alfred Code - Smart Modification Mode (Steve Jobs approach)
   const [modificationPlan, setModificationPlan] = useState<ModificationPlan | null>(null);
@@ -1344,7 +1359,7 @@ export default function BuilderPage() {
 
   // Main render (Desktop)
   return (
-    <div className="builder-page" style={{ background: previewBgColor }}>
+    <div className={`builder-page ${isLightTheme ? 'light-theme' : 'dark-theme'}`} style={{ ...themeVars, background: currentTheme.bg }}>
       {/* Header */}
       <header className="builder-header">
         <div className="header-left">
@@ -1356,29 +1371,29 @@ export default function BuilderPage() {
         </div>
         <div className="header-center"><ViewToggle mode={viewMode} onModeChange={setViewMode} /></div>
         <div className="header-right">
-          {/* Background Color Picker */}
-          <div className="bg-color-picker">
+          {/* Theme Picker - State of the Art */}
+          <div className="theme-picker">
             <button
-              className={`header-btn color-picker-btn ${showBgColorPicker ? 'active' : ''}`}
-              onClick={() => setShowBgColorPicker(!showBgColorPicker)}
-              title="Preview Background"
+              className={`header-btn theme-btn ${showThemePicker ? 'active' : ''}`}
+              onClick={() => setShowThemePicker(!showThemePicker)}
+              title="Theme"
             >
-              <div className="color-swatch-preview" style={{ background: previewBgColor }} />
-              <span>Background</span>
+              <div className="theme-swatch" style={{ background: currentTheme.bg }} />
+              <span>Theme</span>
             </button>
-            {showBgColorPicker && (
-              <div className="color-dropdown">
-                <div className="color-dropdown-title">Page Background</div>
-                <div className="color-options">
-                  {bgColors.map((c) => (
+            {showThemePicker && (
+              <div className="theme-dropdown">
+                <div className="theme-dropdown-title">Choose Theme</div>
+                <div className="theme-options">
+                  {themes.map((t) => (
                     <button
-                      key={c.id}
-                      className={`color-option ${previewBgColor === c.color ? 'active' : ''}`}
-                      onClick={() => { setPreviewBgColor(c.color); setShowBgColorPicker(false); }}
-                      title={c.label}
+                      key={t.id}
+                      className={`theme-option ${currentTheme.id === t.id ? 'active' : ''}`}
+                      onClick={() => { setCurrentTheme(t); setShowThemePicker(false); }}
                     >
-                      <div className="color-dot" style={{ background: c.color }} />
-                      <span>{c.label}</span>
+                      <div className="theme-dot" style={{ background: t.bg }} />
+                      <span>{t.label}</span>
+                      <span className="theme-mode-tag">{t.mode}</span>
                     </button>
                   ))}
                 </div>
@@ -1523,7 +1538,7 @@ export default function BuilderPage() {
                 isBuilding={isStreaming || builder.isBuilding}
                 onConsole={() => {}}
                 onRebuild={() => builder.rebuild?.(builder.files)}
-                bgColor={previewBgColor}
+                bgColor={currentTheme.bg}
               />
             </div>
           )}
@@ -1804,36 +1819,44 @@ export default function BuilderPage() {
       </div>
 
       <style jsx>{`
-        .builder-page { display: flex; flex-direction: column; height: 100vh; background: #09090b; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; overflow: hidden; }
+        .builder-page { display: flex; flex-direction: column; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; overflow: hidden; transition: background 0.3s ease; color: var(--text); }
 
         /* Header */
-        .builder-header { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); position: relative; }
+        .builder-header { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); position: relative; transition: all 0.3s ease; }
         .header-left { display: flex; align-items: center; gap: 10px; }
         .logo { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 10px; color: white; }
         .project-info { display: flex; flex-direction: column; gap: 1px; }
-        .project-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95); }
+        .project-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .project-label { font-size: 10px; color: var(--text-muted); }
         .project-label { font-size: 9px; font-weight: 500; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; }
         .header-center { position: absolute; left: 50%; transform: translateX(-50%); }
         .header-right { display: flex; align-items: center; gap: 8px; }
-        .header-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.15s ease; }
-        .header-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(139,92,246,0.4); color: rgba(255,255,255,0.9); }
+        .header-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .header-btn:hover { background: var(--surface-hover); border-color: rgba(139,92,246,0.4); color: var(--text); }
         .header-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .header-btn svg { flex-shrink: 0; }
+        .header-btn svg { flex-shrink: 0; color: var(--icon); }
         .header-btn.primary { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: rgba(139,92,246,0.5); color: white; }
         .header-btn.primary:hover { background: linear-gradient(135deg, #9b6cf6, #7376f1); border-color: rgba(139,92,246,0.7); box-shadow: 0 4px 16px rgba(139,92,246,0.3); transform: translateY(-1px); }
-        /* Background Color Picker - State of the Art */
-        .bg-color-picker { position: relative; }
-        .color-picker-btn { gap: 8px !important; }
-        .color-picker-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); }
-        .color-swatch-preview { width: 16px; height: 16px; border-radius: 4px; border: 2px solid rgba(255,255,255,0.2); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); }
-        .color-dropdown { position: absolute; top: calc(100% + 8px); right: 0; padding: 12px; background: #18181b; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 1000; min-width: 160px; animation: dropdownIn 0.15s ease; }
+        .header-btn.primary svg { color: white; }
+        /* Theme Picker - State of the Art */
+        .theme-picker { position: relative; }
+        .theme-btn { gap: 8px !important; }
+        .theme-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); }
+        .theme-swatch { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--border); box-shadow: inset 0 0 0 1px rgba(128,128,128,0.2); }
+        .theme-dropdown { position: absolute; top: calc(100% + 8px); right: 0; padding: 12px; background: #18181b; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 1000; min-width: 180px; animation: dropdownIn 0.15s ease; }
+        .light-theme .theme-dropdown { background: #ffffff; border-color: rgba(0,0,0,0.1); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
         @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        .color-dropdown-title { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-        .color-options { display: flex; flex-direction: column; gap: 4px; }
-        .color-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 500; }
-        .color-option:hover { background: rgba(255,255,255,0.05); }
-        .color-option.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.3); color: white; }
-        .color-dot { width: 20px; height: 20px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .theme-dropdown-title { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+        .light-theme .theme-dropdown-title { color: rgba(0,0,0,0.4); }
+        .theme-options { display: flex; flex-direction: column; gap: 4px; }
+        .theme-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 500; }
+        .light-theme .theme-option { color: rgba(0,0,0,0.8); }
+        .theme-option:hover { background: rgba(255,255,255,0.08); }
+        .light-theme .theme-option:hover { background: rgba(0,0,0,0.05); }
+        .theme-option.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.3); }
+        .theme-dot { width: 22px; height: 22px; border-radius: 6px; border: 2px solid rgba(128,128,128,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .theme-mode-tag { margin-left: auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px; background: rgba(128,128,128,0.15); color: rgba(255,255,255,0.4); }
+        .light-theme .theme-mode-tag { color: rgba(0,0,0,0.4); }
         /* Live Site Badge - State of the Art */
         .live-site-badge { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(16,185,129,0.05)); border: 1px solid rgba(34,197,94,0.25); border-radius: 10px; text-decoration: none; transition: all 0.2s ease; cursor: pointer; }
         .live-site-badge:hover { background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(16,185,129,0.1)); border-color: rgba(34,197,94,0.4); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34,197,94,0.2); }
@@ -1856,19 +1879,19 @@ export default function BuilderPage() {
 
         /* Content */
         .builder-content { display: flex; flex: 1; min-height: 0; }
-        .file-panel { width: 220px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .file-panel { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
         .editor-area { flex: 1; display: flex; min-width: 0; height: 100%; overflow: hidden; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
-        .editor-panel, .preview-panel { display: flex; flex-direction: column; height: 100%; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .editor-panel, .preview-panel { display: flex; flex-direction: column; height: 100%; transition: all 0.4s cubic-bezier(0.4,0,0.2,1); background: var(--surface); }
         .editor-panel.full, .preview-panel.full { flex: 1; }
         .editor-panel.split, .preview-panel.split { flex: 1; }
-        .preview-panel.split { border-left: 1px solid rgba(255,255,255,0.06); }
-        .editor-tabs { display: flex; height: 34px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); }
-        .tab { display: flex; align-items: center; padding: 0 14px; border-top: 2px solid transparent; }
-        .tab.active { background: #09090b; border-top-color: #8b5cf6; }
-        .tab span { font-size: 11px; font-family: "SF Mono", Monaco, monospace; color: rgba(255,255,255,0.8); }
-        .editor-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-        .editor-content.streaming { padding: 0; background: #0d0d10; height: 100%; position: relative; }
-        .editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: rgba(255,255,255,0.25); font-size: 12px; }
+        .preview-panel.split { border-left: 1px solid var(--border); }
+        .editor-tabs { display: flex; height: 34px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .tab { display: flex; align-items: center; padding: 0 14px; border-top: 2px solid transparent; color: var(--text-secondary); }
+        .tab.active { background: var(--bg); border-top-color: #8b5cf6; color: var(--text); }
+        .tab span { font-size: 11px; font-family: "SF Mono", Monaco, monospace; }
+        .editor-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+        .editor-content.streaming { padding: 0; height: 100%; position: relative; }
+        .editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 12px; }
         .press-enter-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(24,24,27,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: rgba(255,255,255,0.6); font-size: 13px; backdrop-filter: blur(8px); pointer-events: none; }
         .press-enter-hint kbd { padding: 2px 8px; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.3); border-radius: 4px; color: #a78bfa; font-family: "SF Mono", Monaco, monospace; font-size: 11px; }
         .editor-loading { display: flex; align-items: center; justify-content: center; height: 100%; background: #09090b; }
@@ -1879,46 +1902,47 @@ export default function BuilderPage() {
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
         /* Chat Panel */
-        .chat-panel { position: relative; display: flex; flex-direction: column; width: 360px; min-width: 360px; background: linear-gradient(180deg, #0c0c0f 0%, #09090b 100%); border-left: 1px solid rgba(255,255,255,0.06); transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .chat-panel { position: relative; display: flex; flex-direction: column; width: 360px; min-width: 360px; background: var(--surface); border-left: 1px solid var(--border); transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
         .chat-panel.minimized { width: 44px; min-width: 44px; }
-        .chat-toggle { position: absolute; left: -11px; top: 50%; transform: translateY(-50%); width: 22px; height: 44px; background: linear-gradient(135deg, #1a1a1f, #0f0f12); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px 0 0 6px; color: rgba(255,255,255,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s; }
-        .chat-toggle:hover { background: linear-gradient(135deg, #252530, #1a1a1f); color: rgba(255,255,255,0.9); }
-        .minimized-icon { flex: 1; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4); }
+        .chat-toggle { position: absolute; left: -11px; top: 50%; transform: translateY(-50%); width: 22px; height: 44px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 0 0 6px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s; }
+        .chat-toggle:hover { background: var(--surface-hover); color: var(--text); }
+        .minimized-icon { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
         .chat-content { display: flex; flex-direction: column; height: 100%; }
         .chat-header { padding: 14px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); }
         .chat-header-left { display: flex; align-items: center; gap: 10px; }
         .alfred-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 10px; color: white; }
         .header-text { display: flex; flex-direction: column; gap: 1px; }
-        .header-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.95); }
+        .header-title { font-size: 14px; font-weight: 600; color: var(--text); }
         .header-status { font-size: 10px; font-weight: 500; }
         .header-status.online { color: #22c55e; }
         .header-status.streaming { color: #8b5cf6; animation: blink 1.5s infinite; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 0 16px; }
         .chat-welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; padding: 20px; }
         .welcome-icon { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.08)); border: 1px solid rgba(139,92,246,0.2); border-radius: 18px; color: #8b5cf6; margin-bottom: 20px; }
-        .chat-welcome h3 { font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.95); margin: 0 0 6px; }
-        .chat-welcome p { font-size: 13px; color: rgba(255,255,255,0.5); margin: 0 0 24px; }
+        .chat-welcome h3 { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
+        .chat-welcome p { font-size: 13px; color: var(--text-secondary); margin: 0 0 24px; }
         .suggestions { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-        .suggestions button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: rgba(255,255,255,0.75); font-size: 13px; text-align: left; cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
-        .suggestions button:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.25); color: white; transform: translateX(3px); }
+        .suggestions button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-size: 13px; text-align: left; cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+        .suggestions button:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.25); color: var(--text); transform: translateX(3px); }
+        .suggestions button svg { color: var(--icon); }
 
         /* Alfred Code - Modification Preview */
         .modification-preview-container { padding: 16px; }
-        .analyzing-indicator { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: rgba(255,255,255,0.6); font-size: 13px; }
+        .analyzing-indicator { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--text-secondary); font-size: 13px; }
         .analyzing-spinner { width: 16px; height: 16px; border: 2px solid rgba(139,92,246,0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Input Area - Properly contained in chat panel */
-        .chat-input-area { padding: 14px 16px; background: rgba(255,255,255,0.02); border-top: 1px solid rgba(255,255,255,0.06); }
-        .input-row { display: flex; align-items: flex-end; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 10px 12px; transition: border-color 0.2s; }
+        .chat-input-area { padding: 14px 16px; background: var(--surface); border-top: 1px solid var(--border); }
+        .input-row { display: flex; align-items: flex-end; gap: 8px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; transition: border-color 0.2s; }
         .input-row:focus-within { border-color: rgba(139,92,246,0.4); }
-        .input-row textarea { flex: 1; background: transparent; border: none; outline: none; color: rgba(255,255,255,0.95); font-size: 13px; font-family: inherit; resize: none; min-height: 20px; max-height: 100px; line-height: 1.5; }
-        .input-row textarea::placeholder { color: rgba(255,255,255,0.35); }
+        .input-row textarea { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 13px; font-family: inherit; resize: none; min-height: 20px; max-height: 100px; line-height: 1.5; }
+        .input-row textarea::placeholder { color: var(--text-muted); }
         .btn-enhance, .btn-mic, .btn-send { width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
-        .btn-enhance { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); }
-        .btn-enhance:hover { background: rgba(255,255,255,0.1); color: white; }
-        .btn-mic { background: transparent; color: rgba(255,255,255,0.5); }
-        .btn-mic:hover { color: white; }
+        .btn-enhance { background: var(--surface); color: var(--icon); }
+        .btn-enhance:hover { background: var(--surface-hover); color: var(--text); }
+        .btn-mic { background: transparent; color: var(--icon); }
+        .btn-mic:hover { color: var(--text); }
         .btn-send { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; }
         .btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
         .btn-send:disabled, .btn-mic:disabled, .btn-enhance:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
@@ -1926,16 +1950,16 @@ export default function BuilderPage() {
 
         /* Prompt Enhancer */
         .prompt-enhancer { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
-        .enhanced-text { margin: 0 0 10px; font-size: 13px; color: rgba(255,255,255,0.85); line-height: 1.5; }
+        .enhanced-text { margin: 0 0 10px; font-size: 13px; color: var(--text); line-height: 1.5; }
         .enhancer-actions { display: flex; align-items: center; gap: 8px; }
-        .enhancer-hint { flex: 1; font-size: 10px; color: rgba(255,255,255,0.4); }
+        .enhancer-hint { flex: 1; font-size: 10px; color: var(--text-muted); }
         .btn-dismiss, .btn-apply { padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-        .btn-dismiss { background: transparent; border: none; color: rgba(255,255,255,0.5); }
-        .btn-dismiss:hover { color: white; }
-        .btn-apply { background: white; border: none; color: black; font-weight: 600; }
+        .btn-dismiss { background: transparent; border: none; color: var(--text-secondary); }
+        .btn-dismiss:hover { color: var(--text); }
+        .btn-apply { background: #8b5cf6; border: none; color: white; font-weight: 600; }
         .btn-apply:hover { transform: translateY(-1px); }
         .enhancer-loading { display: flex; justify-content: center; gap: 4px; padding: 8px 0; }
-        .enhancer-loading span { width: 5px; height: 5px; background: rgba(255,255,255,0.4); border-radius: 50%; animation: dot 1.2s infinite; }
+        .enhancer-loading span { width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%; animation: dot 1.2s infinite; }
         .enhancer-loading span:nth-child(2) { animation-delay: 0.15s; }
         .enhancer-loading span:nth-child(3) { animation-delay: 0.3s; }
 
