@@ -88,6 +88,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
 
   // Manager ref (stable across renders)
   const managerRef = useRef<PreviewManager | null>(null);
+  const rebuildInProgressRef = useRef(false);
 
   // Store onStreamEvent in a ref to avoid dependency issues
   const onStreamEventRef = useRef(onStreamEvent);
@@ -267,7 +268,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     }
   }, [selectedPath]);
 
-  const rebuild = useCallback(async (): Promise<PreviewResult> => {
+  const rebuild = useCallback(async (providedFiles?: VirtualFile[]): Promise<PreviewResult> => {
     const manager = managerRef.current;
     if (!manager) {
       return {
@@ -281,7 +282,24 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       };
     }
 
+    // Prevent concurrent rebuilds - this prevents race conditions
+    if (rebuildInProgressRef.current) {
+      console.log('[useBuilder] ⏳ Rebuild already in progress, skipping duplicate call');
+      // Return current result or wait for existing rebuild
+      return previewResult || {
+        success: false,
+        errors: [{
+          line: 0,
+          column: 0,
+          message: 'Rebuild in progress',
+          severity: 'warning' as const,
+        }],
+      };
+    }
+
+    rebuildInProgressRef.current = true;
     console.log('[useBuilder] 🔨 rebuild() starting, setting isBuilding=true');
+    console.log('[useBuilder] 🔨 Files provided:', providedFiles?.length || 'none (will use internal)');
     setIsBuilding(true);
 
     // Add timeout to prevent hanging forever
@@ -291,7 +309,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
 
     try {
       const result = await Promise.race([
-        manager.rebuild(),
+        manager.rebuild(providedFiles),
         timeoutPromise
       ]) as Awaited<ReturnType<typeof manager.rebuild>>;
 
@@ -314,10 +332,11 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       };
     } finally {
       // Always reset isBuilding, even if rebuild throws
+      rebuildInProgressRef.current = false;
       console.log('[useBuilder] 🏁 rebuild() finally block, setting isBuilding=false');
       setIsBuilding(false);
     }
-  }, []);
+  }, [previewResult]);
 
   const reset = useCallback(() => {
     const manager = managerRef.current;

@@ -198,13 +198,27 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         };
       }
 
-      // Get files as array
-      const files = Array.from(project.files.values());
+      // FORENSIC: Log exactly what we received
+      console.log('[FORENSIC ESBuild] project.files type:', typeof project.files);
+      console.log('[FORENSIC ESBuild] project.files instanceof Map:', project.files instanceof Map);
+      console.log('[FORENSIC ESBuild] project.fileCount:', project.fileCount);
+
+      // Get files as array - with safety checks
+      let files: VirtualFile[] = [];
+      if (project.files instanceof Map) {
+        files = Array.from(project.files.values());
+      } else if (project.files && typeof project.files === 'object') {
+        // Maybe it's a plain object?
+        console.log('[FORENSIC ESBuild] ⚠️ project.files is not a Map, trying Object.values');
+        files = Object.values(project.files as Record<string, VirtualFile>);
+      }
 
       // Debug: Log file count
       console.log('[ESBuild] 📁 Building project with', files.length, 'files');
       if (files.length > 0) {
         console.log('[ESBuild] Files:', files.map(f => f.path).join(', '));
+      } else {
+        console.log('[FORENSIC ESBuild] ❌ NO FILES! project.files keys:', project.files ? Array.from((project.files as Map<string, any>).keys?.() || []) : 'N/A');
       }
 
       // Check if we have any files at all

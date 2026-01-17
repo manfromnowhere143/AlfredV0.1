@@ -184,44 +184,82 @@ export class PreviewManager {
 
   /**
    * Trigger a preview rebuild
+   * @param providedFiles - Optional files to use directly (bypasses internal file lookup)
    */
-  async rebuild(): Promise<PreviewResult> {
-    // CRITICAL FIX: Ensure files are synced from parser before building
-    // This fixes the "No files to build" error when fileSystem is out of sync
-    const parserFiles = this.parser.getFiles();
-    const fsFiles = this.fileSystem.getAllFiles();
+  async rebuild(providedFiles?: VirtualFile[]): Promise<PreviewResult> {
+    // CRITICAL FIX: If files are provided directly, use them to avoid race conditions
+    // This ensures the files seen at sync time are the same used for building
+    let filesToUse: VirtualFile[] = [];
 
-    console.log('[PreviewManager] 🔍 Pre-rebuild check: Parser files:', parserFiles.length, '| FileSystem files:', fsFiles.length);
+    if (providedFiles && providedFiles.length > 0) {
+      console.log('[PreviewManager] 🔒 Using PROVIDED files:', providedFiles.length);
+      filesToUse = providedFiles;
 
-    // If parser has files but fileSystem doesn't, sync them now
-    if (parserFiles.length > 0 && fsFiles.length === 0) {
-      console.log('[PreviewManager] ⚠️ FileSystem empty but parser has files! Syncing...');
-      for (const pFile of parserFiles) {
-        this.fileSystem.createFile({
-          path: pFile.path,
-          content: pFile.content,
-          language: pFile.language,
-          fileType: pFile.fileType,
-          isEntryPoint: pFile.isEntryPoint,
-          generatedBy: 'llm',
-        });
-        console.log('[PreviewManager] ✅ Emergency synced:', pFile.path);
+      // Also sync to internal fileSystem for consistency
+      for (const pf of providedFiles) {
+        if (!this.fileSystem.getFile(pf.path)) {
+          this.fileSystem.createFile({
+            path: pf.path,
+            content: pf.content,
+            language: pf.language,
+            fileType: pf.fileType,
+            isEntryPoint: pf.isEntryPoint,
+            generatedBy: pf.generatedBy || 'llm',
+          });
+        }
+      }
+    } else {
+      // Fallback: Get files from multiple sources
+      const parserFiles = this.parser.getFiles();
+      const fsFiles = this.fileSystem.getAllFiles();
+
+      console.log('[PreviewManager] 🔍 Pre-rebuild check: Parser files:', parserFiles.length, '| FileSystem files:', fsFiles.length);
+
+      // Use whichever source has files
+      if (fsFiles.length > 0) {
+        filesToUse = fsFiles;
+        console.log('[PreviewManager] Using fileSystem files');
+      } else if (parserFiles.length > 0) {
+        filesToUse = parserFiles;
+        console.log('[PreviewManager] Using parser files (fileSystem was empty)');
+        // Sync to fileSystem
+        for (const pFile of parserFiles) {
+          this.fileSystem.createFile({
+            path: pFile.path,
+            content: pFile.content,
+            language: pFile.language,
+            fileType: pFile.fileType,
+            isEntryPoint: pFile.isEntryPoint,
+            generatedBy: 'llm',
+          });
+        }
       }
     }
 
+    console.log('[PreviewManager] 📁 Files to build:', filesToUse.length);
+
+    if (filesToUse.length === 0) {
+      console.error('[PreviewManager] ❌ NO FILES AVAILABLE FOR BUILD!');
+      return {
+        success: false,
+        errors: [{
+          line: 0,
+          column: 0,
+          message: 'No files to build. Files may not have synced correctly.',
+          severity: 'error' as const,
+          source: 'preview-manager',
+        }],
+      };
+    }
+
+    // Create project with the files we've gathered
     const adapter = getEsbuildAdapter();
-    const project = this.createProject();
+    const project = this.createProjectWithFiles(filesToUse);
 
     console.log('[PreviewManager] 🔨 Rebuilding project:', project.name);
     console.log('[PreviewManager] 📁 Files in project:', project.fileCount);
     console.log('[PreviewManager] 🎯 Entry point:', project.entryPoint);
-
-    if (project.fileCount > 0) {
-      const filePaths = Array.from(project.files.keys());
-      console.log('[PreviewManager] Files:', filePaths.join(', '));
-    } else {
-      console.warn('[PreviewManager] ⚠️ Still no files after sync! Parser:', parserFiles.length, '| FS:', this.fileSystem.getAllFiles().length);
-    }
+    console.log('[PreviewManager] Files:', Array.from(project.files.keys()).join(', '));
 
     const result = await adapter.preview(project);
 
@@ -237,17 +275,10 @@ export class PreviewManager {
   }
 
   /**
-   * Get the last preview result
+   * Create project with explicit files (avoids race conditions)
    */
-  getLastPreview(): PreviewResult | null {
-    return this.lastPreviewResult;
-  }
-
-  /**
-   * Create an AlfredProject from current state
-   */
-  private createProject(): AlfredProject {
-    const files = this.fileSystem.getAllFiles();
+  private createProjectWithFiles(files: VirtualFile[]): AlfredProject {
+    const filesMap = new Map(files.map(f => [f.path, f]));
 
     return {
       id: 'preview-' + Date.now(),
@@ -269,7 +300,83 @@ export class PreviewManager {
         autoRefresh: this.options.autoRefresh,
         consoleEnabled: true,
       },
-      files: new Map(files.map(f => [f.path, f])),
+      files: filesMap,
+      fileCount: files.length,
+      totalSize: files.reduce((sum, f) => sum + f.size, 0),
+      version: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Get the last preview result
+   */
+  getLastPreview(): PreviewResult | null {
+    return this.lastPreviewResult;
+  }
+
+  /**
+   * Create an AlfredProject from current state
+   */
+  private createProject(): AlfredProject {
+    // FORENSIC: Get files from multiple sources to compare
+    const fsFiles = this.fileSystem.getAllFiles();
+    const parserFiles = this.parser.getFiles();
+    const fsCount = this.fileSystem.getFileCount();
+
+    console.log('[FORENSIC] createProject() called');
+    console.log('[FORENSIC] fileSystem.getAllFiles():', fsFiles.length);
+    console.log('[FORENSIC] fileSystem.getFileCount():', fsCount);
+    console.log('[FORENSIC] parser.getFiles():', parserFiles.length);
+
+    // CRITICAL FIX: If fileSystem is empty but parser has files, USE PARSER FILES DIRECTLY
+    const files = fsFiles.length > 0 ? fsFiles : parserFiles;
+
+    if (fsFiles.length === 0 && parserFiles.length > 0) {
+      console.log('[FORENSIC] ⚠️ Using parser files directly because fileSystem is empty!');
+      // Also sync to fileSystem for future use
+      for (const pf of parserFiles) {
+        this.fileSystem.createFile({
+          path: pf.path,
+          content: pf.content,
+          language: pf.language,
+          fileType: pf.fileType,
+          isEntryPoint: pf.isEntryPoint,
+          generatedBy: 'llm',
+        });
+      }
+    }
+
+    console.log('[FORENSIC] Final files count:', files.length);
+    if (files.length > 0) {
+      console.log('[FORENSIC] Files:', files.map(f => f.path).join(', '));
+    }
+
+    const filesMap = new Map(files.map(f => [f.path, f]));
+    console.log('[FORENSIC] Map size:', filesMap.size);
+
+    return {
+      id: 'preview-' + Date.now(),
+      userId: 'anonymous',
+      name: this.projectMeta.name,
+      description: this.projectMeta.description,
+      framework: this.projectMeta.framework,
+      entryPoint: files.find(f => f.isEntryPoint)?.path || '/src/main.tsx',
+      previewEngine: 'esbuild',
+      dependencies: this.projectMeta.dependencies,
+      devDependencies: this.projectMeta.devDependencies,
+      buildConfig: {
+        target: 'es2020',
+        jsx: 'react-jsx',
+        minify: false,
+        sourcemap: true,
+      },
+      previewConfig: {
+        autoRefresh: this.options.autoRefresh,
+        consoleEnabled: true,
+      },
+      files: filesMap,
       fileCount: files.length,
       totalSize: files.reduce((sum, f) => sum + f.size, 0),
       version: 1,
@@ -389,9 +496,10 @@ export class PreviewManager {
             this.options.onFileChange(file);
           }
 
-          // Final rebuild
-          console.log('[PreviewManager] 🔨 Triggering final rebuild...');
-          this.rebuild();
+          // NOTE: Do NOT call rebuild() here - let page.tsx handle it
+          // This prevents race conditions with multiple rebuild() calls
+          // The page.tsx will call builder.rebuild() after syncFiles()
+          console.log('[PreviewManager] 🏁 Files synced, waiting for external rebuild trigger');
           break;
       }
     });

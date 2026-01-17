@@ -329,10 +329,10 @@ export default function BuilderPage() {
       const timeout = setTimeout(() => {
         console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 5s');
         setIsStreaming(false);
-        // Force a rebuild to ensure preview updates
+        // Force a rebuild to ensure preview updates - PASS FILES DIRECTLY
         if (builder.files.length > 0 && !builder.previewResult?.html) {
-          console.log('[Builder Page] 🔄 Forcing rebuild after timeout...');
-          builder.rebuild?.();
+          console.log('[Builder Page] 🔄 Forcing rebuild after timeout with', builder.files.length, 'files...');
+          builder.rebuild?.(builder.files);
         }
       }, 5000);
       return () => clearTimeout(timeout);
@@ -436,8 +436,8 @@ export default function BuilderPage() {
         }
       }
 
-      // Sync to React state
-      builder.syncFiles?.();
+      // Sync to React state and capture synced files
+      const syncedFiles = builder.syncFiles?.() || [];
       setCurrentProjectId(projectId);
       setShowProjects(false);
 
@@ -446,8 +446,9 @@ export default function BuilderPage() {
         builder.selectFile(files[0].path);
       }
 
-      // Trigger rebuild
-      await builder.rebuild?.();
+      // Trigger rebuild - PASS FILES DIRECTLY
+      console.log('[Builder] Triggering rebuild with', syncedFiles.length, 'synced files');
+      await builder.rebuild?.(syncedFiles);
 
       console.log('[Builder] Project loaded:', projectId, files.length, 'files');
     } catch (error) {
@@ -752,9 +753,10 @@ export default function BuilderPage() {
         console.log('[Builder] 🎉 Files created:', managerFiles.map(f => f.path));
 
         // Force rebuild to trigger preview and wait for completion
-        console.log('[Builder] 🔨 Triggering rebuild...');
+        // CRITICAL: Pass files directly to avoid race conditions where files disappear
+        console.log('[Builder] 🔨 Triggering rebuild with', managerFiles.length, 'files...');
         try {
-          const previewResult = await builder.rebuild?.();
+          const previewResult = await builder.rebuild?.(managerFiles);
           if (previewResult?.errors?.length) {
             console.warn('[Builder] ⚠️ Preview built with errors:', previewResult.errors.length);
             console.warn('[Builder] Errors:', previewResult.errors.map(e => e.message).join(', '));
@@ -810,7 +812,7 @@ export default function BuilderPage() {
           onFileSelect={handleFileSelect}
           onFileChange={handleEditorChange}
           onSendMessage={(msg) => sendMessage(msg)}
-          onRebuild={() => builder.rebuild?.()}
+          onRebuild={() => builder.rebuild?.(builder.files)}
           streamingFile={streamingFile}
           streamingCode={streamingCode}
           streamingSteps={streamingSteps}
@@ -908,7 +910,7 @@ export default function BuilderPage() {
               ) : builder.selectedFile ? (
                 <>
                   <div className="editor-tabs"><div className="tab active"><span>{builder.selectedFile.name}</span></div></div>
-                  <div className="editor-content"><MonacoEditor value={builder.selectedFile.content} language={builder.selectedFile.language} path={builder.selectedFile.path} onChange={handleEditorChange} theme="dark" /></div>
+                  <div className="editor-content"><MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} path={builder.selectedFile.path} onChange={handleEditorChange} theme="dark" /></div>
                 </>
               ) : (
                 <div className="editor-empty">{Icons.file}<span>Select a file to edit</span></div>
