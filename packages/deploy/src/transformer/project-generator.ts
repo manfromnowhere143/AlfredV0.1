@@ -246,7 +246,7 @@ import type {
   
     files.push(generatePackageJson(preparedArtifact, projectName, detectedDeps));
     files.push(generateViteConfig(preparedArtifact));
-    files.push(generateIndexHtml(projectName));
+    files.push(generateIndexHtml(projectName, preparedArtifact.usesTypeScript));
     files.push(generateMainEntry(preparedArtifact));
     files.push(generateComponentFile(preparedArtifact));
     files.push(generateAppWrapper(preparedArtifact));
@@ -789,7 +789,8 @@ import type {
     return { path: `vite.config.${ext}`, content };
   }
   
-  function generateIndexHtml(projectName: string): ProjectFile {
+  function generateIndexHtml(projectName: string, usesTypeScript: boolean = false): ProjectFile {
+    const ext = usesTypeScript ? 'tsx' : 'jsx';
     const content = `<!DOCTYPE html>
   <html lang="en">
     <head>
@@ -801,7 +802,7 @@ import type {
     </head>
     <body>
       <div id="root"></div>
-      <script type="module" src="/src/main.jsx"></script>
+      <script type="module" src="/src/main.${ext}"></script>
     </body>
   </html>
   `;
