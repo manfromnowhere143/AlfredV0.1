@@ -6,7 +6,7 @@
  * POST - Analyze files and return a modification plan
  */
 
-export const maxDuration = 60; // 1 minute for analysis
+export const maxDuration = 120; // 2 minutes for analysis (increased for larger projects)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -231,20 +231,42 @@ CONFIDENCE LEVELS:
 
 IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
 
-    // Create LLM client with higher max tokens to prevent truncation
+    // Create LLM client with higher max tokens and timeout
     const llm = createLLMClient({
       apiKey: process.env.ANTHROPIC_API_KEY!,
       model: 'claude-sonnet-4-5-20250929',
-      maxTokens: 8000, // Increased to prevent truncation
+      maxTokens: 8000,
+      timeout: 90000, // 90 second timeout
     });
 
-    // Get modification plan from Claude
-    const response = await llm.complete({
-      system: 'You are a code modification expert. Output only valid JSON. Keep responses concise.',
-      messages: [{ role: 'user', content: systemPrompt }],
-      maxTokens: 8000, // Increased to prevent truncation
-      temperature: 0.2, // Lower temperature for more precise output
-    });
+    // Get modification plan from Claude with retry logic
+    let response;
+    let lastError;
+    const maxRetries = 2;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Alfred Code] API attempt ${attempt + 1}/${maxRetries + 1}`);
+        response = await llm.complete({
+          system: 'You are a code modification expert. Output only valid JSON. Keep responses concise.',
+          messages: [{ role: 'user', content: systemPrompt }],
+          maxTokens: 8000,
+          temperature: 0.2,
+        });
+        break; // Success, exit retry loop
+      } catch (err) {
+        lastError = err;
+        console.warn(`[Alfred Code] Attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : err);
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        }
+      }
+    }
+
+    if (!response) {
+      throw lastError || new Error('Failed to get response from AI after retries');
+    }
 
     // Extract text content
     const textContent = response.content.find(c => c.type === 'text');
@@ -268,7 +290,23 @@ IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
     });
   } catch (error) {
     console.error('[Alfred Code] Error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to analyze modifications';
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    // Provide user-friendly error messages
+    let message = 'Failed to analyze modifications';
+    let status = 500;
+
+    if (error instanceof Error) {
+      if (error.message.includes('timed out') || error.message.includes('timeout')) {
+        message = 'Request took too long. Try a simpler modification or reduce file count.';
+        status = 504;
+      } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+        message = 'Too many requests. Please wait a moment and try again.';
+        status = 429;
+      } else {
+        message = error.message;
+      }
+    }
+
+    return NextResponse.json({ error: message }, { status });
   }
 }
