@@ -1344,7 +1344,7 @@ export default function BuilderPage() {
 
   // Main render (Desktop)
   return (
-    <div className="builder-page">
+    <div className="builder-page" style={{ background: previewBgColor }}>
       {/* Header */}
       <header className="builder-header">
         <div className="header-left">
@@ -1368,7 +1368,7 @@ export default function BuilderPage() {
             </button>
             {showBgColorPicker && (
               <div className="color-dropdown">
-                <div className="color-dropdown-title">Preview Background</div>
+                <div className="color-dropdown-title">Page Background</div>
                 <div className="color-options">
                   {bgColors.map((c) => (
                     <button
