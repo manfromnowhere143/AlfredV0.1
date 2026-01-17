@@ -24,6 +24,7 @@ export interface BuilderPreviewProps {
   preview: PreviewResult | null;
   isBuilding?: boolean;
   onConsole?: (entry: ConsoleEntry) => void;
+  onRebuild?: () => void;
   className?: string;
   showLoading?: boolean;
 }
@@ -682,6 +683,7 @@ export function BuilderPreview({
   preview,
   isBuilding = false,
   onConsole,
+  onRebuild,
   className = '',
   showLoading = true,
 }: BuilderPreviewProps) {
@@ -810,6 +812,14 @@ export function BuilderPreview({
                       Line {firstError.line}, Column {firstError.column}
                     </div>
                   ) : null}
+                  {onRebuild && (
+                    <button className="rebuild-button" onClick={onRebuild}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                      </svg>
+                      Retry Build
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -825,6 +835,14 @@ export function BuilderPreview({
                   </div>
                   <div className="empty-title">Ready to Build</div>
                   <div className="empty-message">Describe what you want to create and Alfred will generate the code.</div>
+                  {onRebuild && (
+                    <button className="rebuild-button" onClick={onRebuild}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                      </svg>
+                      Build Preview
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1089,6 +1107,32 @@ export function BuilderPreview({
           font-size: 12px;
           color: rgba(255, 255, 255, 0.4);
           font-family: 'Fira Code', monospace;
+        }
+
+        .rebuild-button {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 16px;
+          padding: 10px 20px;
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .rebuild-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .rebuild-button:active {
+          transform: translateY(0);
         }
 
         .build-metrics {

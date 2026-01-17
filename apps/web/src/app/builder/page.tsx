@@ -932,6 +932,7 @@ export default function BuilderPage() {
                 preview={builder.previewResult}
                 isBuilding={isStreaming || builder.isBuilding}
                 onConsole={() => {}}
+                onRebuild={() => builder.rebuild?.(builder.files)}
               />
             </div>
           )}
