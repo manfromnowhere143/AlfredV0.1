@@ -326,15 +326,16 @@ export default function BuilderPage() {
 
   // SAFETY: Force reset stuck states after stream completes
   // If we have files but isBuilding is stuck true for too long, force reset
-  // NOTE: ESBuild WASM can take 20-30s to load first time, so use 60s timeout
+  // ESBuild now has 20s init timeout + 25s transform timeout = 45s max
+  // useBuilder has 35s hard timeout, so 45s safety timeout should be plenty
   useEffect(() => {
     if (builder.files.length > 0 && (isStreaming || builder.isBuilding)) {
       const timeout = setTimeout(() => {
-        console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 60s');
+        console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 45s');
         setIsStreaming(false);
         // Don't try to rebuild here - the hard timeout in useBuilder will handle it
         // This just resets the streaming state
-      }, 60000);
+      }, 45000);
       return () => clearTimeout(timeout);
     }
   }, [builder.files.length, isStreaming, builder.isBuilding]);

@@ -152,15 +152,48 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
   }
 
   private async doInitialize(): Promise<void> {
+    // MASTER TIMEOUT: Entire initialization must complete in 20s
+    // This prevents the adapter from hanging forever
+    const MASTER_TIMEOUT = 20000;
+    const MODULE_IMPORT_TIMEOUT = 10000;
+    const WASM_INIT_TIMEOUT = 15000;
+    const WARMUP_TIMEOUT = 5000;
+
+    const masterTimeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('ESBuild initialization timed out after 20s')), MASTER_TIMEOUT);
+    });
+
+    try {
+      await Promise.race([
+        this.doInitializeInternal(MODULE_IMPORT_TIMEOUT, WASM_INIT_TIMEOUT, WARMUP_TIMEOUT),
+        masterTimeout,
+      ]);
+    } catch (error) {
+      // CRITICAL: Reset initPromise on ANY failure so retries can work
+      this.initPromise = null;
+      console.error('[ESBuild] ❌ Initialization failed:', error);
+      throw error;
+    }
+  }
+
+  private async doInitializeInternal(
+    moduleTimeout: number,
+    wasmTimeout: number,
+    warmupTimeout: number
+  ): Promise<void> {
     try {
       console.log('[ESBuild] Starting initialization...');
       console.log('[ESBuild] 📦 Importing esbuild-wasm module...');
 
-      // Dynamic import to avoid SSR issues
+      // Dynamic import WITH timeout to avoid hanging forever
       const importStart = performance.now();
       let esbuildModule: ESBuild;
       try {
-        esbuildModule = await import('esbuild-wasm');
+        const modulePromise = import('esbuild-wasm');
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Module import timed out')), moduleTimeout)
+        );
+        esbuildModule = await Promise.race([modulePromise, timeoutPromise]);
         console.log('[ESBuild] ✅ Module imported in', Math.round(performance.now() - importStart), 'ms');
         console.log('[ESBuild] Module keys:', Object.keys(esbuildModule).join(', '));
       } catch (importError) {
@@ -187,22 +220,34 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           console.log('[ESBuild] ⏳ Starting WASM initialization...');
           const wasmStart = performance.now();
 
-          // Add timeout for initialization (30s should be enough)
+          // WASM initialization with timeout
           const initWithTimeout = Promise.race([
             esbuildModule.initialize({ wasmURL }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`Timeout loading WASM from ${wasmURL}`)), 30000)
+              setTimeout(() => reject(new Error(`Timeout loading WASM from ${wasmURL}`)), wasmTimeout)
             )
           ]);
 
           await initWithTimeout;
           console.log('[ESBuild] ✅ WASM loaded from:', wasmURL, 'in', Math.round(performance.now() - wasmStart), 'ms');
 
-          // Do a warm-up transform to ensure WASM is fully ready
+          // Warm-up transform WITH timeout - if it times out, we continue anyway
+          // The warm-up is just an optimization, not required
           console.log('[ESBuild] 🔥 Running warm-up transform...');
           const warmupStart = performance.now();
-          await esbuildModule.transform('const warmup = 1;', { loader: 'js' });
-          console.log('[ESBuild] ✅ Warm-up complete in', Math.round(performance.now() - warmupStart), 'ms');
+          try {
+            const warmupPromise = esbuildModule.transform('const warmup = 1;', { loader: 'js' });
+            const warmupTimeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Warm-up transform timed out')), warmupTimeout)
+            );
+            await Promise.race([warmupPromise, warmupTimeoutPromise]);
+            console.log('[ESBuild] ✅ Warm-up complete in', Math.round(performance.now() - warmupStart), 'ms');
+          } catch (warmupErr) {
+            // Warm-up failed or timed out - log but continue
+            // The first real transform will be slower, but that's OK
+            console.warn('[ESBuild] ⚠️ Warm-up failed/skipped:', warmupErr instanceof Error ? warmupErr.message : warmupErr);
+            console.log('[ESBuild] Continuing without warm-up...');
+          }
 
           this.initialized = true;
           console.log('[ESBuild] ✅ ESBuild fully initialized and ready!');
@@ -220,13 +265,13 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           console.warn('[ESBuild] Failed to load from:', wasmURL, errorMsg);
           lastError = err instanceof Error ? err : new Error(String(err));
           // Small delay before trying next source
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 300));
         }
       }
 
       throw lastError || new Error('Failed to initialize ESBuild from any source');
     } catch (error) {
-      console.error('[ESBuild] ❌ Initialization failed:', error);
+      console.error('[ESBuild] ❌ doInitializeInternal failed:', error);
       throw error;
     }
   }
@@ -322,14 +367,33 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       const transformedFiles: { path: string; code: string }[] = [];
       const transformErrors: FileError[] = [];
 
+      // TOTAL transform timeout - all files must complete in 25s
+      const TOTAL_TRANSFORM_TIMEOUT = 25000;
+      const PER_FILE_TIMEOUT = 8000; // 8s per file max
+      const transformStartTotal = performance.now();
+
       for (const file of files) {
         if (!file.path.match(/\.(tsx?|jsx?)$/)) continue;
+
+        // Check total time elapsed
+        const elapsed = performance.now() - transformStartTotal;
+        if (elapsed > TOTAL_TRANSFORM_TIMEOUT) {
+          console.error('[ESBuild] ⏱️ TOTAL transform timeout exceeded after', Math.round(elapsed), 'ms');
+          transformErrors.push({
+            line: 0,
+            column: 0,
+            message: `Build timeout: transforms took too long (${Math.round(elapsed)}ms). Try refreshing.`,
+            severity: 'error' as const,
+            source: 'esbuild',
+          });
+          break;
+        }
 
         try {
           const transformStart = performance.now();
           console.log('[ESBuild] 📄 Transforming:', file.path, '| Size:', file.content.length, 'chars');
 
-          // Add 30s timeout per file transform
+          // 8s timeout per file (reduced from 30s)
           const transformPromise = this.esbuild.transform(file.content, {
             loader: file.path.endsWith('.tsx') ? 'tsx' :
                     file.path.endsWith('.ts') ? 'ts' :
@@ -343,7 +407,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           const result = await Promise.race([
             transformPromise,
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), 30000)
+              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), PER_FILE_TIMEOUT)
             )
           ]);
 

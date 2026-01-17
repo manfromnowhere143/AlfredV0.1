@@ -61,7 +61,7 @@ export interface UseBuilderResult {
   updateFile: (path: string, content: string) => void;
   createFile: (path: string, content?: string) => void;
   deleteFile: (path: string) => void;
-  rebuild: () => Promise<PreviewResult>;
+  rebuild: (providedFiles?: VirtualFile[]) => Promise<PreviewResult>;
   reset: () => void;
   clearConsole: () => void;
 
@@ -323,9 +323,10 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     console.log('[useBuilder] 🔨 Files provided:', providedFiles?.length || 'none (will use internal)');
     setIsBuilding(true);
 
-    // HARD TIMEOUT: Force completion after 45s no matter what
-    // First WASM load can take 20-30s, so give it more time
-    const HARD_TIMEOUT = 45000;
+    // HARD TIMEOUT: Force completion after 35s no matter what
+    // ESBuild init: 20s max, transforms: 25s max = 45s theoretical
+    // But with our new timeouts, 35s should be plenty
+    const HARD_TIMEOUT = 35000;
     let hardTimeoutId: NodeJS.Timeout | null = null;
     let resolved = false;
 
@@ -348,7 +349,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     };
 
     hardTimeoutId = setTimeout(() => {
-      forceComplete('Build timed out after 30s. Check browser console for [ESBuild] logs.');
+      forceComplete('Build timed out. ESBuild may have failed to initialize. Check browser console for [ESBuild] logs and try refreshing the page.');
     }, HARD_TIMEOUT);
 
     try {
