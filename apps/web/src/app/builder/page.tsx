@@ -24,6 +24,9 @@ import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } f
 import LimitReached from '@/components/LimitReached';
 import { DeploymentCard } from '@/components/DeploymentCard';
 import MessageAttachments from '@/components/MessageAttachments';
+import { ModificationPreview, ExportToClaudeCode } from '@/components/alfred-code';
+import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
+import { isModificationRequest, applyModifications } from '@/lib/alfred-code/modify-project';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
 import type { FileAttachment } from '@/lib/types';
 
@@ -264,6 +267,12 @@ export default function BuilderPage() {
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
+
+  // Alfred Code - Smart Modification Mode (Steve Jobs approach)
+  const [modificationPlan, setModificationPlan] = useState<ModificationPlan | null>(null);
+  const [isAnalyzingModification, setIsAnalyzingModification] = useState(false);
+  const [isApplyingModification, setIsApplyingModification] = useState(false);
+  const [pendingModificationMessage, setPendingModificationMessage] = useState<string>('');
 
   // Refs
   const conversationId = useRef<string | null>(null);
@@ -729,6 +738,125 @@ export default function BuilderPage() {
   const useOriginal = () => { setInputValue(originalText); setShowEnhancer(false); inputRef.current?.focus(); };
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // ALFRED CODE - SMART MODIFICATION HANDLERS (Steve Jobs Approach)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const analyzeModification = useCallback(async (userRequest: string) => {
+    if (builder.files.length === 0) return null;
+
+    setIsAnalyzingModification(true);
+    setPendingModificationMessage(userRequest);
+
+    try {
+      // Convert builder files to ProjectFile format
+      const projectFiles = builder.files.map(f => ({
+        path: f.path,
+        content: f.content,
+        language: f.language,
+      }));
+
+      console.log('[Alfred Code] Analyzing modification:', userRequest.slice(0, 100));
+
+      const response = await fetch('/api/builder/modify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: projectFiles,
+          userRequest,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to analyze modification');
+      }
+
+      const data = await response.json();
+      console.log('[Alfred Code] Modification plan:', data.plan);
+      return data.plan as ModificationPlan;
+    } catch (error) {
+      console.error('[Alfred Code] Analysis error:', error);
+      return null;
+    } finally {
+      setIsAnalyzingModification(false);
+    }
+  }, [builder.files]);
+
+  const handleApplyModification = useCallback(async () => {
+    if (!modificationPlan) return;
+
+    setIsApplyingModification(true);
+
+    try {
+      // Create a Map from builder files
+      const filesMap = new Map<string, string>();
+      builder.files.forEach(f => filesMap.set(f.path, f.content));
+
+      // Apply the modifications
+      const result = applyModifications(filesMap, modificationPlan);
+
+      if (result.failedChanges.length > 0) {
+        console.warn('[Alfred Code] Some changes failed:', result.failedChanges);
+      }
+
+      console.log('[Alfred Code] Applied', result.appliedChanges, 'changes');
+
+      // Update builder files with the new content
+      result.newFiles.forEach((content, path) => {
+        const existingFile = builder.files.find(f => f.path === path);
+        if (existingFile) {
+          builder.updateFile(path, content);
+        } else {
+          // New file - create it
+          builder.manager?.createFile(path, content);
+        }
+      });
+
+      // Handle deleted files
+      builder.files.forEach(f => {
+        if (!result.newFiles.has(f.path)) {
+          // File was deleted
+          builder.manager?.deleteFile?.(f.path);
+        }
+      });
+
+      // Sync and rebuild
+      builder.syncFiles?.();
+      await builder.rebuild?.(builder.files);
+
+      // Add success message to chat
+      const successMessage: ChatMessage = {
+        id: `a-mod-${Date.now()}`,
+        role: 'alfred',
+        content: `Applied ${result.appliedChanges} change${result.appliedChanges !== 1 ? 's' : ''}. ${modificationPlan.analysis}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, successMessage]);
+
+      // Clear modification state
+      setModificationPlan(null);
+      setPendingModificationMessage('');
+    } catch (error) {
+      console.error('[Alfred Code] Apply error:', error);
+      const errorMessage: ChatMessage = {
+        id: `a-err-${Date.now()}`,
+        role: 'alfred',
+        content: 'Failed to apply changes. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsApplyingModification(false);
+    }
+  }, [modificationPlan, builder]);
+
+  const handleCancelModification = useCallback(() => {
+    setModificationPlan(null);
+    setPendingModificationMessage('');
+    setIsAnalyzingModification(false);
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // SEND MESSAGE
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -762,6 +890,60 @@ export default function BuilderPage() {
     }
 
     console.log('[Builder] ✅ Builder initialized:', builder.isInitialized, '| Manager:', !!builder.manager);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ALFRED CODE: Smart Modification Detection (Steve Jobs Approach)
+    // If project exists and user is asking for modifications, use surgical edits
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (builder.files.length > 0 && isModificationRequest(content, builder.files.length)) {
+      console.log('[Alfred Code] Detected modification request, analyzing surgically...');
+
+      setInputValue('');
+      if (chatMinimized) setChatMinimized(false);
+
+      // Add user message to chat
+      const userMessage: ChatMessage = {
+        id: `u-${Date.now()}`,
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Add analyzing message
+      const analyzingMessage: ChatMessage = {
+        id: `a-analyzing-${Date.now()}`,
+        role: 'alfred',
+        content: 'Analyzing your request...',
+        timestamp: new Date(),
+        isStreaming: true,
+      };
+      setMessages(prev => [...prev, analyzingMessage]);
+
+      // Analyze the modification
+      const plan = await analyzeModification(content);
+
+      // Remove the analyzing message
+      setMessages(prev => prev.filter(m => !m.isStreaming));
+
+      if (plan && plan.modifications.length > 0) {
+        // Show the modification preview
+        setModificationPlan(plan);
+        setIsSending(false);
+        return;
+      } else {
+        // Couldn't generate a plan, fall through to regeneration
+        console.log('[Alfred Code] No modification plan generated, falling back to regeneration');
+        const fallbackMessage: ChatMessage = {
+          id: `a-fallback-${Date.now()}`,
+          role: 'alfred',
+          content: 'I\'ll regenerate the project with your changes.',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, fallbackMessage]);
+      }
+    }
+    // ═══════════════════════════════════════════════════════════════════════════
 
     setInputValue('');
     setStreamingSteps([]);
@@ -1065,6 +1247,14 @@ export default function BuilderPage() {
             </svg>
             <span>Projects</span>
           </button>
+          {/* Export to Claude Code - Power user feature */}
+          {builder.files.length > 0 && (
+            <ExportToClaudeCode
+              files={new Map(builder.files.map(f => [f.path, f.content]))}
+              projectName={builder.projectName}
+              className="header-btn"
+            />
+          )}
           <button
             className="header-btn primary"
             onClick={handleDeploy}
@@ -1210,6 +1400,26 @@ export default function BuilderPage() {
                   </div>
                 ) : (
                   messages.map(msg => <ChatMessage key={msg.id} message={msg} streamingSteps={msg.isStreaming ? streamingSteps : undefined} />)
+                )}
+
+                {/* Alfred Code - Modification Preview */}
+                {modificationPlan && (
+                  <div className="modification-preview-container">
+                    <ModificationPreview
+                      plan={modificationPlan}
+                      onApply={handleApplyModification}
+                      onCancel={handleCancelModification}
+                      isApplying={isApplyingModification}
+                    />
+                  </div>
+                )}
+
+                {/* Analyzing indicator */}
+                {isAnalyzingModification && (
+                  <div className="analyzing-indicator">
+                    <div className="analyzing-spinner" />
+                    <span>Analyzing your changes...</span>
+                  </div>
                 )}
               </div>
 
@@ -1466,6 +1676,12 @@ export default function BuilderPage() {
         .suggestions { display: flex; flex-direction: column; gap: 6px; width: 100%; }
         .suggestions button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: rgba(255,255,255,0.75); font-size: 13px; text-align: left; cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
         .suggestions button:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.25); color: white; transform: translateX(3px); }
+
+        /* Alfred Code - Modification Preview */
+        .modification-preview-container { padding: 16px; }
+        .analyzing-indicator { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: rgba(255,255,255,0.6); font-size: 13px; }
+        .analyzing-spinner { width: 16px; height: 16px; border: 2px solid rgba(139,92,246,0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Input Area - Properly contained in chat panel */
         .chat-input-area { padding: 14px 16px; background: rgba(255,255,255,0.02); border-top: 1px solid rgba(255,255,255,0.06); }
