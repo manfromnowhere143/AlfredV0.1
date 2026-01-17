@@ -464,6 +464,7 @@ export default function BuilderPage() {
         dependencies: projectMeta.dependencies || {},
         devDependencies: projectMeta.devDependencies || {},
         files,
+        deployedUrl: deployedUrl || undefined,
       };
 
       console.log('[Builder:Save] Saving payload:', {
@@ -531,6 +532,13 @@ export default function BuilderPage() {
       const syncedFiles = builder.syncFiles?.() || [];
       setCurrentProjectId(projectId);
       setShowProjects(false);
+
+      // Load deployed URL if available
+      if (project.deployedUrl) {
+        setDeployedUrl(project.deployedUrl);
+      } else {
+        setDeployedUrl(null);
+      }
 
       // Select first file
       if (files.length > 0) {
@@ -1374,15 +1382,23 @@ export default function BuilderPage() {
               href={deployedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="header-btn deployed-link"
+              className="live-site-badge"
               title="View deployed site"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-              <span>Live</span>
+              <div className="live-indicator">
+                <div className="live-dot" />
+                <span>LIVE</span>
+              </div>
+              <div className="live-url">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                </svg>
+                <span className="url-text">{deployedUrl.replace('https://', '')}</span>
+                <svg className="arrow-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M7 17L17 7M17 7H7M17 7v10" />
+                </svg>
+              </div>
             </a>
           )}
           <div className={`status-badge ${isStreaming ? 'streaming' : builder.isBuilding ? 'building' : 'ready'}`}>
@@ -1743,8 +1759,19 @@ export default function BuilderPage() {
         .header-btn svg { flex-shrink: 0; }
         .header-btn.primary { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: rgba(139,92,246,0.5); color: white; }
         .header-btn.primary:hover { background: linear-gradient(135deg, #9b6cf6, #7376f1); border-color: rgba(139,92,246,0.7); box-shadow: 0 4px 16px rgba(139,92,246,0.3); transform: translateY(-1px); }
-        .header-btn.deployed-link { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: #22c55e; text-decoration: none; }
-        .header-btn.deployed-link:hover { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.5); }
+        /* Live Site Badge - State of the Art */
+        .live-site-badge { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(16,185,129,0.05)); border: 1px solid rgba(34,197,94,0.25); border-radius: 10px; text-decoration: none; transition: all 0.2s ease; cursor: pointer; }
+        .live-site-badge:hover { background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(16,185,129,0.1)); border-color: rgba(34,197,94,0.4); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34,197,94,0.2); }
+        .live-indicator { display: flex; align-items: center; gap: 5px; padding: 3px 8px; background: rgba(34,197,94,0.15); border-radius: 6px; }
+        .live-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: livePulse 2s ease-in-out infinite; box-shadow: 0 0 8px rgba(34,197,94,0.6); }
+        @keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.85); } }
+        .live-indicator span { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #22c55e; }
+        .live-url { display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.7); }
+        .live-url svg { flex-shrink: 0; opacity: 0.5; }
+        .live-url .url-text { font-size: 11px; font-family: 'SF Mono', Monaco, monospace; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .live-url .arrow-icon { opacity: 0.3; transition: all 0.2s ease; }
+        .live-site-badge:hover .live-url { color: rgba(255,255,255,0.9); }
+        .live-site-badge:hover .arrow-icon { opacity: 0.7; transform: translate(2px, -2px); }
         .btn-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.1); border-top-color: rgba(255,255,255,0.7); border-radius: 50%; animation: spin 0.8s linear infinite; }
         .status-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.7); }
         .status-dot { width: 6px; height: 6px; border-radius: 50%; }

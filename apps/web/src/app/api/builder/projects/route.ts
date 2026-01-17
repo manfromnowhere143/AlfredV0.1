@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
       dependencies = {},
       devDependencies = {},
       files = [],
+      deployedUrl,
     } = body;
 
     console.log('[Builder:POST] Saving project:', { name, fileCount: files?.length, framework });
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
         devDependencies,
         fileCount,
         totalSize,
+        deployedUrl: deployedUrl || undefined,
         files: files.map((f: any) => ({
           path: f.path,
           name: f.name || f.path.split('/').pop() || 'unknown',

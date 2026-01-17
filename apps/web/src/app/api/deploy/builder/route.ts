@@ -30,6 +30,7 @@ interface DeployRequestBody {
   projectName: string;
   artifactId?: string;
   artifactTitle?: string;
+  customDomain?: string;
 }
 
 interface VercelFile {
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request
     const body: DeployRequestBody = await request.json();
-    const { files, projectName, artifactId, artifactTitle } = body;
+    const { files, projectName, artifactId, artifactTitle, customDomain } = body;
 
     if (!files || files.length === 0) {
       return new Response(JSON.stringify({ error: 'No files provided' }), {
@@ -445,7 +446,34 @@ export async function POST(request: NextRequest) {
             const readyState = status.readyState;
 
             if (readyState === 'READY') {
-              const url = `https://${status.alias?.[0] || status.url}`;
+              let url = `https://${status.alias?.[0] || status.url}`;
+              let domainConfigured = false;
+
+              // Configure custom domain if provided
+              if (customDomain) {
+                sendEvent({ type: 'progress', status: 'deploying', message: 'Configuring custom domain...', progress: 90 });
+                try {
+                  const domainRes = await vercelRequest(`/v10/projects/${vercelProjectId}/domains`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: customDomain }),
+                  }, vercelToken, teamId);
+
+                  if (domainRes.ok) {
+                    const domainData = await domainRes.json();
+                    domainConfigured = true;
+                    if (domainData.verified) {
+                      url = `https://${customDomain}`;
+                      sendEvent({ type: 'progress', status: 'deploying', message: 'Custom domain verified!', progress: 95 });
+                    } else {
+                      sendEvent({ type: 'progress', status: 'deploying', message: 'Domain added - DNS verification pending', progress: 95 });
+                    }
+                  } else {
+                    console.error('[Builder Deploy] Domain config failed:', await domainRes.text());
+                  }
+                } catch (domainErr) {
+                  console.error('[Builder Deploy] Domain error:', domainErr);
+                }
+              }
 
               // Save to database
               try {

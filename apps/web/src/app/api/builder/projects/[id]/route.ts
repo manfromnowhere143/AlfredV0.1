@@ -64,6 +64,7 @@ export async function GET(
         devDependencies: meta.devDependencies || {},
         fileCount: meta.fileCount || files.length,
         totalSize: meta.totalSize || 0,
+        deployedUrl: meta.deployedUrl || null,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
       },

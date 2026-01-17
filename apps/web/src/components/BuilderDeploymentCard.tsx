@@ -44,6 +44,8 @@ export function BuilderDeploymentCard({
   const [error, setError] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [useCustomDomain, setUseCustomDomain] = useState(false);
+  const [customDomain, setCustomDomain] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export function BuilderDeploymentCard({
           projectName: projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
           artifactId,
           artifactTitle: artifactTitle || projectName,
+          customDomain: useCustomDomain && customDomain ? customDomain.toLowerCase().trim() : undefined,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -264,6 +267,44 @@ export function BuilderDeploymentCard({
                   <span className="input-suffix">.vercel.app</span>
                 </div>
               </div>
+
+              {/* Custom Domain Section */}
+              <div className="domain-section">
+                <button
+                  className={`domain-toggle ${useCustomDomain ? 'active' : ''}`}
+                  onClick={() => setUseCustomDomain(!useCustomDomain)}
+                  type="button"
+                >
+                  <div className="toggle-indicator" />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                  </svg>
+                  <span>Use Custom Domain</span>
+                  <span className="coming-soon">PRO</span>
+                </button>
+
+                {useCustomDomain && (
+                  <div className="custom-domain-input">
+                    <div className="input-wrapper domain">
+                      <input
+                        type="text"
+                        value={customDomain}
+                        onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, ''))}
+                        placeholder="yourdomain.com"
+                      />
+                    </div>
+                    <div className="dns-info">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4M12 8h.01"/>
+                      </svg>
+                      <span>Add a CNAME record pointing to <code>cname.vercel-dns.com</code></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="info-section">
                 <div className="info-item highlight">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -327,6 +368,22 @@ export function BuilderDeploymentCard({
         .input-wrapper input { flex: 1; padding: 12px 14px; background: transparent; border: none; outline: none; font-size: 15px; color: var(--text); font-family: 'SF Mono', Monaco, monospace; }
         .input-wrapper input::placeholder { color: var(--text-muted); }
         .input-suffix { padding: 12px 14px; font-size: 14px; color: var(--text-muted); background: var(--badge-bg); border-left: 1px solid var(--border); font-family: 'SF Mono', Monaco, monospace; }
+        /* Custom Domain Section */
+        .domain-section { margin-bottom: 20px; }
+        .domain-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; background: var(--badge-bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; color: var(--text-secondary); font-size: 13px; font-weight: 500; position: relative; }
+        .domain-toggle:hover { border-color: var(--pro-color); background: rgba(139,92,246,0.05); }
+        .domain-toggle.active { border-color: var(--pro-color); background: rgba(139,92,246,0.1); color: var(--text); }
+        .toggle-indicator { width: 36px; height: 20px; background: var(--border); border-radius: 10px; position: relative; transition: all 0.2s ease; flex-shrink: 0; }
+        .toggle-indicator::after { content: ''; position: absolute; width: 16px; height: 16px; background: var(--text-muted); border-radius: 50%; top: 2px; left: 2px; transition: all 0.2s ease; }
+        .domain-toggle.active .toggle-indicator { background: var(--pro-color); }
+        .domain-toggle.active .toggle-indicator::after { left: 18px; background: white; }
+        .coming-soon { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; padding: 3px 8px; background: linear-gradient(135deg, var(--pro-color), #6366f1); color: white; border-radius: 4px; }
+        .custom-domain-input { margin-top: 12px; animation: slideDown 0.2s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .input-wrapper.domain { margin-bottom: 10px; }
+        .dns-info { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; font-size: 11px; color: rgba(245,158,11,0.9); }
+        .dns-info svg { flex-shrink: 0; margin-top: 1px; }
+        .dns-info code { background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; }
         .info-section { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
         .info-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
         .info-item svg { opacity: 0.5; }
