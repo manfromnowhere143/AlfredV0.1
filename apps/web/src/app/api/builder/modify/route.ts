@@ -83,7 +83,69 @@ function extractJSON(text: string): string {
     throw new Error('No JSON object found in response');
   }
 
-  return cleaned.slice(startIdx, endIdx + 1);
+  const jsonStr = cleaned.slice(startIdx, endIdx + 1);
+
+  // Validate and repair truncated JSON if needed
+  try {
+    JSON.parse(jsonStr);
+    return jsonStr;
+  } catch (e) {
+    // Try to repair common truncation issues
+    console.log('[Alfred Code] Attempting to repair truncated JSON...');
+    const repaired = repairTruncatedJSON(jsonStr);
+    JSON.parse(repaired); // Validate the repair worked
+    console.log('[Alfred Code] JSON repair successful');
+    return repaired;
+  }
+}
+
+function repairTruncatedJSON(jsonStr: string): string {
+  let result = jsonStr;
+
+  // Count open/close brackets and braces
+  let braceCount = 0;
+  let bracketCount = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < result.length; i++) {
+    const char = result[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === '{') braceCount++;
+      else if (char === '}') braceCount--;
+      else if (char === '[') bracketCount++;
+      else if (char === ']') bracketCount--;
+    }
+  }
+
+  // If we're still in a string, close it
+  if (inString) {
+    result += '"';
+  }
+
+  // Close any unclosed brackets and braces
+  while (bracketCount > 0) {
+    result += ']';
+    bracketCount--;
+  }
+  while (braceCount > 0) {
+    result += '}';
+    braceCount--;
+  }
+
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -169,19 +231,19 @@ CONFIDENCE LEVELS:
 
 IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
 
-    // Create LLM client
+    // Create LLM client with higher max tokens to prevent truncation
     const llm = createLLMClient({
       apiKey: process.env.ANTHROPIC_API_KEY!,
       model: 'claude-sonnet-4-5-20250929',
-      maxTokens: 4000,
+      maxTokens: 8000, // Increased to prevent truncation
     });
 
     // Get modification plan from Claude
     const response = await llm.complete({
-      system: 'You are a code modification expert. Output only valid JSON.',
+      system: 'You are a code modification expert. Output only valid JSON. Keep responses concise.',
       messages: [{ role: 'user', content: systemPrompt }],
-      maxTokens: 4000,
-      temperature: 0.3, // Lower temperature for more precise output
+      maxTokens: 8000, // Increased to prevent truncation
+      temperature: 0.2, // Lower temperature for more precise output
     });
 
     // Extract text content

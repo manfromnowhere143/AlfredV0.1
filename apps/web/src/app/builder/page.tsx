@@ -24,8 +24,8 @@ import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } f
 import LimitReached from '@/components/LimitReached';
 import { DeploymentCard } from '@/components/DeploymentCard';
 import MessageAttachments from '@/components/MessageAttachments';
-import { ModificationPreview, ForensicInvestigation, SaveBar, ExportToClaudeCode, createForensicReport } from '@/components/alfred-code';
-import type { ForensicReport } from '@/components/alfred-code';
+import { ModificationPreview, ForensicInvestigation, SaveBar, ExportToClaudeCode, createForensicReport, WelcomePanel, ModificationProgress, ProgressSteps, createProgressStep, markStepDone } from '@/components/alfred-code';
+import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
 import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
 import { isModificationRequest, applyModifications } from '@/lib/alfred-code/modify-project';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
@@ -276,6 +276,7 @@ export default function BuilderPage() {
   const [isApplyingModification, setIsApplyingModification] = useState(false);
   const [pendingModificationMessage, setPendingModificationMessage] = useState<string>('');
   const [pendingChanges, setPendingChanges] = useState<string[]>([]); // Files with unsaved changes
+  const [modificationSteps, setModificationSteps] = useState<ProgressStep[]>([]); // Real-time progress steps
 
   // Refs
   const conversationId = useRef<string | null>(null);
@@ -769,6 +770,11 @@ export default function BuilderPage() {
     setIsAnalyzingModification(true);
     setPendingModificationMessage(userRequest);
 
+    // Start progress tracking - State of the Art UX
+    setModificationSteps([]);
+    const analyzeStep = ProgressSteps.analyzing(userRequest);
+    setModificationSteps([analyzeStep]);
+
     try {
       // Convert builder files to ProjectFile format - use currentFiles from manager
       const projectFiles = currentFiles.map(f => ({
@@ -776,6 +782,10 @@ export default function BuilderPage() {
         content: f.content,
         language: f.language,
       }));
+
+      // Add scanning step
+      const scanStep = ProgressSteps.scanningProject(currentFiles.length);
+      setModificationSteps(prev => [...prev.map(s => markStepDone(s)), scanStep]);
 
       console.log('[Alfred Code] Analyzing modification:', userRequest.slice(0, 100));
 
@@ -795,6 +805,16 @@ export default function BuilderPage() {
 
       const data = await response.json();
       console.log('[Alfred Code] Modification plan:', data.plan);
+
+      // Mark scanning done and add found locations step
+      if (data.plan?.modifications?.length > 0) {
+        const foundStep = ProgressSteps.foundLocations(data.plan.modifications.length);
+        setModificationSteps(prev => [...prev.map(s => markStepDone(s)), foundStep]);
+        setTimeout(() => {
+          setModificationSteps(prev => prev.map(s => markStepDone(s)));
+        }, 500);
+      }
+
       return data.plan as ModificationPlan;
     } catch (error) {
       console.error('[Alfred Code] Analysis error:', error);
@@ -809,11 +829,23 @@ export default function BuilderPage() {
 
     setIsApplyingModification(true);
 
+    // Start apply progress tracking
+    setModificationSteps([createProgressStep('modify', 'Preparing to apply changes')]);
+
     try {
       // CRITICAL: Use manager.getFiles() for most current files (React state can be stale!)
       const currentFiles = builder.manager?.getFiles?.() || builder.files;
       const filesMap = new Map<string, string>();
       currentFiles.forEach(f => filesMap.set(f.path, f.content));
+
+      // Add applying step for each modification
+      const totalMods = modificationPlan.modifications.length;
+      modificationPlan.modifications.forEach((mod, idx) => {
+        const step = ProgressSteps.applyingChange(idx + 1, totalMods, `${mod.action} ${mod.path.split('/').pop()}`);
+        setTimeout(() => {
+          setModificationSteps(prev => [...prev.map(s => markStepDone(s)), step]);
+        }, idx * 150); // Stagger for visual effect
+      });
 
       // Apply the modifications
       const result = applyModifications(filesMap, modificationPlan);
@@ -847,6 +879,13 @@ export default function BuilderPage() {
       const syncedFiles = builder.syncFiles?.() || [];
       await builder.rebuild?.(syncedFiles);
 
+      // Mark all steps done and add complete step
+      const completeStep = ProgressSteps.complete(result.appliedChanges);
+      setModificationSteps(prev => [...prev.map(s => markStepDone(s)), completeStep]);
+      setTimeout(() => {
+        setModificationSteps(prev => prev.map(s => markStepDone(s)));
+      }, 500);
+
       // Add success message to chat
       const successMessage: ChatMessage = {
         id: `a-mod-${Date.now()}`,
@@ -856,10 +895,13 @@ export default function BuilderPage() {
       };
       setMessages(prev => [...prev, successMessage]);
 
-      // Clear modification state
-      setModificationPlan(null);
-      setForensicReport(null);
-      setPendingModificationMessage('');
+      // Clear modification state after a delay to show the complete step
+      setTimeout(() => {
+        setModificationPlan(null);
+        setForensicReport(null);
+        setPendingModificationMessage('');
+        setModificationSteps([]);
+      }, 1500);
 
       // Track as pending change (will need to be saved)
       const modifiedPaths = Array.from(result.newFiles.keys());
@@ -883,6 +925,7 @@ export default function BuilderPage() {
     setForensicReport(null);
     setPendingModificationMessage('');
     setIsAnalyzingModification(false);
+    setModificationSteps([]); // Clear progress steps
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -1429,25 +1472,17 @@ export default function BuilderPage() {
               {/* Messages */}
               <div className="chat-messages" ref={scrollRef}>
                 {messages.length === 0 ? (
-                  <div className="chat-welcome">
-                    <div className="welcome-icon">{Icons.layers}</div>
-                    <h3>What would you like to build?</h3>
-                    <p>Describe your idea and I'll generate the code.</p>
-                    <div className="suggestions">
-                      <button onClick={() => handleSuggestionClick('Create a modern todo app with React and local storage')}>
-                        {Icons.todo}<span>Todo App</span>
-                      </button>
-                      <button onClick={() => handleSuggestionClick('Build a calculator with a clean minimal design')}>
-                        {Icons.calc}<span>Calculator</span>
-                      </button>
-                      <button onClick={() => handleSuggestionClick('Create a beautiful landing page for a SaaS product')}>
-                        {Icons.rocket}<span>Landing Page</span>
-                      </button>
-                      <button onClick={() => handleSuggestionClick('Build a weather dashboard that shows current conditions')}>
-                        {Icons.weather}<span>Weather App</span>
-                      </button>
-                    </div>
-                  </div>
+                  <WelcomePanel
+                    project={builder.files.length > 0 ? {
+                      name: builder.projectName,
+                      fileCount: builder.files.length,
+                      framework: 'React',
+                      hasComponents: builder.files.some(f => f.path.includes('component') || f.path.includes('Component')),
+                      hasStyles: builder.files.some(f => f.path.endsWith('.css')),
+                    } : null}
+                    onSuggestionClick={handleSuggestionClick}
+                    isProcessing={isStreaming || isSending}
+                  />
                 ) : (
                   messages.map(msg => <ChatMessage key={msg.id} message={msg} streamingSteps={msg.isStreaming ? streamingSteps : undefined} />)
                 )}
@@ -1476,11 +1511,14 @@ export default function BuilderPage() {
                   </div>
                 )}
 
-                {/* Analyzing indicator */}
-                {isAnalyzingModification && (
-                  <div className="analyzing-indicator">
-                    <div className="analyzing-spinner" />
-                    <span>Analyzing your changes...</span>
+                {/* Modification Progress - State of the Art (replaces simple analyzing indicator) */}
+                {isAnalyzingModification && modificationSteps.length > 0 && (
+                  <div className="modification-progress-container">
+                    <ModificationProgress
+                      steps={modificationSteps}
+                      isActive={isAnalyzingModification}
+                      projectName={builder.projectName}
+                    />
                   </div>
                 )}
               </div>
