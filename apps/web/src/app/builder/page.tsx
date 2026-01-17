@@ -44,6 +44,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  attachments?: Attachment[];
 }
 
 interface StreamingStep {
@@ -53,7 +54,34 @@ interface StreamingStep {
   status: 'active' | 'done';
 }
 
+// File attachment for upload
+interface Attachment {
+  id: string;
+  type: 'image' | 'video' | 'document' | 'code';
+  name: string;
+  file: File;
+  size: number;
+  preview?: string;
+  base64?: string;
+  url?: string;
+  status: 'pending' | 'uploading' | 'ready' | 'error';
+  progress: number;
+  error?: string;
+}
+
 type ViewMode = 'editor' | 'preview' | 'split';
+
+// File upload config
+const UPLOAD_CONFIG = {
+  MAX_FILES: 10,
+  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+  SUPPORTED_TYPES: {
+    image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+    video: ['video/mp4', 'video/webm', 'video/quicktime'],
+    document: ['application/pdf'],
+    code: ['text/plain', 'text/markdown', 'text/csv', 'text/html', 'text/css', 'application/json', 'text/javascript', 'application/javascript'],
+  },
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ICONS — Elegant SVG iconography (no generic emojis)
@@ -74,6 +102,13 @@ const Icons = {
   stop: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
   layers: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>,
   loading: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2a10 10 0 019.5 13" strokeLinecap="round"/></svg>,
+  // File upload icons
+  image: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  video: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>,
+  paperclip: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>,
+  x: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  document: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  code: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -144,6 +179,25 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
           <span className="message-role">{message.role === 'user' ? 'You' : 'Alfred'}</span>
           <span className="message-time">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
+        {/* Show attachments for user messages */}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="message-attachments">
+            {message.attachments.map((att) => (
+              <div key={att.id} className={`msg-attachment ${att.type}`}>
+                {att.preview ? (
+                  <img src={att.preview} alt={att.name} className="msg-attachment-thumb" />
+                ) : (
+                  <span className="msg-attachment-icon">
+                    {att.type === 'document' && Icons.document}
+                    {att.type === 'code' && Icons.code}
+                    {att.type === 'video' && Icons.video}
+                  </span>
+                )}
+                <span className="msg-attachment-name">{att.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {message.isStreaming ? (
           <>
             <StreamingSteps steps={streamingSteps || []} isActive={true} />
@@ -164,6 +218,15 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
         .message-role { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
         .message-time { font-size: 9px; color: rgba(255, 255, 255, 0.3); }
         .message-content { font-size: 13px; line-height: 1.6; color: rgba(255, 255, 255, 0.8); }
+        .message-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .msg-attachment { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 11px; }
+        .msg-attachment.image { border-color: rgba(139,92,246,0.3); }
+        .msg-attachment.video { border-color: rgba(236,72,153,0.3); }
+        .msg-attachment.document { border-color: rgba(59,130,246,0.3); }
+        .msg-attachment.code { border-color: rgba(34,197,94,0.3); }
+        .msg-attachment-thumb { width: 24px; height: 24px; border-radius: 3px; object-fit: cover; }
+        .msg-attachment-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); }
+        .msg-attachment-name { color: rgba(255,255,255,0.7); max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .typing { display: flex; gap: 3px; padding: 6px 0; }
         .typing span { width: 6px; height: 6px; background: #8b5cf6; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
         .typing span:nth-child(1) { animation-delay: -0.32s; }
@@ -240,10 +303,17 @@ export default function BuilderPage() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
+  // File attachment state
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   // Refs
   const conversationId = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -575,6 +645,108 @@ export default function BuilderPage() {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // FILE ATTACHMENTS — Perplexity-inspired file upload
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  // Get file type category
+  const getFileType = useCallback((mimeType: string): Attachment['type'] => {
+    if (UPLOAD_CONFIG.SUPPORTED_TYPES.image.includes(mimeType)) return 'image';
+    if (UPLOAD_CONFIG.SUPPORTED_TYPES.video.includes(mimeType)) return 'video';
+    if (UPLOAD_CONFIG.SUPPORTED_TYPES.document.includes(mimeType)) return 'document';
+    if (UPLOAD_CONFIG.SUPPORTED_TYPES.code.includes(mimeType)) return 'code';
+    return 'document';
+  }, []);
+
+  // Generate preview for images/videos
+  const generatePreview = useCallback(async (file: File): Promise<string | undefined> => {
+    if (file.type.startsWith('image/')) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = () => resolve(undefined);
+        reader.readAsDataURL(file);
+      });
+    }
+    if (file.type.startsWith('video/')) {
+      return new Promise((resolve) => {
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        video.onloadeddata = () => {
+          canvas.width = 120;
+          canvas.height = 80;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(video, 0, 0, 120, 80);
+          resolve(canvas.toDataURL('image/jpeg'));
+          URL.revokeObjectURL(video.src);
+        };
+        video.onerror = () => resolve(undefined);
+        video.src = URL.createObjectURL(file);
+      });
+    }
+    return undefined;
+  }, []);
+
+  // Handle file upload selection
+  const handleFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+
+    // Validate count
+    if (attachments.length + fileArray.length > UPLOAD_CONFIG.MAX_FILES) {
+      alert(`Maximum ${UPLOAD_CONFIG.MAX_FILES} files allowed`);
+      return;
+    }
+
+    setIsUploading(true);
+
+    for (const file of fileArray) {
+      // Validate size
+      if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
+        alert(`${file.name} is too large. Maximum size is 50MB.`);
+        continue;
+      }
+
+      // Validate type
+      const fileType = getFileType(file.type);
+
+      // Create attachment with preview
+      const preview = await generatePreview(file);
+      const attachment: Attachment = {
+        id: crypto.randomUUID(),
+        type: fileType,
+        name: file.name,
+        file,
+        size: file.size,
+        preview,
+        status: 'ready',
+        progress: 100,
+      };
+
+      setAttachments(prev => [...prev, attachment]);
+    }
+
+    setIsUploading(false);
+  }, [attachments.length, getFileType, generatePreview]);
+
+  // Remove attachment
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  // Clear all attachments
+  const clearAttachments = useCallback(() => {
+    setAttachments([]);
+  }, []);
+
+  // Format file size
+  const formatFileSize = useCallback((bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // VOICE RECORDING
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -729,17 +901,51 @@ export default function BuilderPage() {
     builder.reset();
     if (chatMinimized) setChatMinimized(false);
 
-    const userMessage: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content, timestamp: new Date() };
+    // Capture current attachments and clear them
+    const currentAttachments = [...attachments];
+    clearAttachments();
+
+    const userMessage: ChatMessage = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date(),
+      attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
+    };
     const streamingMessage: ChatMessage = { id: `a-${Date.now()}`, role: 'alfred', content: '', timestamp: new Date(), isStreaming: true };
     setMessages(prev => [...prev, userMessage, streamingMessage]);
     setIsStreaming(true);
 
     try {
+      // Convert attachments to base64 for API
+      const attachmentData = await Promise.all(
+        currentAttachments.map(async (attachment) => {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(attachment.file);
+          });
+          return {
+            id: attachment.id,
+            type: attachment.type,
+            name: attachment.name,
+            size: attachment.size,
+            mimeType: attachment.file.type,
+            base64,
+          };
+        })
+      );
+
       console.log('[Builder] 🚀 Sending request to /api/chat in builder mode...');
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, conversationId: conversationId.current, mode: 'builder' }),
+        body: JSON.stringify({
+          message: content,
+          conversationId: conversationId.current,
+          mode: 'builder',
+          attachments: attachmentData.length > 0 ? attachmentData : undefined,
+        }),
       });
 
       // Handle usage limit exceeded
@@ -1175,6 +1381,60 @@ export default function BuilderPage() {
                   </div>
                 )}
 
+                {/* Hidden File Inputs */}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept={UPLOAD_CONFIG.SUPPORTED_TYPES.image.join(',')}
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept={UPLOAD_CONFIG.SUPPORTED_TYPES.video.join(',')}
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={[...UPLOAD_CONFIG.SUPPORTED_TYPES.document, ...UPLOAD_CONFIG.SUPPORTED_TYPES.code].join(',')}
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+
+                {/* File Preview Bar */}
+                {attachments.length > 0 && (
+                  <div className="attachments-preview">
+                    {attachments.map((attachment) => (
+                      <div key={attachment.id} className={`attachment-chip ${attachment.type}`}>
+                        {attachment.preview ? (
+                          <img src={attachment.preview} alt={attachment.name} className="attachment-thumb" />
+                        ) : (
+                          <span className="attachment-icon">
+                            {attachment.type === 'document' && Icons.document}
+                            {attachment.type === 'code' && Icons.code}
+                            {attachment.type === 'video' && Icons.video}
+                          </span>
+                        )}
+                        <span className="attachment-name">{attachment.name}</span>
+                        <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                        <button
+                          className="attachment-remove"
+                          onClick={() => removeAttachment(attachment.id)}
+                          aria-label="Remove attachment"
+                        >
+                          {Icons.x}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Recording UI */}
                 {isRecording ? (
                   <div className="recording-ui">
@@ -1190,6 +1450,33 @@ export default function BuilderPage() {
                   <div className="transcribing"><span>Processing</span><div className="dots"><span /><span /><span /></div></div>
                 ) : (
                   <div className="input-row">
+                    {/* Upload Buttons */}
+                    <div className="upload-buttons">
+                      <button
+                        className="btn-upload"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={isStreaming || isUploading}
+                        title="Add image"
+                      >
+                        {Icons.image}
+                      </button>
+                      <button
+                        className="btn-upload"
+                        onClick={() => videoInputRef.current?.click()}
+                        disabled={isStreaming || isUploading}
+                        title="Add video"
+                      >
+                        {Icons.video}
+                      </button>
+                      <button
+                        className="btn-upload"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isStreaming || isUploading}
+                        title="Add file"
+                      >
+                        {Icons.paperclip}
+                      </button>
+                    </div>
                     {/* Enhance Button */}
                     {inputValue.trim() && !showEnhancer && (
                       <button className="btn-enhance" onClick={() => enhancePrompt(inputValue)} disabled={isEnhancing}>{Icons.sparkle}</button>
@@ -1372,6 +1659,26 @@ export default function BuilderPage() {
         .dots span { width: 4px; height: 4px; background: currentColor; border-radius: 50%; animation: dot 1.3s infinite; }
         .dots span:nth-child(2) { animation-delay: 0.15s; }
         .dots span:nth-child(3) { animation-delay: 0.3s; }
+
+        /* File Upload Styles */
+        .upload-buttons { display: flex; gap: 2px; margin-right: 4px; }
+        .btn-upload { width: 28px; height: 28px; border: none; border-radius: 6px; background: transparent; color: rgba(255,255,255,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
+        .btn-upload:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
+        .btn-upload:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Attachments Preview */
+        .attachments-preview { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; margin-bottom: 8px; }
+        .attachment-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-width: 100%; animation: fadeIn 0.2s ease; }
+        .attachment-chip.image { border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.08); }
+        .attachment-chip.video { border-color: rgba(236,72,153,0.3); background: rgba(236,72,153,0.08); }
+        .attachment-chip.document { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.08); }
+        .attachment-chip.code { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+        .attachment-thumb { width: 32px; height: 32px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .attachment-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); border-radius: 4px; color: rgba(255,255,255,0.6); flex-shrink: 0; }
+        .attachment-name { font-size: 11px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+        .attachment-size { font-size: 10px; color: rgba(255,255,255,0.4); flex-shrink: 0; }
+        .attachment-remove { width: 20px; height: 20px; border: none; border-radius: 4px; background: transparent; color: rgba(255,255,255,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; flex-shrink: 0; }
+        .attachment-remove:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
 
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
