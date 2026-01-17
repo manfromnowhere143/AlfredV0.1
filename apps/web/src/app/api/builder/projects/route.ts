@@ -1,19 +1,22 @@
 /**
  * Builder Projects API
  *
- * GET  - List user's projects
- * POST - Save a new project
+ * Uses existing projects + artifacts tables (same as regular Alfred)
+ * Stores multi-file projects in artifacts with type: 'builder-project'
+ *
+ * GET  - List user's builder projects
+ * POST - Save a new builder project
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db, alfredProjects, alfredProjectFiles, eq, desc, and, isNull, sql } from '@alfred/database';
+import { db, projects, artifacts, eq, desc, and, isNull } from '@alfred/database';
 
 export const maxDuration = 30;
 
 // ============================================================================
-// GET - List Projects
+// GET - List Builder Projects
 // ============================================================================
 
 export async function GET(request: NextRequest) {
@@ -29,27 +32,46 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    // Fetch projects with file count
-    const projects = await db
+    // Fetch all user projects and filter for builder projects (isBuilder: true in metadata)
+    const userProjects = await db
       .select({
-        id: alfredProjects.id,
-        name: alfredProjects.name,
-        description: alfredProjects.description,
-        framework: alfredProjects.framework,
-        fileCount: alfredProjects.fileCount,
-        totalSize: alfredProjects.totalSize,
-        createdAt: alfredProjects.createdAt,
-        updatedAt: alfredProjects.updatedAt,
-        metadata: alfredProjects.metadata,
+        id: projects.id,
+        name: projects.name,
+        description: projects.description,
+        type: projects.type,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+        metadata: projects.metadata,
       })
-      .from(alfredProjects)
-      .where(and(eq(alfredProjects.userId, userId), isNull(alfredProjects.deletedAt)))
-      .orderBy(desc(alfredProjects.updatedAt))
-      .limit(limit);
+      .from(projects)
+      .where(and(
+        eq(projects.userId, userId),
+        isNull(projects.deletedAt)
+      ))
+      .orderBy(desc(projects.updatedAt))
+      .limit(100); // Get more to filter
 
-    console.log(`[Builder] Listed ${projects.length} projects for user ${userId}`);
+    // Filter for builder projects (has isBuilder flag or has files array)
+    const builderProjects = userProjects.filter(p => {
+      const meta = p.metadata as any;
+      return meta?.isBuilder === true || Array.isArray(meta?.files);
+    }).slice(0, limit);
 
-    return NextResponse.json({ projects });
+    // Map to expected format
+    const projectsList = builderProjects.map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      framework: (p.metadata as any)?.framework || 'react',
+      fileCount: (p.metadata as any)?.fileCount || 0,
+      totalSize: (p.metadata as any)?.totalSize || 0,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }));
+
+    console.log(`[Builder] Listed ${projectsList.length} projects for user ${userId}`);
+
+    return NextResponse.json({ projects: projectsList });
   } catch (error) {
     console.error('[Builder] Error listing projects:', error);
     return NextResponse.json({ error: 'Failed to list projects' }, { status: 500 });
@@ -66,7 +88,7 @@ export async function POST(request: NextRequest) {
     const userId = (session?.user as any)?.id;
 
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized - Please sign in' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -80,6 +102,8 @@ export async function POST(request: NextRequest) {
       files = [],
     } = body;
 
+    console.log('[Builder:POST] Saving project:', { name, fileCount: files?.length, framework });
+
     if (!name) {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
     }
@@ -92,48 +116,35 @@ export async function POST(request: NextRequest) {
     const fileCount = files.length;
     const totalSize = files.reduce((sum: number, f: any) => sum + (f.content?.length || 0), 0);
 
-    // Create project
+    // Create project in existing projects table (type='web_app', isBuilder=true in metadata)
     const [project] = await db
-      .insert(alfredProjects)
+      .insert(projects)
       .values({
         userId,
         name,
-        description,
-        framework,
-        entryPoint: entryPoint || files.find((f: any) => f.isEntryPoint)?.path || '/src/main.tsx',
-        dependencies,
-        devDependencies,
-        fileCount,
-        totalSize,
-        lastBuildStatus: 'success',
+        description: description || '',
+        type: 'web_app',
         metadata: {
-          llmModel: 'claude-sonnet-4',
-          tags: [],
-          isPublic: false,
+          isBuilder: true,
+          framework,
+          entryPoint: entryPoint || files.find((f: any) => f.isEntryPoint)?.path || '/src/main.tsx',
+          dependencies,
+          devDependencies,
+          fileCount,
+          totalSize,
+          files: files.map((f: any) => ({
+            path: f.path,
+            name: f.name || f.path.split('/').pop() || 'unknown',
+            content: f.content || '',
+            language: f.language || 'typescript',
+            isEntryPoint: f.isEntryPoint || false,
+          })),
         },
       })
       .returning();
 
     if (!project) {
-      throw new Error('Failed to create project');
-    }
-
-    // Insert files
-    const fileRecords = files.map((file: any) => ({
-      alfredProjectId: project.id,
-      path: file.path,
-      name: file.name || file.path.split('/').pop() || 'unknown',
-      content: file.content || '',
-      language: file.language || 'typescript',
-      fileType: file.fileType || 'component',
-      size: file.content?.length || 0,
-      lineCount: (file.content || '').split('\n').length,
-      isEntryPoint: file.isEntryPoint || false,
-      generatedBy: file.generatedBy || 'llm',
-    }));
-
-    if (fileRecords.length > 0) {
-      await db.insert(alfredProjectFiles).values(fileRecords);
+      throw new Error('Project insert returned empty');
     }
 
     console.log(`[Builder] Saved project: ${project.id} (${fileCount} files, ${totalSize} bytes)`);
@@ -149,6 +160,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Builder] Error saving project:', error);
-    return NextResponse.json({ error: 'Failed to save project' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to save project';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

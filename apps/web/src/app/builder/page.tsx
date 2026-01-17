@@ -427,8 +427,11 @@ export default function BuilderPage() {
         generatedBy: f.generatedBy || 'llm',
       }));
 
+      // Ensure we have a valid project name
+      const projectName = projectMeta.name || builder.projectName || 'Untitled Project';
+
       const payload = {
-        name: projectMeta.name || builder.projectName || 'Untitled Project',
+        name: projectName,
         description: projectMeta.description || '',
         framework: projectMeta.framework || 'react',
         dependencies: projectMeta.dependencies || {},
@@ -440,6 +443,7 @@ export default function BuilderPage() {
         name: payload.name,
         fileCount: files.length,
         totalSize: files.reduce((s, f) => s + (f.content?.length || 0), 0),
+        firstFile: files[0]?.path,
       });
 
       const res = await fetch('/api/builder/projects', {

@@ -1,6 +1,9 @@
 /**
  * Builder Project by ID API
  *
+ * Uses existing projects table (same as regular Alfred)
+ * Files are stored in metadata JSON
+ *
  * GET    - Get project with files
  * PUT    - Update project
  * DELETE - Delete project (soft)
@@ -9,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db, alfredProjects, alfredProjectFiles, eq, and, isNull } from '@alfred/database';
+import { db, projects, eq, and, isNull } from '@alfred/database';
 
 export const maxDuration = 30;
 
@@ -33,11 +36,11 @@ export async function GET(
     // Get project
     const [project] = await db
       .select()
-      .from(alfredProjects)
+      .from(projects)
       .where(and(
-        eq(alfredProjects.id, id),
-        eq(alfredProjects.userId, userId),
-        isNull(alfredProjects.deletedAt)
+        eq(projects.id, id),
+        eq(projects.userId, userId),
+        isNull(projects.deletedAt)
       ))
       .limit(1);
 
@@ -45,14 +48,8 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Get files
-    const files = await db
-      .select()
-      .from(alfredProjectFiles)
-      .where(and(
-        eq(alfredProjectFiles.alfredProjectId, id),
-        isNull(alfredProjectFiles.deletedAt)
-      ));
+    const meta = project.metadata as any || {};
+    const files = meta.files || [];
 
     console.log(`[Builder] Loaded project: ${id} (${files.length} files)`);
 
@@ -61,26 +58,22 @@ export async function GET(
         id: project.id,
         name: project.name,
         description: project.description,
-        framework: project.framework,
-        entryPoint: project.entryPoint,
-        dependencies: project.dependencies,
-        devDependencies: project.devDependencies,
-        fileCount: project.fileCount,
-        totalSize: project.totalSize,
+        framework: meta.framework || 'react',
+        entryPoint: meta.entryPoint || '/src/main.tsx',
+        dependencies: meta.dependencies || {},
+        devDependencies: meta.devDependencies || {},
+        fileCount: meta.fileCount || files.length,
+        totalSize: meta.totalSize || 0,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
       },
-      files: files.map(f => ({
-        id: f.id,
+      files: files.map((f: any, i: number) => ({
+        id: `file-${i}`,
         path: f.path,
-        name: f.name,
-        content: f.content,
-        language: f.language,
-        fileType: f.fileType,
-        size: f.size,
-        lineCount: f.lineCount,
-        isEntryPoint: f.isEntryPoint,
-        generatedBy: f.generatedBy,
+        name: f.name || f.path?.split('/').pop() || 'unknown',
+        content: f.content || '',
+        language: f.language || 'typescript',
+        isEntryPoint: f.isEntryPoint || false,
       })),
     });
   } catch (error) {
@@ -108,12 +101,12 @@ export async function PUT(
 
     // Verify ownership
     const [existing] = await db
-      .select({ id: alfredProjects.id })
-      .from(alfredProjects)
+      .select()
+      .from(projects)
       .where(and(
-        eq(alfredProjects.id, id),
-        eq(alfredProjects.userId, userId),
-        isNull(alfredProjects.deletedAt)
+        eq(projects.id, id),
+        eq(projects.userId, userId),
+        isNull(projects.deletedAt)
       ))
       .limit(1);
 
@@ -122,44 +115,37 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, description, files } = body;
+    const { name, description, framework, files, dependencies, devDependencies } = body;
 
-    // Update project metadata
+    const existingMeta = existing.metadata as any || {};
+
+    // Update project with new files in metadata
+    const fileCount = files?.length || existingMeta.fileCount || 0;
+    const totalSize = files?.reduce((sum: number, f: any) => sum + (f.content?.length || 0), 0) || existingMeta.totalSize || 0;
+
     await db
-      .update(alfredProjects)
+      .update(projects)
       .set({
-        name: name || undefined,
-        description: description || undefined,
-        fileCount: files?.length,
-        totalSize: files?.reduce((sum: number, f: any) => sum + (f.content?.length || 0), 0),
+        name: name || existing.name,
+        description: description !== undefined ? description : existing.description,
+        metadata: {
+          ...existingMeta,
+          framework: framework || existingMeta.framework || 'react',
+          dependencies: dependencies || existingMeta.dependencies || {},
+          devDependencies: devDependencies || existingMeta.devDependencies || {},
+          fileCount,
+          totalSize,
+          files: files ? files.map((f: any) => ({
+            path: f.path,
+            name: f.name || f.path?.split('/').pop() || 'unknown',
+            content: f.content || '',
+            language: f.language || 'typescript',
+            isEntryPoint: f.isEntryPoint || false,
+          })) : existingMeta.files,
+        },
         updatedAt: new Date(),
       })
-      .where(eq(alfredProjects.id, id));
-
-    // If files provided, replace all files
-    if (files && files.length > 0) {
-      // Soft delete existing files
-      await db
-        .update(alfredProjectFiles)
-        .set({ deletedAt: new Date() })
-        .where(eq(alfredProjectFiles.alfredProjectId, id));
-
-      // Insert new files
-      const fileRecords = files.map((file: any) => ({
-        alfredProjectId: id,
-        path: file.path,
-        name: file.name || file.path.split('/').pop() || 'unknown',
-        content: file.content || '',
-        language: file.language || 'typescript',
-        fileType: file.fileType || 'component',
-        size: file.content?.length || 0,
-        lineCount: (file.content || '').split('\n').length,
-        isEntryPoint: file.isEntryPoint || false,
-        generatedBy: file.generatedBy || 'user',
-      }));
-
-      await db.insert(alfredProjectFiles).values(fileRecords);
-    }
+      .where(eq(projects.id, id));
 
     console.log(`[Builder] Updated project: ${id}`);
 
@@ -188,13 +174,13 @@ export async function DELETE(
     }
 
     // Verify ownership and soft delete
-    const result = await db
-      .update(alfredProjects)
+    await db
+      .update(projects)
       .set({ deletedAt: new Date() })
       .where(and(
-        eq(alfredProjects.id, id),
-        eq(alfredProjects.userId, userId),
-        isNull(alfredProjects.deletedAt)
+        eq(projects.id, id),
+        eq(projects.userId, userId),
+        isNull(projects.deletedAt)
       ));
 
     console.log(`[Builder] Deleted project: ${id}`);
