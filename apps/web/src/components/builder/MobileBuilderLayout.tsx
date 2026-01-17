@@ -2491,17 +2491,47 @@ function MobileChat({
             </div>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className={`message ${msg.role}`}>
-              <div className="message-avatar">
-                {msg.role === 'user' ? 'Y' : Icons.alfred}
-              </div>
-              <div className="message-body">
-                <div className="message-header">
-                  <span className="message-sender">{msg.role === 'user' ? 'You' : 'Alfred'}</span>
-                  <span className="message-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <>
+            {messages.map((msg) => (
+              <div key={msg.id} className={`message ${msg.role}`}>
+                <div className="message-avatar">
+                  {msg.role === 'user' ? 'Y' : Icons.alfred}
                 </div>
-                {msg.isStreaming ? (
+                <div className="message-body">
+                  <div className="message-header">
+                    <span className="message-sender">{msg.role === 'user' ? 'You' : 'Alfred'}</span>
+                    <span className="message-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  {msg.isStreaming ? (
+                    <div className="streaming-indicator">
+                      {streamingSteps.map((step) => (
+                        <div key={step.id} className={`step ${step.status}`}>
+                          <span className="step-icon">
+                            {step.status === 'active' ? <div className="spinner" /> : Icons.check}
+                          </span>
+                          <span className="step-name">{step.name}</span>
+                        </div>
+                      ))}
+                      <div className="typing-dots"><span /><span /><span /></div>
+                    </div>
+                  ) : (
+                    <div className="message-content">{msg.content}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Streaming Progress - Shows when streaming but no streaming message visible */}
+            {isStreaming && streamingSteps.length > 0 && !messages.some(m => m.isStreaming) && (
+              <div className="message alfred streaming-progress">
+                <div className="message-avatar">
+                  {Icons.alfred}
+                </div>
+                <div className="message-body">
+                  <div className="message-header">
+                    <span className="message-sender">Alfred</span>
+                    <span className="message-time">now</span>
+                  </div>
                   <div className="streaming-indicator">
                     {streamingSteps.map((step) => (
                       <div key={step.id} className={`step ${step.status}`}>
@@ -2513,12 +2543,33 @@ function MobileChat({
                     ))}
                     <div className="typing-dots"><span /><span /><span /></div>
                   </div>
-                ) : (
-                  <div className="message-content">{msg.content}</div>
-                )}
+                </div>
               </div>
-            </div>
-          ))
+            )}
+
+            {/* Thinking Indicator - Shows when streaming but no steps yet */}
+            {isStreaming && streamingSteps.length === 0 && !messages.some(m => m.isStreaming) && (
+              <div className="message alfred thinking-indicator">
+                <div className="message-avatar">
+                  {Icons.alfred}
+                </div>
+                <div className="message-body">
+                  <div className="message-header">
+                    <span className="message-sender">Alfred</span>
+                    <span className="message-time">now</span>
+                  </div>
+                  <div className="thinking-content">
+                    <div className="thinking-orb">
+                      <div className="orb-core" />
+                      <div className="orb-ring r1" />
+                      <div className="orb-ring r2" />
+                    </div>
+                    <span>Thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
       {/* Input Area - Desktop Identical */}
@@ -2851,6 +2902,64 @@ function MobileChat({
         .typing-dots span:nth-child(2) { animation-delay: 0.16s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.32s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        /* Thinking Indicator - Professional Loading State */
+        .thinking-content {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 16px;
+          background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(99,102,241,0.05));
+          border: 1px solid rgba(139,92,246,0.12);
+          border-radius: 12px;
+        }
+        .thinking-orb {
+          position: relative;
+          width: 36px;
+          height: 36px;
+        }
+        .thinking-orb .orb-core {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 14px;
+          height: 14px;
+          background: linear-gradient(135deg, #8b5cf6, #6366f1);
+          border-radius: 50%;
+          box-shadow: 0 0 20px rgba(139,92,246,0.5);
+        }
+        .thinking-orb .orb-ring {
+          position: absolute;
+          inset: 0;
+          border: 1.5px solid #8b5cf6;
+          border-radius: 50%;
+          animation: thinkPulse 2s ease-in-out infinite;
+        }
+        .thinking-orb .orb-ring.r1 { animation-delay: 0s; }
+        .thinking-orb .orb-ring.r2 { animation-delay: -1s; opacity: 0.5; }
+        @keyframes thinkPulse {
+          0%, 100% { transform: scale(1); opacity: 0.6; }
+          50% { transform: scale(1.2); opacity: 0.2; }
+        }
+        .thinking-content span {
+          font-size: 14px;
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+          animation: textPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes textPulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+
+        /* Streaming Progress Animation */
+        .streaming-progress, .thinking-indicator {
+          animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
 
         /* Desktop-Identical Chat Input Area */
         .chat-input-area {
