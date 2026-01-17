@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { DomainSearch } from './DomainSearch';
 
 interface BuilderFile {
   path: string;
@@ -280,30 +281,19 @@ export function BuilderDeploymentCard({
                     <circle cx="12" cy="12" r="10" />
                     <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
                   </svg>
-                  <span>Use Custom Domain</span>
+                  <span>Custom Domain</span>
                   <span className="coming-soon">PRO</span>
                 </button>
 
                 {useCustomDomain && (
                   <div className="custom-domain-input">
-                    <div className="input-wrapper domain">
-                      <input
-                        type="text"
-                        value={customDomain}
-                        onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, ''))}
-                        placeholder="mysite.com"
-                      />
-                    </div>
-                    <div className="dns-info">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M12 16v-4M12 8h.01"/>
-                      </svg>
-                      <div className="dns-steps">
-                        <span><strong>After deploying:</strong> Go to your domain provider and add:</span>
-                        <code>CNAME → cname.vercel-dns.com</code>
-                      </div>
-                    </div>
+                    <DomainSearch
+                      onDomainSelect={(domain, isPurchased) => {
+                        setCustomDomain(domain);
+                        // If purchased, domain is already configured
+                        // If BYOD, user needs to configure DNS
+                      }}
+                    />
                   </div>
                 )}
               </div>
