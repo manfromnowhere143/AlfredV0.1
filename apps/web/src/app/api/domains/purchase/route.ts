@@ -68,14 +68,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Domains] Purchasing: ${domain} for user ${userId}`);
 
-    // Step 1: Purchase the domain using new Vercel Registrar API (v1)
+    // Step 1: Purchase the domain using Vercel Registrar API v1
+    // Endpoint: POST /v1/registrar/domains/{domain}/buy
+    // Note: Full purchase requires contactInformation - for now, return instructions
+    // This is a placeholder - full implementation needs user contact info form
     const purchaseRes = await vercelRequest(
-      '/v1/registrar/domains/buy',
+      `/v1/registrar/domains/${encodeURIComponent(domain.toLowerCase())}/buy`,
       {
         method: 'POST',
         body: {
-          name: domain.toLowerCase(),
-          // Expected payment method to be pre-configured in Vercel
+          autoRenew: true,
+          years: 1,
+          expectedPrice: 0, // This should come from pricing API
+          // contactInformation would be required for actual purchase
         },
       },
       vercelToken,

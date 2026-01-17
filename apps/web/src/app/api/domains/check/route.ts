@@ -66,9 +66,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Vercel not configured' }, { status: 500 });
     }
 
-    // Check domain availability using new Vercel Registrar API (v1)
+    // Check domain availability using Vercel Registrar API v1
+    // Endpoint: GET /v1/registrar/domains/{domain}/availability
     const statusRes = await vercelRequest(
-      `/v1/domains-registrar/availability?name=${encodeURIComponent(domain)}`,
+      `/v1/registrar/domains/${encodeURIComponent(domain)}/availability`,
       'GET',
       vercelToken,
       teamId
@@ -87,13 +88,14 @@ export async function GET(request: NextRequest) {
     const statusData = await statusRes.json();
     const isAvailable = statusData.available === true;
 
-    // If available, get pricing using new Registrar API
+    // If available, get pricing using Registrar API
+    // Endpoint: GET /v1/registrar/domains/{domain}/price
     let price: number | undefined;
     let period: number | undefined;
 
     if (isAvailable) {
       const priceRes = await vercelRequest(
-        `/v1/domains-registrar/pricing?name=${encodeURIComponent(domain)}`,
+        `/v1/registrar/domains/${encodeURIComponent(domain)}/price`,
         'GET',
         vercelToken,
         teamId
@@ -101,7 +103,7 @@ export async function GET(request: NextRequest) {
 
       if (priceRes.ok) {
         const priceData = await priceRes.json();
-        // New API returns pricing object with registration, renewal, transfer prices
+        // API returns pricing object with registration, renewal, transfer prices
         price = priceData.registration?.price || priceData.price;
         period = priceData.registration?.period || priceData.period || 1;
       }
