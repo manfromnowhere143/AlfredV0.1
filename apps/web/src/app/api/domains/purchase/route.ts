@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Domains] Purchasing: ${domain} for user ${userId}`);
 
-    // Step 1: Purchase the domain
+    // Step 1: Purchase the domain using new Vercel Registrar API (v1)
     const purchaseRes = await vercelRequest(
-      '/v6/domains/buy',
+      '/v1/registrar/domains/buy',
       {
         method: 'POST',
         body: {

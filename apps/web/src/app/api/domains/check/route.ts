@@ -66,9 +66,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Vercel not configured' }, { status: 500 });
     }
 
-    // Check domain availability
+    // Check domain availability using new Vercel Registrar API (v1)
     const statusRes = await vercelRequest(
-      `/v4/domains/status?name=${encodeURIComponent(domain)}`,
+      `/v1/domains-registrar/availability?name=${encodeURIComponent(domain)}`,
       'GET',
       vercelToken,
       teamId
@@ -76,9 +76,9 @@ export async function GET(request: NextRequest) {
 
     if (!statusRes.ok) {
       const errorData = await statusRes.json().catch(() => ({}));
-      console.error('[Domains] Status check failed:', statusRes.status, errorData);
+      console.error('[Domains] Availability check failed:', statusRes.status, errorData);
       return NextResponse.json({
-        error: 'Failed to check domain status',
+        error: errorData.error?.message || 'Failed to check domain availability',
         available: false,
         domain
       }, { status: 500 });
@@ -87,13 +87,13 @@ export async function GET(request: NextRequest) {
     const statusData = await statusRes.json();
     const isAvailable = statusData.available === true;
 
-    // If available, get pricing
+    // If available, get pricing using new Registrar API
     let price: number | undefined;
     let period: number | undefined;
 
     if (isAvailable) {
       const priceRes = await vercelRequest(
-        `/v4/domains/price?name=${encodeURIComponent(domain)}`,
+        `/v1/domains-registrar/pricing?name=${encodeURIComponent(domain)}`,
         'GET',
         vercelToken,
         teamId
@@ -101,8 +101,9 @@ export async function GET(request: NextRequest) {
 
       if (priceRes.ok) {
         const priceData = await priceRes.json();
-        price = priceData.price;
-        period = priceData.period || 1;
+        // New API returns pricing object with registration, renewal, transfer prices
+        price = priceData.registration?.price || priceData.price;
+        period = priceData.registration?.period || priceData.period || 1;
       }
     }
 
