@@ -28,6 +28,7 @@ export interface BuilderPreviewProps {
   onRebuild?: () => void;
   className?: string;
   showLoading?: boolean;
+  bgColor?: string;
 }
 
 type DeviceType = 'desktop' | 'tablet' | 'mobile';
@@ -812,6 +813,7 @@ export function BuilderPreview({
   onRebuild,
   className = '',
   showLoading = true,
+  bgColor: externalBgColor,
 }: BuilderPreviewProps) {
   // DEBUG: Log state on every render to diagnose stuck states
   console.log('[BuilderPreview] 🔍 Render:', {
@@ -831,7 +833,9 @@ export function BuilderPreview({
   const [refreshKey, setRefreshKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [bgColor, setBgColor] = useState('#0a0a0c');
+  const [internalBgColor, setInternalBgColor] = useState('#0a0a0c');
+  const bgColor = externalBgColor || internalBgColor;
+  const setBgColor = setInternalBgColor;
 
   // Auto-retry on build failure
   useEffect(() => {

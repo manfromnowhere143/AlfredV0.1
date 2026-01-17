@@ -269,6 +269,18 @@ export default function BuilderPage() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
+  // Preview background color - State of the Art
+  const [previewBgColor, setPreviewBgColor] = useState('#0a0a0c');
+  const [showBgColorPicker, setShowBgColorPicker] = useState(false);
+  const bgColors = [
+    { id: 'dark', color: '#0a0a0c', label: 'Dark' },
+    { id: 'darker', color: '#050506', label: 'Darker' },
+    { id: 'light', color: '#f8f9fa', label: 'Light' },
+    { id: 'white', color: '#ffffff', label: 'White' },
+    { id: 'purple', color: '#1a1025', label: 'Purple' },
+    { id: 'blue', color: '#0a1628', label: 'Blue' },
+  ];
+
   // Alfred Code - Smart Modification Mode (Steve Jobs approach)
   const [modificationPlan, setModificationPlan] = useState<ModificationPlan | null>(null);
   const [forensicReport, setForensicReport] = useState<ForensicReport | null>(null);
@@ -1344,6 +1356,35 @@ export default function BuilderPage() {
         </div>
         <div className="header-center"><ViewToggle mode={viewMode} onModeChange={setViewMode} /></div>
         <div className="header-right">
+          {/* Background Color Picker */}
+          <div className="bg-color-picker">
+            <button
+              className={`header-btn color-picker-btn ${showBgColorPicker ? 'active' : ''}`}
+              onClick={() => setShowBgColorPicker(!showBgColorPicker)}
+              title="Preview Background"
+            >
+              <div className="color-swatch-preview" style={{ background: previewBgColor }} />
+              <span>Background</span>
+            </button>
+            {showBgColorPicker && (
+              <div className="color-dropdown">
+                <div className="color-dropdown-title">Preview Background</div>
+                <div className="color-options">
+                  {bgColors.map((c) => (
+                    <button
+                      key={c.id}
+                      className={`color-option ${previewBgColor === c.color ? 'active' : ''}`}
+                      onClick={() => { setPreviewBgColor(c.color); setShowBgColorPicker(false); }}
+                      title={c.label}
+                    >
+                      <div className="color-dot" style={{ background: c.color }} />
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <button
             className="header-btn"
             onClick={saveProject}
@@ -1482,6 +1523,7 @@ export default function BuilderPage() {
                 isBuilding={isStreaming || builder.isBuilding}
                 onConsole={() => {}}
                 onRebuild={() => builder.rebuild?.(builder.files)}
+                bgColor={previewBgColor}
               />
             </div>
           )}
@@ -1779,6 +1821,19 @@ export default function BuilderPage() {
         .header-btn svg { flex-shrink: 0; }
         .header-btn.primary { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: rgba(139,92,246,0.5); color: white; }
         .header-btn.primary:hover { background: linear-gradient(135deg, #9b6cf6, #7376f1); border-color: rgba(139,92,246,0.7); box-shadow: 0 4px 16px rgba(139,92,246,0.3); transform: translateY(-1px); }
+        /* Background Color Picker - State of the Art */
+        .bg-color-picker { position: relative; }
+        .color-picker-btn { gap: 8px !important; }
+        .color-picker-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); }
+        .color-swatch-preview { width: 16px; height: 16px; border-radius: 4px; border: 2px solid rgba(255,255,255,0.2); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); }
+        .color-dropdown { position: absolute; top: calc(100% + 8px); right: 0; padding: 12px; background: #18181b; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 1000; min-width: 160px; animation: dropdownIn 0.15s ease; }
+        @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .color-dropdown-title { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+        .color-options { display: flex; flex-direction: column; gap: 4px; }
+        .color-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 500; }
+        .color-option:hover { background: rgba(255,255,255,0.05); }
+        .color-option.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.3); color: white; }
+        .color-dot { width: 20px; height: 20px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         /* Live Site Badge - State of the Art */
         .live-site-badge { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(16,185,129,0.05)); border: 1px solid rgba(34,197,94,0.25); border-radius: 10px; text-decoration: none; transition: all 0.2s ease; cursor: pointer; }
         .live-site-badge:hover { background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(16,185,129,0.1)); border-color: rgba(34,197,94,0.4); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34,197,94,0.2); }
