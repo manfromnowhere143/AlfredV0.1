@@ -337,6 +337,105 @@ function getModificationSuggestions(project: ProjectInfo): Suggestion[] {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STYLES - Inline for framer-motion compatibility
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const styles = {
+  panel: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 24px',
+    textAlign: 'center' as const,
+  },
+  header: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    marginBottom: '32px',
+  },
+  orb: {
+    position: 'relative' as const,
+    width: '64px',
+    height: '64px',
+    marginBottom: '20px',
+  },
+  orbGradient: {
+    position: 'absolute' as const,
+    inset: 0,
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)',
+  },
+  orbGlow: {
+    position: 'absolute' as const,
+    inset: '-8px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    filter: 'blur(20px)',
+    opacity: 0.4,
+  },
+  title: {
+    margin: '0 0 8px',
+    fontSize: '20px',
+    fontWeight: 600,
+    color: 'rgba(255, 255, 255, 0.95)',
+    lineHeight: 1.3,
+    maxWidth: '320px',
+  },
+  subtitle: {
+    margin: 0,
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '10px',
+    maxWidth: '480px',
+    width: '100%',
+  },
+  card: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '10px',
+    padding: '16px 12px',
+    background: 'rgba(255, 255, 255, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  cardDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+  icon: {
+    width: '44px',
+    height: '44px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '12px',
+    color: 'white',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+  },
+  label: {
+    fontSize: '11px',
+    fontWeight: 500,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center' as const,
+    lineHeight: 1.3,
+  },
+  hint: {
+    marginTop: '24px',
+    fontSize: '11px',
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -361,11 +460,11 @@ export function WelcomePanel({
     : 'Describe your vision and Alfred will bring it to life.';
 
   return (
-    <div className="welcome-panel">
+    <div style={styles.panel}>
       {/* Header */}
-      <div className="welcome-header">
+      <div style={styles.header}>
         <motion.div
-          className="welcome-orb"
+          style={styles.orb}
           animate={{
             scale: [1, 1.1, 1],
             opacity: [0.8, 1, 0.8],
@@ -376,172 +475,54 @@ export function WelcomePanel({
             ease: 'easeInOut',
           }}
         >
-          <div className="orb-gradient" />
-          <div className="orb-glow" />
+          <div style={styles.orbGradient} />
+          <div style={styles.orbGlow} />
         </motion.div>
 
-        <h2 className="welcome-title">{title}</h2>
-        <p className="welcome-subtitle">{subtitle}</p>
+        <h2 style={styles.title}>{title}</h2>
+        <p style={styles.subtitle}>{subtitle}</p>
       </div>
 
       {/* Suggestions */}
-      <div className="suggestions-grid">
+      <div style={styles.grid}>
         {suggestions.map((suggestion, index) => (
           <motion.button
             key={suggestion.label}
-            className="suggestion-card"
+            style={{
+              ...styles.card,
+              ...(isProcessing ? styles.cardDisabled : {}),
+            }}
             onClick={() => !isProcessing && onSuggestionClick(suggestion.prompt)}
             disabled={isProcessing}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={!isProcessing ? {
+              scale: 1.03,
+              y: -3,
+              background: 'rgba(255, 255, 255, 0.06)',
+              borderColor: 'rgba(255, 255, 255, 0.12)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+            } : undefined}
+            whileTap={!isProcessing ? { scale: 0.97 } : undefined}
           >
             <div
-              className="suggestion-icon"
-              style={{ background: suggestion.gradient }}
+              style={{
+                ...styles.icon,
+                background: suggestion.gradient,
+              }}
             >
               {suggestion.icon}
             </div>
-            <span className="suggestion-label">{suggestion.label}</span>
+            <span style={styles.label}>{suggestion.label}</span>
           </motion.button>
         ))}
       </div>
 
       {/* Custom prompt hint */}
-      <p className="custom-hint">
+      <p style={styles.hint}>
         Or type your own idea below...
       </p>
-
-      <style jsx>{`
-        .welcome-panel {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 40px 24px;
-          text-align: center;
-        }
-
-        .welcome-header {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin-bottom: 32px;
-        }
-
-        .welcome-orb {
-          position: relative;
-          width: 64px;
-          height: 64px;
-          margin-bottom: 20px;
-        }
-
-        .orb-gradient {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
-          animation: rotate 8s linear infinite;
-        }
-
-        .orb-glow {
-          position: absolute;
-          inset: -8px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
-          filter: blur(20px);
-          opacity: 0.4;
-        }
-
-        @keyframes rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .welcome-title {
-          margin: 0 0 8px;
-          font-size: 20px;
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.95);
-          line-height: 1.3;
-          max-width: 320px;
-        }
-
-        .welcome-subtitle {
-          margin: 0;
-          font-size: 13px;
-          color: rgba(255, 255, 255, 0.5);
-        }
-
-        .suggestions-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-          max-width: 440px;
-          width: 100%;
-        }
-
-        @media (max-width: 480px) {
-          .suggestions-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-
-        .suggestions-grid.modifications {
-          grid-template-columns: repeat(4, 1fr);
-        }
-
-        .suggestion-card {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          padding: 16px 12px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 12px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .suggestion-card:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.06);
-          border-color: rgba(255, 255, 255, 0.1);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-        }
-
-        .suggestion-card:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .suggestion-icon {
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 10px;
-          color: white;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .suggestion-label {
-          font-size: 11px;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.8);
-          text-align: center;
-          line-height: 1.3;
-        }
-
-        .custom-hint {
-          margin-top: 24px;
-          font-size: 11px;
-          color: rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
     </div>
   );
 }
