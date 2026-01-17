@@ -287,13 +287,32 @@ export function BuilderDeploymentCard({
 
                 {useCustomDomain && (
                   <div className="custom-domain-input">
-                    <DomainSearch
-                      onDomainSelect={(domain, isPurchased) => {
-                        setCustomDomain(domain);
-                        // If purchased, domain is already configured
-                        // If BYOD, user needs to configure DNS
-                      }}
-                    />
+                    {customDomain ? (
+                      /* Show selected domain */
+                      <div className="selected-domain">
+                        <div className="selected-domain-info">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                          </svg>
+                          <span className="domain-text">{customDomain}</span>
+                          <span className="domain-badge">Ready</span>
+                        </div>
+                        <button
+                          className="change-domain-btn"
+                          onClick={() => setCustomDomain('')}
+                          type="button"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    ) : (
+                      <DomainSearch
+                        onDomainSelect={(domain, isPurchased) => {
+                          setCustomDomain(domain);
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -380,6 +399,13 @@ export function BuilderDeploymentCard({
         .dns-steps { display: flex; flex-direction: column; gap: 6px; }
         .dns-steps span { line-height: 1.4; }
         .dns-steps code { display: block; margin-top: 4px; font-size: 12px; }
+        .selected-domain { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; }
+        .selected-domain-info { display: flex; align-items: center; gap: 10px; color: var(--success-color); }
+        .selected-domain-info svg { opacity: 0.8; }
+        .domain-text { font-size: 14px; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; color: var(--text); }
+        .domain-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 3px 8px; background: var(--success-color); color: white; border-radius: 4px; }
+        .change-domain-btn { padding: 8px 14px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+        .change-domain-btn:hover { border-color: var(--text-secondary); color: var(--text); }
         .info-section { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
         .info-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
         .info-item svg { opacity: 0.5; }

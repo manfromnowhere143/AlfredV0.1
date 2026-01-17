@@ -278,16 +278,26 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
                   <span className="suggestion-domain">{s.domain}</span>
                   {s.price ? (
                     <button
+                      type="button"
                       className="suggestion-btn"
-                      onClick={() => handlePurchase(s.domain)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handlePurchase(s.domain);
+                      }}
                       disabled={isPurchasing}
                     >
                       ${s.price}/yr
                     </button>
                   ) : (
                     <button
+                      type="button"
                       className="suggestion-btn"
-                      onClick={() => onDomainSelect(s.domain, false)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDomainSelect(s.domain, false);
+                      }}
                     >
                       Use
                     </button>
@@ -605,10 +615,18 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
           font-weight: 600;
           cursor: pointer;
           transition: all 0.15s;
+          position: relative;
+          z-index: 10;
+          flex-shrink: 0;
         }
 
         .suggestion-btn:hover {
           background: rgba(16,185,129,0.2);
+          transform: scale(1.02);
+        }
+
+        .suggestion-btn:active {
+          transform: scale(0.98);
         }
 
         .error-message {
