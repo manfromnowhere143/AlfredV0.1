@@ -910,7 +910,7 @@ export default function BuilderPage() {
               ) : builder.selectedFile ? (
                 <>
                   <div className="editor-tabs"><div className="tab active"><span>{builder.selectedFile.name}</span></div></div>
-                  <div className="editor-content"><MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} path={builder.selectedFile.path} onChange={handleEditorChange} theme="dark" /></div>
+                  <div className="editor-content"><MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} onChange={handleEditorChange} theme="dark" /></div>
                 </>
               ) : (
                 <div className="editor-empty">{Icons.file}<span>Select a file to edit</span></div>

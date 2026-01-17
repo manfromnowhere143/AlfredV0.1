@@ -321,7 +321,7 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       return result;
     } catch (error) {
       console.error('[useBuilder] ❌ Rebuild failed:', error);
-      return {
+      const errorResult = {
         success: false,
         errors: [{
           line: 0,
@@ -330,6 +330,9 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
           severity: 'error' as const,
         }],
       };
+      // CRITICAL: Also set error result to state so UI updates
+      setPreviewResult(errorResult);
+      return errorResult;
     } finally {
       // Always reset isBuilding, even if rebuild throws
       rebuildInProgressRef.current = false;

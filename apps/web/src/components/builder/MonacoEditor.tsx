@@ -353,6 +353,9 @@ export const MonacoEditor = memo(function MonacoEditor({
         .editor-wrapper {
           flex: 1;
           min-height: 0;
+          height: 0; /* Force flex to calculate height properly */
+          position: relative;
+          overflow: hidden;
         }
 
         .editor-loading {
