@@ -22,6 +22,7 @@ import { useDeviceType } from '@/hooks/useDeviceType';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
 import { DeploymentCard } from '@/components/DeploymentCard';
+import MessageAttachments from '@/components/MessageAttachments';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
 
 const MonacoEditor = nextDynamic(
@@ -179,24 +180,19 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
           <span className="message-role">{message.role === 'user' ? 'You' : 'Alfred'}</span>
           <span className="message-time">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
-        {/* Show attachments for user messages */}
+        {/* Show attachments for user messages using MessageAttachments component */}
         {message.attachments && message.attachments.length > 0 && (
-          <div className="message-attachments">
-            {message.attachments.map((att) => (
-              <div key={att.id} className={`msg-attachment ${att.type}`}>
-                {att.preview ? (
-                  <img src={att.preview} alt={att.name} className="msg-attachment-thumb" />
-                ) : (
-                  <span className="msg-attachment-icon">
-                    {att.type === 'document' && Icons.document}
-                    {att.type === 'code' && Icons.code}
-                    {att.type === 'video' && Icons.video}
-                  </span>
-                )}
-                <span className="msg-attachment-name">{att.name}</span>
-              </div>
-            ))}
-          </div>
+          <MessageAttachments
+            attachments={message.attachments.map(att => ({
+              id: att.id,
+              type: att.type,
+              name: att.name,
+              size: att.size,
+              url: att.url,
+              preview: att.preview,
+            }))}
+            isUser={message.role === 'user'}
+          />
         )}
         {message.isStreaming ? (
           <>
@@ -218,15 +214,6 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
         .message-role { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
         .message-time { font-size: 9px; color: rgba(255, 255, 255, 0.3); }
         .message-content { font-size: 13px; line-height: 1.6; color: rgba(255, 255, 255, 0.8); }
-        .message-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-        .msg-attachment { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 11px; }
-        .msg-attachment.image { border-color: rgba(139,92,246,0.3); }
-        .msg-attachment.video { border-color: rgba(236,72,153,0.3); }
-        .msg-attachment.document { border-color: rgba(59,130,246,0.3); }
-        .msg-attachment.code { border-color: rgba(34,197,94,0.3); }
-        .msg-attachment-thumb { width: 24px; height: 24px; border-radius: 3px; object-fit: cover; }
-        .msg-attachment-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); }
-        .msg-attachment-name { color: rgba(255,255,255,0.7); max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .typing { display: flex; gap: 3px; padding: 6px 0; }
         .typing span { width: 6px; height: 6px; background: #8b5cf6; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
         .typing span:nth-child(1) { animation-delay: -0.32s; }
