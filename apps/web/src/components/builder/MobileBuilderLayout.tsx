@@ -385,6 +385,106 @@ const Icons = {
       <line x1="3" y1="21" x2="10" y2="14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // TEMPLATE ICONS — Beautiful icons for quick start suggestions
+  // ═══════════════════════════════════════════════════════════════════════════════
+  templateDashboard: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+      <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+      <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+      <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+    </svg>
+  ),
+  templateEcommerce: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="9" cy="21" r="1"/>
+      <circle cx="20" cy="21" r="1"/>
+      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>
+    </svg>
+  ),
+  templateSaas: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+      <path d="M16 3.13a4 4 0 010 7.75"/>
+    </svg>
+  ),
+  templateAI: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </svg>
+  ),
+  templatePortfolio: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+    </svg>
+  ),
+  templateLiveData: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg>
+  ),
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // MODIFICATION ICONS — Icons for quick modification suggestions
+  // ═══════════════════════════════════════════════════════════════════════════════
+  modColors: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/>
+      <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor"/>
+      <circle cx="12" cy="7.5" r="1.5" fill="currentColor"/>
+      <circle cx="16.5" cy="10.5" r="1.5" fill="currentColor"/>
+    </svg>
+  ),
+  modFonts: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <polyline points="4 7 4 4 20 4 20 7"/>
+      <line x1="9" y1="20" x2="15" y2="20"/>
+      <line x1="12" y1="4" x2="12" y2="20"/>
+    </svg>
+  ),
+  modNav: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+    </svg>
+  ),
+  modButtons: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="8" width="18" height="8" rx="4"/>
+      <circle cx="12" cy="12" r="1" fill="currentColor"/>
+    </svg>
+  ),
+  modLayout: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <line x1="3" y1="9" x2="21" y2="9"/>
+      <line x1="9" y1="21" x2="9" y2="9"/>
+    </svg>
+  ),
+  modAnimate: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" fillOpacity="0.2"/>
+    </svg>
+  ),
+  modImages: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+  ),
+  modDark: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+    </svg>
+  ),
 };
 
 // File type icons
@@ -704,7 +804,7 @@ function BottomNavigation({
           transform: translateX(-50%);
           width: 200px;
           height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), transparent);
+          background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
         }
 
         .nav-content {
@@ -735,7 +835,7 @@ function BottomNavigation({
         }
 
         .nav-item.active {
-          background: rgba(245, 158, 11, 0.1);
+          background: rgba(139, 92, 246, 0.1);
         }
 
         .nav-item:active {
@@ -755,7 +855,7 @@ function BottomNavigation({
         }
 
         .nav-item.active .nav-icon {
-          color: #f59e0b;
+          color: #a78bfa;
           transform: translateY(-2px);
         }
 
@@ -799,7 +899,7 @@ function BottomNavigation({
         }
 
         .nav-item.active .nav-label {
-          color: #f59e0b;
+          color: #a78bfa;
         }
 
         .active-glow {
@@ -809,9 +909,9 @@ function BottomNavigation({
           transform: translateX(-50%);
           width: 24px;
           height: 3px;
-          background: linear-gradient(90deg, #f59e0b, #fbbf24);
+          background: linear-gradient(90deg, #8b5cf6, #a78bfa);
           border-radius: 2px;
-          box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
         }
       `}</style>
     </nav>
@@ -2320,8 +2420,75 @@ function MobileChat({
               <div className="icon-glow" />
               {Icons.alfred}
             </div>
-            <h3>What would you like to build?</h3>
-            <p>Describe your idea and Alfred will generate the code.</p>
+            <h3>{hasFiles ? 'What would you like to modify?' : 'What would you like to build?'}</h3>
+            <p>{hasFiles ? 'Choose a quick action or describe your changes' : 'Tap a template or describe your vision'}</p>
+
+            {/* Template/Modification Grid */}
+            <div className="suggestion-grid">
+              {hasFiles ? (
+                <>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Change the color scheme to use darker tones with purple accents')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' }}>{Icons.modColors}</div>
+                    <span>Colors</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Update typography with Inter font and better spacing')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>{Icons.modFonts}</div>
+                    <span>Fonts</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Add a navigation bar with smooth hover effects')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>{Icons.modNav}</div>
+                    <span>Nav</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Style buttons with gradients and hover animations')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>{Icons.modButtons}</div>
+                    <span>Buttons</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Improve the layout spacing and visual balance')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#f472b6' }}>{Icons.modLayout}</div>
+                    <span>Layout</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Add smooth fade-in and transition animations')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185' }}>{Icons.modAnimate}</div>
+                    <span>Animate</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Add a hero image to enhance the design')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf' }}>{Icons.modImages}</div>
+                    <span>Images</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Add dark mode toggle functionality')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>{Icons.modDark}</div>
+                    <span>Dark</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Build an analytics dashboard with charts, KPI cards, and dark theme')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>{Icons.templateDashboard}</div>
+                    <span>Dashboard</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Create a modern e-commerce storefront with product grid and cart')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>{Icons.templateEcommerce}</div>
+                    <span>E-commerce</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Design a premium SaaS landing page with hero, pricing, and testimonials')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>{Icons.templateSaas}</div>
+                    <span>SaaS Page</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Build a ChatGPT-style chat interface with message bubbles and dark theme')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#f472b6' }}>{Icons.templateAI}</div>
+                    <span>AI Chat</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Create a stunning developer portfolio with project showcase')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf' }}>{Icons.templatePortfolio}</div>
+                    <span>Portfolio</span>
+                  </button>
+                  <button className="suggestion-card" onClick={() => onSendMessage('Build a real-time monitoring dashboard with live metrics and charts')}>
+                    <div className="suggestion-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185' }}>{Icons.templateLiveData}</div>
+                    <span>Live Data</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         ) : (
           messages.map((msg) => (
@@ -2555,22 +2722,61 @@ function MobileChat({
         .theme-dot-btn:active { transform: scale(0.9); }
         .welcome-state {
           display: flex; flex-direction: column; align-items: center;
-          justify-content: center; height: 100%; text-align: center; padding: 24px;
+          justify-content: flex-start; min-height: 100%; text-align: center;
+          padding: 32px 20px; padding-bottom: 200px;
         }
         .welcome-icon {
-          position: relative; width: 80px; height: 80px;
+          position: relative; width: 72px; height: 72px;
           display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.1));
-          border: 1px solid rgba(139,92,246,0.3);
-          border-radius: 24px; color: #8b5cf6; margin-bottom: 24px;
+          background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.08));
+          border: 1px solid rgba(139,92,246,0.2);
+          border-radius: 20px; color: #8b5cf6; margin-bottom: 20px;
         }
         .icon-glow {
-          position: absolute; inset: -20px;
-          background: radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%);
-          filter: blur(20px);
+          position: absolute; inset: -16px;
+          background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
+          filter: blur(16px);
         }
-        .welcome-state h3 { font-size: 22px; font-weight: 650; color: var(--text, rgba(255,255,255,0.97)); margin: 0 0 8px; letter-spacing: -0.02em; }
-        .welcome-state p { font-size: 15px; color: var(--text-muted, rgba(255,255,255,0.5)); margin: 0; }
+        .welcome-state h3 { font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95)); margin: 0 0 6px; letter-spacing: -0.02em; }
+        .welcome-state p { font-size: 14px; color: var(--text-muted, rgba(255,255,255,0.45)); margin: 0 0 24px; }
+
+        /* Suggestion Grid - Beautiful Template Cards */
+        .suggestion-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          width: 100%;
+          max-width: 340px;
+        }
+        .suggestion-card {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          padding: 16px 8px 14px;
+          background: var(--surface, rgba(255,255,255,0.03));
+          border: 1px solid var(--border, rgba(255,255,255,0.06));
+          border-radius: 14px;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .suggestion-card:active {
+          transform: scale(0.96);
+          background: var(--surface-hover, rgba(255,255,255,0.06));
+        }
+        .suggestion-icon {
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 12px;
+        }
+        .suggestion-card span {
+          font-size: 11px;
+          font-weight: 550;
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+        }
         .message { display: flex; gap: 12px; margin-bottom: 20px; animation: msgFadeIn 0.3s ease; }
         @keyframes msgFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .message-avatar {
@@ -3015,13 +3221,7 @@ export default function MobileBuilderLayout({
     '--icon': isLightTheme ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)',
   } as React.CSSProperties : {};
 
-  // Auto-switch to preview when build completes
-  useEffect(() => {
-    if (!isBuilding && !isStreaming && previewResult?.html && activeTab === 'chat') {
-      const timer = setTimeout(() => setActiveTab('preview'), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isBuilding, isStreaming, previewResult?.html, activeTab]);
+  // Removed auto-switch to preview - let user control navigation
 
   const navigateToCode = useCallback(() => setActiveTab('code'), []);
 
