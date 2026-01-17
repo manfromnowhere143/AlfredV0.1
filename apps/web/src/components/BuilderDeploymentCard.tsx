@@ -348,24 +348,130 @@ export function BuilderDeploymentCard({
       </div>
 
       <style jsx>{`
-        .overlay { --bg: rgba(0,0,0,0.7); --card-bg: #0d0d0e; --card-border: rgba(255,255,255,0.08); --text: rgba(255,255,255,0.9); --text-secondary: rgba(255,255,255,0.5); --text-muted: rgba(255,255,255,0.25); --border: rgba(255,255,255,0.08); --input-bg: rgba(255,255,255,0.05); --input-border: rgba(255,255,255,0.1); --badge-bg: rgba(255,255,255,0.08); --btn-secondary-bg: rgba(255,255,255,0.08); --btn-secondary-hover: rgba(255,255,255,0.12); --btn-primary-bg: #fff; --btn-primary-text: #000; --success-color: #10b981; --error-color: #ef4444; --glow-color: rgba(255,255,255,0.1); --pro-color: #8b5cf6; }
-        .overlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: var(--bg); backdrop-filter: blur(8px); animation: overlayIn 0.25s ease-out; padding: 20px; }
+        .overlay {
+          --bg: rgba(0,0,0,0.85);
+          --card-bg: #0f0f10;
+          --card-border: rgba(255,255,255,0.1);
+          --text: rgba(255,255,255,0.95);
+          --text-secondary: rgba(255,255,255,0.6);
+          --text-muted: rgba(255,255,255,0.3);
+          --border: rgba(255,255,255,0.1);
+          --input-bg: rgba(255,255,255,0.06);
+          --input-border: rgba(255,255,255,0.12);
+          --badge-bg: rgba(255,255,255,0.08);
+          --btn-secondary-bg: rgba(255,255,255,0.1);
+          --btn-secondary-hover: rgba(255,255,255,0.15);
+          --btn-primary-bg: #fff;
+          --btn-primary-text: #000;
+          --success-color: #10b981;
+          --error-color: #ef4444;
+          --glow-color: rgba(255,255,255,0.1);
+          --pro-color: #8b5cf6;
+        }
+        .overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--bg);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          animation: overlayIn 0.25s ease-out;
+          padding: 20px;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
         .overlay.closing { animation: overlayOut 0.2s ease-in forwards; }
         @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
-        .card { width: 100%; max-width: 460px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: cardIn 0.3s cubic-bezier(0.16,1,0.3,1); overflow: hidden; }
+
+        .card {
+          width: 100%;
+          max-width: 460px;
+          max-height: 90vh;
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 20px;
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+          animation: cardIn 0.3s cubic-bezier(0.16,1,0.3,1);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          margin: auto;
+        }
         .closing .card { animation: cardOut 0.2s ease-in forwards; }
         @keyframes cardIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes cardOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
-        .header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+
+        /* ═══════════════════════════════════════════════════════════════════════════════
+           MOBILE LAYOUT — Full Screen Scrollable Card
+           ═══════════════════════════════════════════════════════════════════════════════ */
+        @media (max-width: 640px) {
+          .overlay {
+            padding: 0;
+            align-items: flex-start;
+            justify-content: flex-start;
+          }
+          .card {
+            width: 100%;
+            max-width: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+            max-height: none;
+            border-radius: 0;
+            margin: 0;
+            animation: mobileCardIn 0.3s ease-out;
+          }
+          .closing .card { animation: mobileCardOut 0.25s ease-in forwards; }
+          @keyframes mobileCardIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+          @keyframes mobileCardOut { from { opacity: 1; } to { opacity: 0; } }
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 24px;
+          border-bottom: 1px solid var(--border);
+          flex-shrink: 0;
+          background: var(--card-bg);
+        }
         .header-left { display: flex; align-items: center; gap: 14px; }
-        .icon-container { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--pro-color), #6366f1); display: flex; align-items: center; justify-content: center; color: white; }
+        .icon-container { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--pro-color), #6366f1); display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
         .header-text h2 { font-size: 16px; font-weight: 600; color: var(--text); margin: 0; }
         .header-text p { font-size: 13px; color: var(--text-secondary); margin: 2px 0 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .close-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-        .close-btn:hover { background: var(--btn-secondary-bg); color: var(--text); }
+        .close-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: var(--btn-secondary-bg); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+        .close-btn:hover { background: var(--btn-secondary-hover); color: var(--text); }
+        .close-btn:active { transform: scale(0.95); }
         .close-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-        .content { padding: 24px; }
+
+        .content {
+          padding: 24px;
+          overflow-y: auto;
+          flex: 1;
+          -webkit-overflow-scrolling: touch;
+        }
+        .content::-webkit-scrollbar { width: 6px; }
+        .content::-webkit-scrollbar-track { background: transparent; }
+        .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Mobile Specific Styles */
+        @media (max-width: 640px) {
+          .header {
+            padding: 16px 20px;
+            padding-top: calc(16px + env(safe-area-inset-top));
+            position: sticky;
+            top: 0;
+            z-index: 10;
+          }
+          .content {
+            padding: 20px;
+            padding-bottom: calc(40px + env(safe-area-inset-bottom));
+            min-height: 0;
+          }
+          .header-text p { max-width: 160px; }
+        }
         .analysis-section { padding: 16px; background: var(--badge-bg); border-radius: 12px; margin-bottom: 20px; }
         .analysis-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .badge { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; padding: 4px 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); }
@@ -390,8 +496,18 @@ export function BuilderDeploymentCard({
         .domain-toggle.active .toggle-indicator { background: var(--pro-color); }
         .domain-toggle.active .toggle-indicator::after { left: 18px; background: white; }
         .coming-soon { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; padding: 3px 8px; background: linear-gradient(135deg, var(--pro-color), #6366f1); color: white; border-radius: 4px; }
-        .custom-domain-input { margin-top: 12px; animation: slideDown 0.2s ease; }
+        .custom-domain-input { margin-top: 12px; animation: slideDown 0.2s ease; max-height: 400px; overflow-y: auto; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 640px) {
+          .custom-domain-input { max-height: 300px; }
+          .analysis-section { padding: 14px; margin-bottom: 16px; }
+          .input-section { margin-bottom: 16px; }
+          .domain-section { margin-bottom: 16px; }
+          .info-section { margin-bottom: 20px; gap: 8px; }
+          .selected-domain { flex-direction: column; align-items: flex-start; gap: 12px; }
+          .change-domain-btn { width: 100%; }
+        }
         .input-wrapper.domain { margin-bottom: 10px; }
         .dns-info { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; font-size: 11px; color: rgba(245,158,11,0.9); }
         .dns-info svg { flex-shrink: 0; margin-top: 1px; }
@@ -412,13 +528,19 @@ export function BuilderDeploymentCard({
         .info-item.highlight { color: var(--pro-color); }
         .info-item.highlight svg { opacity: 1; color: var(--pro-color); }
         .actions { display: flex; gap: 12px; }
-        .btn { flex: 1; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s; }
+        .btn { flex: 1; padding: 14px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn.secondary { background: var(--btn-secondary-bg); color: var(--text); }
         .btn.secondary:hover:not(:disabled) { background: var(--btn-secondary-hover); }
         .btn.primary { background: linear-gradient(135deg, var(--pro-color), #6366f1); color: white; }
         .btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
-        .deploying-container { display: flex; flex-direction: column; align-items: center; padding: 20px 0; }
+        .btn.primary:active:not(:disabled) { transform: scale(0.98); }
+
+        @media (max-width: 640px) {
+          .actions { padding-top: 8px; }
+          .btn { padding: 16px 20px; border-radius: 14px; font-size: 15px; }
+        }
+        .deploying-container { display: flex; flex-direction: column; align-items: center; padding: 20px 0; min-height: 280px; justify-content: center; }
         .deploy-animation { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; margin-bottom: 32px; }
         .orbit { position: absolute; border: 1px solid var(--border); border-radius: 50%; animation: orbitSpin 6s linear infinite; }
         .orbit-1 { width: 80px; height: 80px; animation-duration: 4s; }
@@ -445,7 +567,7 @@ export function BuilderDeploymentCard({
         .progress-info { display: flex; justify-content: space-between; align-items: center; }
         .progress-text { font-size: 13px; color: var(--text-secondary); }
         .progress-percent { font-size: 13px; font-weight: 600; color: var(--text); font-family: 'SF Mono', Monaco, monospace; }
-        .success-container { display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .success-container { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 280px; justify-content: center; }
         .success-animation { position: relative; width: 80px; height: 80px; margin-bottom: 24px; }
         .success-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--success-color); animation: successRing 0.6s ease-out forwards; }
         @keyframes successRing { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
@@ -460,7 +582,7 @@ export function BuilderDeploymentCard({
         .url-arrow { color: var(--text-muted); transition: transform 0.15s; }
         .url-display:hover .url-arrow { transform: translate(2px, -2px); }
         .success-actions { display: flex; gap: 12px; width: 100%; }
-        .error-container { display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .error-container { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 280px; justify-content: center; }
         .error-icon { width: 64px; height: 64px; border-radius: 50%; background: rgba(239,68,68,0.1); display: flex; align-items: center; justify-content: center; color: var(--error-color); margin-bottom: 20px; }
         .error-container h3 { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 8px; }
         .error-message { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; max-width: 320px; line-height: 1.5; }
