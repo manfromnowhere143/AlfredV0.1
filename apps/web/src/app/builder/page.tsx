@@ -24,7 +24,8 @@ import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } f
 import LimitReached from '@/components/LimitReached';
 import { DeploymentCard } from '@/components/DeploymentCard';
 import MessageAttachments from '@/components/MessageAttachments';
-import { ModificationPreview, ExportToClaudeCode } from '@/components/alfred-code';
+import { ModificationPreview, ForensicInvestigation, SaveBar, ExportToClaudeCode, createForensicReport } from '@/components/alfred-code';
+import type { ForensicReport } from '@/components/alfred-code';
 import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
 import { isModificationRequest, applyModifications } from '@/lib/alfred-code/modify-project';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
@@ -270,9 +271,11 @@ export default function BuilderPage() {
 
   // Alfred Code - Smart Modification Mode (Steve Jobs approach)
   const [modificationPlan, setModificationPlan] = useState<ModificationPlan | null>(null);
+  const [forensicReport, setForensicReport] = useState<ForensicReport | null>(null);
   const [isAnalyzingModification, setIsAnalyzingModification] = useState(false);
   const [isApplyingModification, setIsApplyingModification] = useState(false);
   const [pendingModificationMessage, setPendingModificationMessage] = useState<string>('');
+  const [pendingChanges, setPendingChanges] = useState<string[]>([]); // Files with unsaved changes
 
   // Refs
   const conversationId = useRef<string | null>(null);
@@ -390,6 +393,20 @@ export default function BuilderPage() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, streamingSteps]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingChanges.length > 0) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [pendingChanges.length]);
 
   // Handlers
   const handleFileSelect = useCallback((file: VirtualFile) => {
@@ -742,14 +759,19 @@ export default function BuilderPage() {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   const analyzeModification = useCallback(async (userRequest: string) => {
-    if (builder.files.length === 0) return null;
+    // CRITICAL: Use manager.getFiles() instead of builder.files (React state can be stale!)
+    const currentFiles = builder.manager?.getFiles?.() || builder.files;
+    if (currentFiles.length === 0) {
+      console.log('[Alfred Code] No files found for modification analysis');
+      return null;
+    }
 
     setIsAnalyzingModification(true);
     setPendingModificationMessage(userRequest);
 
     try {
-      // Convert builder files to ProjectFile format
-      const projectFiles = builder.files.map(f => ({
+      // Convert builder files to ProjectFile format - use currentFiles from manager
+      const projectFiles = currentFiles.map(f => ({
         path: f.path,
         content: f.content,
         language: f.language,
@@ -788,9 +810,10 @@ export default function BuilderPage() {
     setIsApplyingModification(true);
 
     try {
-      // Create a Map from builder files
+      // CRITICAL: Use manager.getFiles() for most current files (React state can be stale!)
+      const currentFiles = builder.manager?.getFiles?.() || builder.files;
       const filesMap = new Map<string, string>();
-      builder.files.forEach(f => filesMap.set(f.path, f.content));
+      currentFiles.forEach(f => filesMap.set(f.path, f.content));
 
       // Apply the modifications
       const result = applyModifications(filesMap, modificationPlan);
@@ -803,7 +826,7 @@ export default function BuilderPage() {
 
       // Update builder files with the new content
       result.newFiles.forEach((content, path) => {
-        const existingFile = builder.files.find(f => f.path === path);
+        const existingFile = currentFiles.find(f => f.path === path);
         if (existingFile) {
           builder.updateFile(path, content);
         } else {
@@ -813,16 +836,16 @@ export default function BuilderPage() {
       });
 
       // Handle deleted files
-      builder.files.forEach(f => {
+      currentFiles.forEach(f => {
         if (!result.newFiles.has(f.path)) {
           // File was deleted
           builder.manager?.deleteFile?.(f.path);
         }
       });
 
-      // Sync and rebuild
-      builder.syncFiles?.();
-      await builder.rebuild?.(builder.files);
+      // Sync and rebuild - use synced files from manager
+      const syncedFiles = builder.syncFiles?.() || [];
+      await builder.rebuild?.(syncedFiles);
 
       // Add success message to chat
       const successMessage: ChatMessage = {
@@ -835,7 +858,12 @@ export default function BuilderPage() {
 
       // Clear modification state
       setModificationPlan(null);
+      setForensicReport(null);
       setPendingModificationMessage('');
+
+      // Track as pending change (will need to be saved)
+      const modifiedPaths = Array.from(result.newFiles.keys());
+      setPendingChanges(prev => [...new Set([...prev, ...modifiedPaths])]);
     } catch (error) {
       console.error('[Alfred Code] Apply error:', error);
       const errorMessage: ChatMessage = {
@@ -852,6 +880,7 @@ export default function BuilderPage() {
 
   const handleCancelModification = useCallback(() => {
     setModificationPlan(null);
+    setForensicReport(null);
     setPendingModificationMessage('');
     setIsAnalyzingModification(false);
   }, []);
@@ -895,7 +924,13 @@ export default function BuilderPage() {
     // ALFRED CODE: Smart Modification Detection (Steve Jobs Approach)
     // If project exists and user is asking for modifications, use surgical edits
     // ═══════════════════════════════════════════════════════════════════════════
-    if (builder.files.length > 0 && isModificationRequest(content, builder.files.length)) {
+    // CRITICAL: Use manager.getFiles() for most accurate file count (React state can be stale!)
+    const managerFiles = builder.manager?.getFiles?.() || [];
+    const effectiveFileCount = managerFiles.length > 0 ? managerFiles.length : builder.files.length;
+
+    console.log('[Alfred Code] File count check - Manager:', managerFiles.length, '| React state:', builder.files.length);
+
+    if (effectiveFileCount > 0 && isModificationRequest(content, effectiveFileCount)) {
       console.log('[Alfred Code] Detected modification request, analyzing surgically...');
 
       setInputValue('');
@@ -927,20 +962,34 @@ export default function BuilderPage() {
       setMessages(prev => prev.filter(m => !m.isStreaming));
 
       if (plan && plan.modifications.length > 0) {
-        // Show the modification preview
+        // Create forensic report from the plan (State of the Art!)
+        const currentFiles = builder.manager?.getFiles?.() || builder.files;
+        const projectName = builder.projectName || 'Project';
+        const filesForReport = currentFiles.map(f => ({
+          path: f.path,
+          content: f.content || '',
+        }));
+
+        const report = createForensicReport(plan, projectName, filesForReport);
+
+        // Show the forensic investigation
         setModificationPlan(plan);
+        setForensicReport(report);
         setIsSending(false);
         return;
       } else {
-        // Couldn't generate a plan, fall through to regeneration
-        console.log('[Alfred Code] No modification plan generated, falling back to regeneration');
-        const fallbackMessage: ChatMessage = {
-          id: `a-fallback-${Date.now()}`,
+        // Couldn't generate a plan - DON'T fall through to regeneration!
+        // Ask user what they want instead of regenerating and losing their project
+        console.log('[Alfred Code] No modification plan generated, asking for clarification');
+        const helpMessage: ChatMessage = {
+          id: `a-help-${Date.now()}`,
           role: 'alfred',
-          content: 'I\'ll regenerate the project with your changes.',
+          content: 'I need to see the current code to make that change. Could you be more specific about which file or component you want to modify? For example: "Change the background color of Header.tsx to blue"',
           timestamp: new Date(),
         };
-        setMessages(prev => [...prev, fallbackMessage]);
+        setMessages(prev => [...prev, helpMessage]);
+        setIsSending(false);
+        return; // DON'T fall through to regeneration!
       }
     }
     // ═══════════════════════════════════════════════════════════════════════════
@@ -950,7 +999,8 @@ export default function BuilderPage() {
     setShowEnhancer(false);
 
     // CRITICAL: Reset builder state to clear any stale locks from previous builds
-    console.log('[Builder] 🔄 Resetting builder state...');
+    // This is ONLY for new project generation, NOT for modifications
+    console.log('[Builder] 🔄 Resetting builder state for NEW generation...');
     builder.reset();
     if (chatMinimized) setChatMinimized(false);
 
@@ -1300,7 +1350,7 @@ export default function BuilderPage() {
       <div className="builder-content">
         {/* File Tree */}
         <div className="file-panel">
-          <FileExplorer tree={builder.fileTree} selectedPath={builder.selectedFile?.path || null} onFileSelect={handleFileSelect} onFileOpen={handleFileSelect} projectName={builder.projectName} />
+          <FileExplorer tree={builder.fileTree} selectedPath={builder.selectedFile?.path || null} onFileSelect={handleFileSelect} onFileOpen={handleFileSelect} projectName={builder.projectName} pendingChanges={pendingChanges} />
         </div>
 
         {/* Editor/Preview */}
@@ -1402,8 +1452,20 @@ export default function BuilderPage() {
                   messages.map(msg => <ChatMessage key={msg.id} message={msg} streamingSteps={msg.isStreaming ? streamingSteps : undefined} />)
                 )}
 
-                {/* Alfred Code - Modification Preview */}
-                {modificationPlan && (
+                {/* Alfred Code - Forensic Investigation (State of the Art) */}
+                {forensicReport && (
+                  <div className="forensic-investigation-container">
+                    <ForensicInvestigation
+                      report={forensicReport}
+                      onApply={handleApplyModification}
+                      onCancel={handleCancelModification}
+                      isApplying={isApplyingModification}
+                    />
+                  </div>
+                )}
+
+                {/* Fallback to simple preview if no forensic report but has plan */}
+                {modificationPlan && !forensicReport && (
                   <div className="modification-preview-container">
                     <ModificationPreview
                       plan={modificationPlan}
@@ -1600,6 +1662,25 @@ export default function BuilderPage() {
             onDismiss={() => setLimitReached(null)}
           />
         )}
+
+        {/* Save Bar - Appears when there are unsaved changes */}
+        <SaveBar
+          pendingChanges={pendingChanges}
+          onSave={async () => {
+            await saveProject();
+            setPendingChanges([]); // Clear pending after successful save
+          }}
+          onDiscard={() => {
+            if (confirm('Discard all unsaved changes? This cannot be undone.')) {
+              // Reload from saved version
+              if (currentProjectId) {
+                loadProject(currentProjectId);
+              }
+              setPendingChanges([]);
+            }
+          }}
+          isSaving={isSaving}
+        />
       </div>
 
       <style jsx>{`

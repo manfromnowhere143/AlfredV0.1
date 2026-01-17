@@ -43,6 +43,9 @@ export interface FileExplorerProps {
   /** Whether the project is loading */
   isLoading?: boolean;
 
+  /** List of file paths with pending/unsaved changes */
+  pendingChanges?: string[];
+
   /** Custom class name */
   className?: string;
 }
@@ -200,6 +203,7 @@ interface FileItemProps {
   isSelected: boolean;
   onSelect: (file: VirtualFile) => void;
   onOpen: (file: VirtualFile) => void;
+  isPending?: boolean; // Has unsaved changes
 }
 
 const FileItem = memo(function FileItem({
@@ -208,6 +212,7 @@ const FileItem = memo(function FileItem({
   isSelected,
   onSelect,
   onOpen,
+  isPending = false,
 }: FileItemProps) {
   const handleClick = useCallback(() => {
     onSelect(file);
@@ -226,7 +231,9 @@ const FileItem = memo(function FileItem({
     [file, onOpen]
   );
 
-  const statusColor = getStatusColor(file.status);
+  // Override status to modified if file has pending changes
+  const effectiveStatus = isPending ? 'modified' : file.status;
+  const statusColor = getStatusColor(effectiveStatus);
   const isGenerating = file.status === 'generating';
 
   return (
@@ -377,6 +384,7 @@ interface DirectoryItemProps {
   onToggle: (path: string) => void;
   onFileSelect: (file: VirtualFile) => void;
   onFileOpen: (file: VirtualFile) => void;
+  pendingChanges?: string[];
 }
 
 const DirectoryItem = memo(function DirectoryItem({
@@ -387,6 +395,7 @@ const DirectoryItem = memo(function DirectoryItem({
   onToggle,
   onFileSelect,
   onFileOpen,
+  pendingChanges = [],
 }: DirectoryItemProps) {
   const isExpanded = expandedPaths.has(directory.path);
 
@@ -442,6 +451,7 @@ const DirectoryItem = memo(function DirectoryItem({
                 onToggle={onToggle}
                 onFileSelect={onFileSelect}
                 onFileOpen={onFileOpen}
+                pendingChanges={pendingChanges}
               />
             ))}
 
@@ -457,6 +467,7 @@ const DirectoryItem = memo(function DirectoryItem({
                 isSelected={selectedPath === file.path}
                 onSelect={onFileSelect}
                 onOpen={onFileOpen}
+                isPending={pendingChanges.includes(file.path)}
               />
             ))}
         </div>
@@ -531,6 +542,7 @@ export function FileExplorer({
   onFileOpen = () => {},
   projectName = 'Project',
   isLoading = false,
+  pendingChanges = [],
   className = '',
 }: FileExplorerProps) {
   // Debug: Log tree updates
@@ -631,6 +643,7 @@ export function FileExplorer({
                   isSelected={selectedPath === file.path}
                   onSelect={onFileSelect}
                   onOpen={onFileOpen}
+                  isPending={pendingChanges.includes(file.path)}
                 />
               ))}
 
@@ -648,6 +661,7 @@ export function FileExplorer({
                   onToggle={handleToggle}
                   onFileSelect={onFileSelect}
                   onFileOpen={onFileOpen}
+                  pendingChanges={pendingChanges}
                 />
               ))}
           </>

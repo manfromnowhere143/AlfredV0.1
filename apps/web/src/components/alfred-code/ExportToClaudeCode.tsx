@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Export to Claude Code Component
+ * Export Project Component
  *
- * One-click export for power users who want the full Claude Code CLI experience.
- * Downloads project as ZIP - user runs: cd project && claude
+ * One-click export for power users who want to use the project locally.
+ * Downloads project as ZIP - user can run: cd project && npm run dev
  *
  * Zero infrastructure. It just works.
  */
@@ -124,16 +124,9 @@ npm install
 npm run dev
 \`\`\`
 
-## Open in Claude Code
+## Continue with Alfred
 
-For AI-powered code modifications:
-
-\`\`\`bash
-cd ${safeName}
-claude
-\`\`\`
-
-Then describe what you want to change!
+For continued AI-powered code modifications, open this project in Alfred Builder.
 
 ---
 
@@ -190,7 +183,7 @@ dist
         ${exportComplete ? 'bg-green-900/30 border-green-700 text-green-400' : ''}
         ${className}
       `}
-      title="Download project to use with Claude Code CLI"
+      title="Download project as ZIP"
     >
       {exportComplete ? (
         <>
@@ -207,8 +200,8 @@ dist
         </>
       ) : (
         <>
-          {TerminalIcon}
-          <span className="hidden sm:inline">Open in Claude Code</span>
+          {DownloadIcon}
+          <span className="hidden sm:inline">Export Project</span>
           <span className="sm:hidden">{DownloadIcon}</span>
         </>
       )}

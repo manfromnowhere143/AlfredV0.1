@@ -116,35 +116,67 @@ export async function POST(request: NextRequest) {
     const fileCount = files.length;
     const totalSize = files.reduce((sum: number, f: any) => sum + (f.content?.length || 0), 0);
 
-    // Create project in existing projects table (type='web_app', isBuilder=true in metadata)
-    const [project] = await db
-      .insert(projects)
-      .values({
-        userId,
-        name,
-        description: description || '',
-        type: 'web_app',
-        metadata: {
-          isBuilder: true,
-          framework,
-          entryPoint: entryPoint || files.find((f: any) => f.isEntryPoint)?.path || '/src/main.tsx',
-          dependencies,
-          devDependencies,
-          fileCount,
-          totalSize,
-          files: files.map((f: any) => ({
-            path: f.path,
-            name: f.name || f.path.split('/').pop() || 'unknown',
-            content: f.content || '',
-            language: f.language || 'typescript',
-            isEntryPoint: f.isEntryPoint || false,
-          })),
-        },
-      })
-      .returning();
+    // Prepare the project data
+    const projectData = {
+      description: description || '',
+      type: 'web_app' as const,
+      metadata: {
+        isBuilder: true,
+        framework,
+        entryPoint: entryPoint || files.find((f: any) => f.isEntryPoint)?.path || '/src/main.tsx',
+        dependencies,
+        devDependencies,
+        fileCount,
+        totalSize,
+        files: files.map((f: any) => ({
+          path: f.path,
+          name: f.name || f.path.split('/').pop() || 'unknown',
+          content: f.content || '',
+          language: f.language || 'typescript',
+          isEntryPoint: f.isEntryPoint || false,
+        })),
+      },
+      updatedAt: new Date(),
+    };
+
+    // Check if project with same name already exists for this user
+    const existingProjects = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(
+        eq(projects.userId, userId),
+        eq(projects.name, name),
+        isNull(projects.deletedAt)
+      ))
+      .limit(1);
+
+    let project;
+
+    if (existingProjects.length > 0) {
+      // Update existing project
+      console.log(`[Builder] Updating existing project: ${existingProjects[0].id}`);
+      const [updated] = await db
+        .update(projects)
+        .set(projectData)
+        .where(eq(projects.id, existingProjects[0].id))
+        .returning();
+      project = updated;
+    } else {
+      // Create new project
+      console.log(`[Builder] Creating new project: ${name}`);
+      const [created] = await db
+        .insert(projects)
+        .values({
+          userId,
+          name,
+          ...projectData,
+        })
+        .returning();
+      project = created;
+    }
 
     if (!project) {
-      throw new Error('Project insert returned empty');
+      throw new Error('Project save returned empty');
     }
 
     console.log(`[Builder] Saved project: ${project.id} (${fileCount} files, ${totalSize} bytes)`);
