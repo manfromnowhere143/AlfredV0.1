@@ -208,9 +208,9 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       // Try multiple WASM sources - local first, then CDN fallbacks
       const wasmSources = [
         '/esbuild.wasm',  // Local file in /public - fastest
-        'https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm',
-        'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.1/esbuild.wasm',
-        'https://esm.sh/esbuild-wasm@0.20.1/esbuild.wasm',
+        'https://unpkg.com/esbuild-wasm@0.20.2/esbuild.wasm',
+        'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.2/esbuild.wasm',
+        'https://esm.sh/esbuild-wasm@0.20.2/esbuild.wasm',
       ];
 
       let lastError: Error | null = null;
@@ -229,24 +229,40 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           ]);
 
           await initWithTimeout;
-          console.log('[ESBuild] ✅ WASM loaded from:', wasmURL, 'in', Math.round(performance.now() - wasmStart), 'ms');
+          const wasmLoadTime = Math.round(performance.now() - wasmStart);
+          console.log('[ESBuild] ✅ WASM loaded from:', wasmURL, 'in', wasmLoadTime, 'ms');
 
-          // Warm-up transform WITH timeout - if it times out, we continue anyway
-          // The warm-up is just an optimization, not required
+          // Quick verification that the module has the expected methods
+          if (!esbuildModule.transform || typeof esbuildModule.transform !== 'function') {
+            throw new Error('ESBuild module missing transform function after initialization');
+          }
+          console.log('[ESBuild] ✅ Module has transform function');
+
+          // Warm-up transform WITH timeout - CRITICAL: if this times out, ESBuild is broken
+          // The warm-up is our canary - if it hangs, real transforms will also hang
           console.log('[ESBuild] 🔥 Running warm-up transform...');
           const warmupStart = performance.now();
           try {
             const warmupPromise = esbuildModule.transform('const warmup = 1;', { loader: 'js' });
             const warmupTimeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Warm-up transform timed out')), warmupTimeout)
+              setTimeout(() => reject(new Error('WARMUP_TIMEOUT')), warmupTimeout)
             );
             await Promise.race([warmupPromise, warmupTimeoutPromise]);
             console.log('[ESBuild] ✅ Warm-up complete in', Math.round(performance.now() - warmupStart), 'ms');
           } catch (warmupErr) {
-            // Warm-up failed or timed out - log but continue
-            // The first real transform will be slower, but that's OK
-            console.warn('[ESBuild] ⚠️ Warm-up failed/skipped:', warmupErr instanceof Error ? warmupErr.message : warmupErr);
-            console.log('[ESBuild] Continuing without warm-up...');
+            const errMsg = warmupErr instanceof Error ? warmupErr.message : String(warmupErr);
+
+            // CRITICAL: If warm-up TIMES OUT, ESBuild transform is broken
+            // Don't continue - throw so we can retry or use fallback
+            if (errMsg === 'WARMUP_TIMEOUT' || errMsg.includes('timeout')) {
+              console.error('[ESBuild] ❌ Warm-up transform timed out - ESBuild is not responding!');
+              console.error('[ESBuild] ❌ This likely means WASM loaded but worker is stuck');
+              throw new Error('ESBuild warm-up timed out - transform function is not responding');
+            }
+
+            // Other errors (syntax, etc.) - log but might be able to continue
+            console.warn('[ESBuild] ⚠️ Warm-up failed (non-timeout):', errMsg);
+            console.log('[ESBuild] Continuing despite warm-up error...');
           }
 
           this.initialized = true;
@@ -285,8 +301,26 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
 
     try {
       console.log('[ESBuild] ⏳ Calling initialize()...');
-      await this.initialize();
-      console.log('[ESBuild] ✅ initialize() completed');
+      try {
+        await this.initialize();
+        console.log('[ESBuild] ✅ initialize() completed');
+      } catch (initError) {
+        console.error('[ESBuild] ❌ Initialization failed:', initError);
+        // Reset state so retry is possible
+        this.initialized = false;
+        this.initPromise = null;
+        return {
+          success: false,
+          errors: [{
+            line: 0,
+            column: 0,
+            message: `ESBuild failed to initialize: ${initError instanceof Error ? initError.message : 'Unknown error'}. Try refreshing the page.`,
+            severity: 'error',
+            source: 'alfred',
+          }],
+          buildTime: performance.now() - startTime,
+        };
+      }
 
       if (!this.esbuild || !this.initialized) {
         return {
@@ -295,6 +329,24 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
             line: 0,
             column: 0,
             message: 'ESBuild not initialized. Try refreshing the page.',
+            severity: 'error',
+            source: 'alfred',
+          }],
+          buildTime: performance.now() - startTime,
+        };
+      }
+
+      // EXTRA VERIFICATION: Check that transform function exists
+      if (typeof this.esbuild.transform !== 'function') {
+        console.error('[ESBuild] ❌ transform is not a function!');
+        this.initialized = false;
+        this.initPromise = null;
+        return {
+          success: false,
+          errors: [{
+            line: 0,
+            column: 0,
+            message: 'ESBuild module is corrupted. Try refreshing the page.',
             severity: 'error',
             source: 'alfred',
           }],
@@ -487,10 +539,22 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       }
 
       if (transformErrors.length > 0) {
+        console.warn('[ESBuild] ⚠️ Transform errors, falling back to Babel preview...');
+
+        // FALLBACK: Use Babel-based preview when ESBuild fails
+        // This provides SOME preview rather than nothing
+        const fallbackHtml = this.generateFallbackPreview(files, project);
+
         return {
-          success: false,
-          errors: transformErrors,
+          success: true, // Mark as success so preview shows
+          html: fallbackHtml,
+          errors: [], // Clear errors since we recovered
+          warnings: transformErrors.map(e => ({ ...e, severity: 'warning' as const })), // Downgrade to warnings
           buildTime: performance.now() - startTime,
+          metadata: {
+            fallbackMode: true,
+            originalErrors: transformErrors,
+          },
         };
       }
 
