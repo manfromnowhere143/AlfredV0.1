@@ -1370,12 +1370,13 @@ function MobilePreview({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // Set iframe content - also triggers when switching fullscreen modes
   useEffect(() => {
     if (preview?.html && iframeRef.current) {
       setIsLoaded(false);
       iframeRef.current.srcdoc = preview.html;
     }
-  }, [preview?.html]);
+  }, [preview?.html, isFullscreen]);
 
   const handleLoad = useCallback(() => setIsLoaded(true), []);
 
@@ -1390,194 +1391,118 @@ function MobilePreview({
   const firstError = hasErrors && preview?.errors ? preview.errors[0] : null;
   const hasPreviewContent = !!preview?.html && preview.html.length > 100;
 
-  // Pull to refresh state
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const pullStartY = useRef(0);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (iframeRef.current && iframeRef.current.parentElement?.scrollTop === 0) {
-      pullStartY.current = e.touches[0].clientY;
-      setIsPulling(true);
-    }
+  // Current time for status bar
+  const [currentTime, setCurrentTime] = useState('');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 60000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isPulling) return;
-    const distance = Math.max(0, Math.min(100, e.touches[0].clientY - pullStartY.current));
-    setPullDistance(distance);
-  }, [isPulling]);
-
-  const handleTouchEnd = useCallback(() => {
-    if (pullDistance > 60) {
-      if ('vibrate' in navigator) navigator.vibrate(20);
-      onRefresh();
-    }
-    setPullDistance(0);
-    setIsPulling(false);
-  }, [pullDistance, onRefresh]);
-
-  // Fullscreen view
-  if (isFullscreen) {
-    return (
-      <div className={`fullscreen-preview ${isLightTheme ? 'light' : ''}`}>
-        {/* Fullscreen Header */}
-        <div className="fullscreen-header">
-          <button className="close-fullscreen" onClick={toggleFullscreen}>
-            {Icons.chevronLeft}
-            <span>Back</span>
-          </button>
-          <div className="fullscreen-actions">
-            {deployedUrl && (
-              <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge-mini">
-                <span className="live-dot" />
-                LIVE
-              </a>
-            )}
-            <button className="action-btn" onClick={onRefresh}>{Icons.refresh}</button>
-          </div>
-        </div>
-        {/* Fullscreen iframe */}
-        <div className="fullscreen-content">
-          {hasPreviewContent && (
-            <iframe
-              ref={iframeRef}
-              title="Fullscreen Preview"
-              sandbox="allow-scripts allow-same-origin"
-              onLoad={handleLoad}
-              className={isLoaded ? 'loaded' : ''}
-            />
-          )}
-        </div>
-        <style jsx>{`
-          .fullscreen-preview {
-            position: fixed;
-            inset: 0;
-            z-index: 1000;
-            background: var(--bg, #09090b);
-            display: flex;
-            flex-direction: column;
-            animation: fullscreenIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          }
-          @keyframes fullscreenIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-          }
-          .fullscreen-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            padding-top: calc(12px + env(safe-area-inset-top));
-            background: var(--bg, #09090b);
-            border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
-          }
-          .close-fullscreen {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 8px 12px 8px 8px;
-            background: var(--surface, rgba(255,255,255,0.05));
-            border: 1px solid var(--border, rgba(255,255,255,0.08));
-            border-radius: 10px;
-            color: var(--text, rgba(255,255,255,0.9));
-            font-size: 14px;
-            font-weight: 550;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .close-fullscreen:active { transform: scale(0.96); background: var(--surface-hover, rgba(255,255,255,0.08)); }
-          .fullscreen-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-          }
-          .live-badge-mini {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: 650;
-            color: #22c55e;
-            text-decoration: none;
-          }
-          .live-badge-mini .live-dot {
-            width: 5px; height: 5px;
-            background: #22c55e;
-            border-radius: 50%;
-            animation: livePulse 2s infinite;
-          }
-          .action-btn {
-            width: 36px; height: 36px;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--surface, rgba(255,255,255,0.05));
-            border: 1px solid var(--border, rgba(255,255,255,0.08));
-            border-radius: 10px;
-            color: var(--text-secondary, rgba(255,255,255,0.6));
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .action-btn:active { transform: scale(0.94); }
-          .fullscreen-content {
-            flex: 1;
-            overflow: hidden;
-            padding-bottom: env(safe-area-inset-bottom);
-          }
-          .fullscreen-content iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            background: white;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-          }
-          .fullscreen-content iframe.loaded { opacity: 1; }
-          @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        `}</style>
-      </div>
-    );
-  }
-
   return (
-    <div className={`mobile-preview ${isLightTheme ? 'light' : ''}`}>
-      <MobileHeader
-        title="Preview"
-        isBuilding={isBuilding}
-        isLightTheme={isLightTheme}
-        rightAction={
-          <div className="preview-actions">
-            {deployedUrl && (
-              <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge">
-                <span className="live-dot" />
-                <span>LIVE</span>
-                {Icons.externalLink}
-              </a>
-            )}
-            <button className="expand-btn" onClick={toggleFullscreen} title="Fullscreen">
-              {Icons.expand}
-            </button>
-            <button className="refresh-btn" onClick={onRefresh}>{Icons.refresh}</button>
-          </div>
-        }
-      />
-      {/* Pull to refresh indicator */}
-      {pullDistance > 0 && (
-        <div className="pull-indicator" style={{ height: pullDistance, opacity: pullDistance / 100 }}>
-          <div className={`pull-spinner ${pullDistance > 60 ? 'ready' : ''}`}>
-            {Icons.refresh}
+    <div className={`mobile-preview ${isLightTheme ? 'light' : ''} ${isFullscreen ? 'fullscreen-mode' : ''}`}>
+      {/* Header - Hidden in fullscreen */}
+      {!isFullscreen && (
+        <MobileHeader
+          title="Preview"
+          isBuilding={isBuilding}
+          isLightTheme={isLightTheme}
+          rightAction={
+            <div className="preview-actions">
+              {deployedUrl && (
+                <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge">
+                  <span className="live-dot" />
+                  <span>LIVE</span>
+                  {Icons.externalLink}
+                </a>
+              )}
+              <button className="expand-btn" onClick={toggleFullscreen} title="Fullscreen">
+                {Icons.expand}
+              </button>
+              <button className="refresh-btn" onClick={onRefresh}>{Icons.refresh}</button>
+            </div>
+          }
+        />
+      )}
+
+      {/* Fullscreen iPhone Preview - True Fullscreen */}
+      {isFullscreen && (
+        <div className="fullscreen-overlay">
+          {/* Floating Minimize Button */}
+          <button className="minimize-fab" onClick={toggleFullscreen}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+
+          {/* State of the Art iPhone Frame - Full Height */}
+          <div className="iphone-device">
+            {/* Side Buttons */}
+            <div className="iphone-button power" />
+            <div className="iphone-button volume-up" />
+            <div className="iphone-button volume-down" />
+            <div className="iphone-button silent" />
+
+            {/* Screen */}
+            <div className="iphone-screen">
+              {/* Dynamic Island */}
+              <div className="dynamic-island">
+                <div className="island-camera" />
+                <div className="island-speaker" />
+              </div>
+
+              {/* Status Bar */}
+              <div className="status-bar">
+                <div className="status-left">
+                  <span className="status-time">{currentTime}</span>
+                </div>
+                <div className="status-right">
+                  <svg className="status-signal" viewBox="0 0 18 12" fill="currentColor">
+                    <rect x="0" y="8" width="3" height="4" rx="0.5" />
+                    <rect x="4" y="6" width="3" height="6" rx="0.5" />
+                    <rect x="8" y="3" width="3" height="9" rx="0.5" />
+                    <rect x="12" y="0" width="3" height="12" rx="0.5" />
+                  </svg>
+                  <svg className="status-wifi" viewBox="0 0 16 12" fill="currentColor">
+                    <path d="M8 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm-4.3-2.1a6 6 0 018.6 0l-.9.9a4.8 4.8 0 00-6.8 0l-.9-.9zm-2.1-2.1a9 9 0 0112.8 0l-.9.9a7.8 7.8 0 00-11 0l-.9-.9z" />
+                  </svg>
+                  <div className="status-battery">
+                    <div className="battery-body">
+                      <div className="battery-level" />
+                    </div>
+                    <div className="battery-cap" />
+                  </div>
+                </div>
+              </div>
+
+              {/* App Content */}
+              <div className="iphone-content">
+                {hasPreviewContent ? (
+                  <iframe
+                    ref={iframeRef}
+                    title="Preview"
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                    onLoad={handleLoad}
+                  />
+                ) : (
+                  <div className="no-content">
+                    <span>No preview available</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Home Indicator */}
+              <div className="home-indicator" />
+            </div>
           </div>
         </div>
       )}
-      <div
-        className="preview-container"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+
+      <div className="preview-container">
         {/* Building State */}
         {isBuilding && (
           <div className="building-state">
@@ -1640,8 +1565,8 @@ function MobilePreview({
           </div>
         )}
 
-        {/* Actual Preview - Mobile Optimized */}
-        {!isBuilding && hasPreviewContent && !hasErrors && (
+        {/* Actual Preview - Mobile Optimized (hidden in fullscreen) */}
+        {!isBuilding && hasPreviewContent && !hasErrors && !isFullscreen && (
           <div className={`iframe-wrapper ${isLoaded ? 'loaded' : ''}`}>
             <div className="device-notch" />
             <iframe
@@ -1882,6 +1807,279 @@ function MobilePreview({
           transform: scale(1);
         }
         .preview-container { position: relative; }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           FULLSCREEN iPHONE PREVIEW - State of the Art True Fullscreen
+           ═══════════════════════════════════════════════════════════════════════ */
+        .fullscreen-mode {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+        }
+        .fullscreen-mode .preview-container {
+          display: none;
+        }
+
+        .fullscreen-overlay {
+          position: fixed;
+          inset: 0;
+          background: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        /* Floating Minimize FAB */
+        .minimize-fab {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,0.12);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 50%;
+          color: rgba(255,255,255,0.9);
+          cursor: pointer;
+          z-index: 10001;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        .minimize-fab:active {
+          transform: scale(0.88);
+          background: rgba(255,255,255,0.2);
+        }
+
+        /* iPhone Device Frame - Maximized */
+        .iphone-device {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100%;
+          padding: 12px;
+          animation: deviceFloat 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes deviceFloat {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Side Buttons */
+        .iphone-button {
+          position: absolute;
+          background: linear-gradient(90deg, #2a2a30, #1a1a1e);
+          border-radius: 2px;
+          z-index: 1;
+        }
+
+        .iphone-button.power {
+          right: -3px;
+          top: 120px;
+          width: 3px;
+          height: 60px;
+        }
+
+        .iphone-button.silent {
+          left: -3px;
+          top: 100px;
+          width: 3px;
+          height: 28px;
+        }
+
+        .iphone-button.volume-up {
+          left: -3px;
+          top: 145px;
+          width: 3px;
+          height: 45px;
+        }
+
+        .iphone-button.volume-down {
+          left: -3px;
+          top: 200px;
+          width: 3px;
+          height: 45px;
+        }
+
+        /* iPhone Screen Container - Maximized for fullscreen */
+        .iphone-screen {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          max-width: min(100vw - 24px, 430px);
+          max-height: min(100vh - 24px, 932px);
+          aspect-ratio: 9/19.5;
+          background: #000;
+          border-radius: 48px;
+          padding: 0;
+          overflow: hidden;
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.08),
+            0 0 0 4px #1a1a1e,
+            0 0 0 5px rgba(255,255,255,0.04),
+            inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+
+        /* Dynamic Island */
+        .dynamic-island {
+          position: absolute;
+          top: 12px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 120px;
+          height: 34px;
+          background: #000;
+          border-radius: 20px;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          box-shadow: 0 0 0 0.5px rgba(255,255,255,0.1);
+        }
+
+        .island-camera {
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 30% 30%, #1a1a2e, #0a0a12);
+          border-radius: 50%;
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 0 0 1px rgba(100,100,120,0.3);
+        }
+
+        .island-speaker {
+          width: 40px;
+          height: 5px;
+          background: linear-gradient(180deg, #1a1a1e, #0a0a0e);
+          border-radius: 3px;
+          box-shadow: inset 0 1px 1px rgba(0,0,0,0.5);
+        }
+
+        /* Status Bar */
+        .status-bar {
+          position: absolute;
+          top: 14px;
+          left: 24px;
+          right: 24px;
+          height: 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          z-index: 50;
+          color: #fff;
+        }
+
+        .status-left {
+          width: 54px;
+        }
+
+        .status-time {
+          font-size: 15px;
+          font-weight: 600;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+          letter-spacing: 0.02em;
+        }
+
+        .status-right {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .status-signal {
+          width: 18px;
+          height: 12px;
+        }
+
+        .status-wifi {
+          width: 16px;
+          height: 12px;
+        }
+
+        .status-battery {
+          display: flex;
+          align-items: center;
+          gap: 1px;
+        }
+
+        .battery-body {
+          width: 24px;
+          height: 12px;
+          border: 1.5px solid rgba(255,255,255,0.9);
+          border-radius: 3px;
+          padding: 1.5px;
+        }
+
+        .battery-level {
+          width: 100%;
+          height: 100%;
+          background: #32d74b;
+          border-radius: 1px;
+        }
+
+        .battery-cap {
+          width: 2px;
+          height: 5px;
+          background: rgba(255,255,255,0.5);
+          border-radius: 0 1px 1px 0;
+        }
+
+        /* App Content Area */
+        .iphone-content {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          overflow: hidden;
+          border-radius: 48px;
+        }
+
+        .iphone-content iframe {
+          width: 100%;
+          height: 100%;
+          border: none;
+          background: #fff;
+        }
+
+        .iphone-content .no-content {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(180deg, #18181b 0%, #0f0f12 100%);
+          color: rgba(255,255,255,0.35);
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        /* Home Indicator */
+        .home-indicator {
+          position: absolute;
+          bottom: 8px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 134px;
+          height: 5px;
+          background: rgba(255,255,255,0.35);
+          border-radius: 100px;
+          z-index: 100;
+        }
       `}</style>
     </div>
   );
