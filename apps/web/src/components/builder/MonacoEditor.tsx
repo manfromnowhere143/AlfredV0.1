@@ -42,6 +42,9 @@ export interface MonacoEditorProps {
 
   /** Theme: 'dark' | 'light' */
   theme?: 'dark' | 'light';
+
+  /** Custom background color for dynamic theming */
+  bgColor?: string;
 }
 
 // ============================================================================
@@ -156,6 +159,81 @@ const ALFRED_LIGHT_THEME: IStandaloneThemeData = {
   },
 };
 
+// ============================================================================
+// DYNAMIC THEME GENERATION - Creates theme based on background color
+// ============================================================================
+
+function isLightColor(hex: string): boolean {
+  // Convert hex to RGB and calculate luminance
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5;
+}
+
+function adjustColor(hex: string, amount: number): string {
+  const c = hex.replace('#', '');
+  const r = Math.min(255, Math.max(0, parseInt(c.substr(0, 2), 16) + amount));
+  const g = Math.min(255, Math.max(0, parseInt(c.substr(2, 2), 16) + amount));
+  const b = Math.min(255, Math.max(0, parseInt(c.substr(4, 2), 16) + amount));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+function createDynamicTheme(bgColor: string, isLight: boolean): IStandaloneThemeData {
+  const lineHighlight = adjustColor(bgColor, isLight ? -10 : 15);
+  const gutterBg = adjustColor(bgColor, isLight ? -5 : 8);
+
+  return {
+    base: isLight ? 'vs' : 'vs-dark',
+    inherit: true,
+    rules: isLight ? [
+      { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
+      { token: 'keyword', foreground: '7C3AED' },
+      { token: 'string', foreground: '059669' },
+      { token: 'number', foreground: 'DB2777' },
+      { token: 'type', foreground: '0284C7' },
+      { token: 'function', foreground: 'B45309' },
+      { token: 'variable', foreground: '1F2937' },
+      { token: 'tag', foreground: 'DC2626' },
+      { token: 'attribute.name', foreground: 'D97706' },
+      { token: 'attribute.value', foreground: '059669' },
+    ] : [
+      { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'C084FC' },
+      { token: 'string', foreground: '86EFAC' },
+      { token: 'number', foreground: 'F9A8D4' },
+      { token: 'type', foreground: '7DD3FC' },
+      { token: 'function', foreground: 'FCD34D' },
+      { token: 'variable', foreground: 'E5E7EB' },
+      { token: 'tag', foreground: 'F87171' },
+      { token: 'attribute.name', foreground: 'FDBA74' },
+      { token: 'attribute.value', foreground: '86EFAC' },
+    ],
+    colors: {
+      'editor.background': bgColor,
+      'editor.foreground': isLight ? '#1F2937' : '#E5E7EB',
+      'editor.lineHighlightBackground': lineHighlight,
+      'editor.selectionBackground': '#6366F140',
+      'editor.inactiveSelectionBackground': '#6366F120',
+      'editorCursor.foreground': '#6366F1',
+      'editorWhitespace.foreground': isLight ? '#E5E7EB' : '#2D2D35',
+      'editorIndentGuide.background': isLight ? '#E5E7EB' : '#2D2D35',
+      'editorIndentGuide.activeBackground': isLight ? '#D1D5DB' : '#4B4B55',
+      'editorLineNumber.foreground': isLight ? '#9CA3AF' : '#4B4B55',
+      'editorLineNumber.activeForeground': isLight ? '#4B5563' : '#9CA3AF',
+      'editorGutter.background': gutterBg,
+      'editor.selectionHighlightBackground': '#6366F120',
+      'editorBracketMatch.background': '#6366F130',
+      'editorBracketMatch.border': '#6366F180',
+      'scrollbarSlider.background': isLight ? '#00000015' : '#FFFFFF15',
+      'scrollbarSlider.hoverBackground': isLight ? '#00000025' : '#FFFFFF25',
+      'scrollbarSlider.activeBackground': isLight ? '#00000035' : '#FFFFFF35',
+    },
+  };
+}
+
 // Configure Monaco loader to use CDN
 console.log('[Monaco] Configuring loader...');
 loader.config({
@@ -184,11 +262,16 @@ export const MonacoEditor = memo(function MonacoEditor({
   className = '',
   showMinimap = false,
   theme = 'dark',
+  bgColor,
 }: MonacoEditorProps) {
   const editorRef = useRef<IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const [monacoReady, setMonacoReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Determine if we should use dynamic theme based on bgColor
+  const isLight = theme === 'light' || (bgColor ? isLightColor(bgColor) : false);
+  const effectiveBgColor = bgColor || (isLight ? '#FFFFFF' : '#0F0F12');
   const [loadTimeout, setLoadTimeout] = useState(false);
 
   // Timeout fallback - if Monaco doesn't load in 5 seconds, show plain textarea
@@ -203,6 +286,18 @@ export const MonacoEditor = memo(function MonacoEditor({
     return () => clearTimeout(timer);
   }, [monacoReady]);
 
+  // Update Monaco theme when bgColor changes
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco || !monacoReady) return;
+
+    // Create and apply dynamic theme based on bgColor
+    const dynamicTheme = createDynamicTheme(effectiveBgColor, isLight);
+    monaco.editor.defineTheme('alfred-dynamic', dynamicTheme);
+    monaco.editor.setTheme('alfred-dynamic');
+    console.log(`[Monaco] 🎨 Theme updated to ${isLight ? 'light' : 'dark'} with bg: ${effectiveBgColor}`);
+  }, [effectiveBgColor, isLight, monacoReady]);
+
   // Handle editor mount
   const handleMount: OnMount = useCallback((editor, monaco) => {
     console.log('[Monaco] 🎉 Editor mounted successfully');
@@ -211,10 +306,14 @@ export const MonacoEditor = memo(function MonacoEditor({
     setMonacoReady(true);
     setLoadTimeout(false); // Cancel timeout fallback
 
-    // Register custom themes
+    // Register static themes as fallback
     monaco.editor.defineTheme('alfred-dark', ALFRED_DARK_THEME);
     monaco.editor.defineTheme('alfred-light', ALFRED_LIGHT_THEME);
-    monaco.editor.setTheme(theme === 'light' ? 'alfred-light' : 'alfred-dark');
+
+    // Create and apply dynamic theme based on bgColor
+    const dynamicTheme = createDynamicTheme(effectiveBgColor, isLight);
+    monaco.editor.defineTheme('alfred-dynamic', dynamicTheme);
+    monaco.editor.setTheme('alfred-dynamic');
 
     // Configure TypeScript/JavaScript settings for TSX
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -320,7 +419,7 @@ export const MonacoEditor = memo(function MonacoEditor({
             height="100%"
             language={getMonacoLanguage(language)}
             value={value}
-            theme={theme === 'dark' ? 'alfred-dark' : 'alfred-light'}
+            theme="alfred-dynamic"
             onChange={handleChange}
             onMount={handleMount}
             options={{

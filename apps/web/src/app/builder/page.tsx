@@ -1519,7 +1519,7 @@ export default function BuilderPage() {
                 <>
                   <div className="editor-tabs"><div className="tab active"><span>{builder.selectedFile.name}</span></div></div>
                   <div className="editor-content" style={{position: 'relative'}}>
-                    <MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} onChange={handleEditorChange} theme={isLightTheme ? 'light' : 'dark'} />
+                    <MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} onChange={handleEditorChange} theme={isLightTheme ? 'light' : 'dark'} bgColor={currentTheme.bg} />
                     <div className="press-enter-hint">
                       <span>Press</span>
                       <kbd>Enter</kbd>
