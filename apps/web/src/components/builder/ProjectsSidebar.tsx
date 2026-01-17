@@ -202,8 +202,8 @@ export function ProjectsSidebar({
           display: flex;
           flex-direction: column;
           height: 100%;
-          background: #0f0f12;
-          border-left: 1px solid rgba(255, 255, 255, 0.06);
+          background: var(--bg, #0f0f12);
+          border-left: 1px solid var(--border, rgba(255, 255, 255, 0.06));
         }
 
         .sidebar-header {
@@ -211,14 +211,14 @@ export function ProjectsSidebar({
           align-items: center;
           justify-content: space-between;
           padding: 14px 16px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
         }
 
         .sidebar-header h3 {
           margin: 0;
           font-size: 13px;
           font-weight: 600;
-          color: rgba(255, 255, 255, 0.9);
+          color: var(--text, rgba(255, 255, 255, 0.9));
         }
 
         .close-btn {
@@ -229,13 +229,13 @@ export function ProjectsSidebar({
           border: none;
           border-radius: 4px;
           cursor: pointer;
-          color: rgba(255, 255, 255, 0.5);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.5));
           transition: all 0.15s ease;
         }
 
         .close-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.9);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.1));
+          color: var(--text, rgba(255, 255, 255, 0.9));
         }
 
         .sidebar-content {
@@ -254,14 +254,14 @@ export function ProjectsSidebar({
           gap: 12px;
           padding: 40px 20px;
           text-align: center;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           font-size: 13px;
         }
 
         .spinner {
           width: 24px;
           height: 24px;
-          border: 2px solid rgba(255, 255, 255, 0.1);
+          border: 2px solid var(--border, rgba(255, 255, 255, 0.1));
           border-top-color: #8b5cf6;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
@@ -270,12 +270,12 @@ export function ProjectsSidebar({
         .empty-state svg {
           width: 48px;
           height: 48px;
-          color: rgba(255, 255, 255, 0.2);
+          color: var(--text-muted, rgba(255, 255, 255, 0.2));
         }
 
         .empty-state p {
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.3);
+          color: var(--text-muted, rgba(255, 255, 255, 0.3));
           margin: 0;
         }
 
@@ -300,15 +300,15 @@ export function ProjectsSidebar({
           align-items: center;
           gap: 12px;
           padding: 12px;
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: var(--surface, rgba(255, 255, 255, 0.02));
+          border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
           border-radius: 8px;
           cursor: pointer;
           transition: all 0.15s ease;
         }
 
         .project-card:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.05));
           border-color: rgba(139, 92, 246, 0.3);
         }
 
@@ -342,7 +342,7 @@ export function ProjectsSidebar({
         .project-name {
           font-size: 13px;
           font-weight: 500;
-          color: rgba(255, 255, 255, 0.9);
+          color: var(--text, rgba(255, 255, 255, 0.9));
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -353,7 +353,7 @@ export function ProjectsSidebar({
           gap: 8px;
           margin-top: 4px;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
         }
 
         .project-meta span {
@@ -369,7 +369,7 @@ export function ProjectsSidebar({
           border: none;
           border-radius: 4px;
           cursor: pointer;
-          color: rgba(255, 255, 255, 0.3);
+          color: var(--text-muted, rgba(255, 255, 255, 0.3));
           opacity: 0;
           transition: all 0.15s ease;
         }
@@ -390,8 +390,8 @@ export function ProjectsSidebar({
         .mini-spinner {
           width: 14px;
           height: 14px;
-          border: 2px solid rgba(255, 255, 255, 0.1);
-          border-top-color: rgba(255, 255, 255, 0.5);
+          border: 2px solid var(--border, rgba(255, 255, 255, 0.1));
+          border-top-color: var(--text-secondary, rgba(255, 255, 255, 0.5));
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }

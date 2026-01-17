@@ -120,6 +120,42 @@ const ALFRED_DARK_THEME: IStandaloneThemeData = {
   },
 };
 
+const ALFRED_LIGHT_THEME: IStandaloneThemeData = {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
+    { token: 'keyword', foreground: '7C3AED' },
+    { token: 'string', foreground: '059669' },
+    { token: 'number', foreground: 'DB2777' },
+    { token: 'type', foreground: '0284C7' },
+    { token: 'function', foreground: 'B45309' },
+    { token: 'variable', foreground: '1F2937' },
+    { token: 'tag', foreground: 'DC2626' },
+    { token: 'attribute.name', foreground: 'D97706' },
+    { token: 'attribute.value', foreground: '059669' },
+  ],
+  colors: {
+    'editor.background': '#FFFFFF',
+    'editor.foreground': '#1F2937',
+    'editor.lineHighlightBackground': '#F3F4F6',
+    'editor.selectionBackground': '#6366F140',
+    'editor.inactiveSelectionBackground': '#6366F120',
+    'editorCursor.foreground': '#6366F1',
+    'editorWhitespace.foreground': '#E5E7EB',
+    'editorIndentGuide.background': '#E5E7EB',
+    'editorIndentGuide.activeBackground': '#D1D5DB',
+    'editorLineNumber.foreground': '#9CA3AF',
+    'editorLineNumber.activeForeground': '#4B5563',
+    'editor.selectionHighlightBackground': '#6366F120',
+    'editorBracketMatch.background': '#6366F130',
+    'editorBracketMatch.border': '#6366F180',
+    'scrollbarSlider.background': '#00000015',
+    'scrollbarSlider.hoverBackground': '#00000025',
+    'scrollbarSlider.activeBackground': '#00000035',
+  },
+};
+
 // Configure Monaco loader to use CDN
 console.log('[Monaco] Configuring loader...');
 loader.config({
@@ -175,9 +211,10 @@ export const MonacoEditor = memo(function MonacoEditor({
     setMonacoReady(true);
     setLoadTimeout(false); // Cancel timeout fallback
 
-    // Register custom theme
+    // Register custom themes
     monaco.editor.defineTheme('alfred-dark', ALFRED_DARK_THEME);
-    monaco.editor.setTheme('alfred-dark');
+    monaco.editor.defineTheme('alfred-light', ALFRED_LIGHT_THEME);
+    monaco.editor.setTheme(theme === 'light' ? 'alfred-light' : 'alfred-dark');
 
     // Configure TypeScript/JavaScript settings for TSX
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -283,7 +320,7 @@ export const MonacoEditor = memo(function MonacoEditor({
             height="100%"
             language={getMonacoLanguage(language)}
             value={value}
-            theme={theme === 'dark' ? 'alfred-dark' : 'light'}
+            theme={theme === 'dark' ? 'alfred-dark' : 'alfred-light'}
             onChange={handleChange}
             onMount={handleMount}
             options={{

@@ -34,17 +34,6 @@ export interface BuilderPreviewProps {
 type DeviceType = 'desktop' | 'tablet' | 'mobile';
 type PanelTab = 'preview' | 'console';
 
-// State-of-the-art background color presets
-const BG_COLORS = [
-  { id: 'dark', color: '#0a0a0c', label: 'Dark' },
-  { id: 'darker', color: '#050506', label: 'Darker' },
-  { id: 'light', color: '#f8f9fa', label: 'Light' },
-  { id: 'white', color: '#ffffff', label: 'White' },
-  { id: 'purple', color: '#1a1025', label: 'Purple' },
-  { id: 'blue', color: '#0a1628', label: 'Blue' },
-  { id: 'green', color: '#0a1a14', label: 'Green' },
-  { id: 'gradient', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', label: 'Gradient' },
-];
 
 // ============================================================================
 // CRAFTING ANIMATION - State of the Art (from Alfred Regular)
@@ -297,8 +286,6 @@ interface PreviewHeaderProps {
   consoleCount: number;
   url?: string;
   onRefresh: () => void;
-  bgColor: string;
-  onBgColorChange: (color: string) => void;
 }
 
 const PreviewHeader = memo(function PreviewHeader({
@@ -308,10 +295,7 @@ const PreviewHeader = memo(function PreviewHeader({
   onTabChange,
   consoleCount,
   onRefresh,
-  bgColor,
-  onBgColorChange,
 }: PreviewHeaderProps) {
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const devices: { id: DeviceType; icon: string; label: string }[] = [
     { id: 'desktop', icon: 'monitor', label: 'Desktop' },
     { id: 'tablet', icon: 'tablet', label: 'Tablet' },
@@ -363,37 +347,6 @@ const PreviewHeader = memo(function PreviewHeader({
 
       {/* Actions */}
       <div className="header-actions">
-        {/* Background Color Picker */}
-        {activeTab === 'preview' && (
-          <div className="color-picker-wrapper">
-            <button
-              className={`action-btn color-btn ${showColorPicker ? 'active' : ''}`}
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              title="Background Color"
-            >
-              <div
-                className="color-preview"
-                style={{ background: bgColor.startsWith('linear') ? bgColor : bgColor }}
-              />
-            </button>
-            {showColorPicker && (
-              <div className="color-picker-dropdown">
-                <div className="color-picker-header">Background</div>
-                <div className="color-grid">
-                  {BG_COLORS.map((c) => (
-                    <button
-                      key={c.id}
-                      className={`color-swatch ${bgColor === c.color ? 'active' : ''}`}
-                      style={{ background: c.color }}
-                      onClick={() => { onBgColorChange(c.color); setShowColorPicker(false); }}
-                      title={c.label}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
         <button className="action-btn" onClick={onRefresh} title="Refresh">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M23 4v6h-6M1 20v-6h6" strokeLinecap="round" strokeLinejoin="round" />
@@ -414,8 +367,9 @@ const PreviewHeader = memo(function PreviewHeader({
           justify-content: space-between;
           height: 44px;
           padding: 0 12px;
-          background: linear-gradient(180deg, rgba(15, 15, 20, 0.98) 0%, rgba(12, 12, 16, 0.95) 100%);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          background: var(--surface, rgba(15, 15, 20, 0.98));
+          border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+          transition: all 0.3s ease;
         }
 
         .header-tabs {
@@ -431,7 +385,7 @@ const PreviewHeader = memo(function PreviewHeader({
           border-radius: 6px;
           border: none;
           background: transparent;
-          color: rgba(255, 255, 255, 0.5);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.5));
           font-size: 12px;
           font-weight: 500;
           cursor: pointer;
@@ -439,12 +393,12 @@ const PreviewHeader = memo(function PreviewHeader({
         }
 
         .tab-btn:hover {
-          color: rgba(255, 255, 255, 0.7);
-          background: rgba(255, 255, 255, 0.04);
+          color: var(--text, rgba(255, 255, 255, 0.7));
+          background: var(--surface-hover, rgba(255, 255, 255, 0.04));
         }
 
         .tab-btn.active {
-          color: rgba(255, 255, 255, 0.95);
+          color: var(--text, rgba(255, 255, 255, 0.95));
           background: rgba(139, 92, 246, 0.15);
         }
 
@@ -470,7 +424,8 @@ const PreviewHeader = memo(function PreviewHeader({
           display: flex;
           gap: 2px;
           padding: 3px;
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+          border: 1px solid var(--border, transparent);
           border-radius: 8px;
         }
 
@@ -480,7 +435,7 @@ const PreviewHeader = memo(function PreviewHeader({
           border-radius: 6px;
           border: none;
           background: transparent;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -489,7 +444,7 @@ const PreviewHeader = memo(function PreviewHeader({
         }
 
         .device-btn:hover {
-          color: rgba(255, 255, 255, 0.7);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.7));
         }
 
         .device-btn.active {
@@ -508,7 +463,7 @@ const PreviewHeader = memo(function PreviewHeader({
           border-radius: 6px;
           border: none;
           background: transparent;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--icon, rgba(255, 255, 255, 0.4));
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -517,82 +472,10 @@ const PreviewHeader = memo(function PreviewHeader({
         }
 
         .action-btn:hover {
-          color: rgba(255, 255, 255, 0.8);
-          background: rgba(255, 255, 255, 0.06);
+          color: var(--text, rgba(255, 255, 255, 0.8));
+          background: var(--surface-hover, rgba(255, 255, 255, 0.06));
         }
 
-        /* Color Picker */
-        .color-picker-wrapper {
-          position: relative;
-        }
-
-        .color-btn {
-          padding: 0;
-        }
-
-        .color-btn.active {
-          background: rgba(139, 92, 246, 0.2);
-        }
-
-        .color-preview {
-          width: 18px;
-          height: 18px;
-          border-radius: 4px;
-          border: 2px solid rgba(255, 255, 255, 0.2);
-          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
-        }
-
-        .color-picker-dropdown {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          padding: 12px;
-          background: #1a1a1e;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-          z-index: 100;
-          animation: dropdownIn 0.15s ease;
-        }
-
-        @keyframes dropdownIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .color-picker-header {
-          font-size: 10px;
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.5);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 10px;
-        }
-
-        .color-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 6px;
-        }
-
-        .color-swatch {
-          width: 28px;
-          height: 28px;
-          border-radius: 6px;
-          border: 2px solid transparent;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .color-swatch:hover {
-          transform: scale(1.1);
-        }
-
-        .color-swatch.active {
-          border-color: #8b5cf6;
-          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
-        }
       `}</style>
     </div>
   );
@@ -833,9 +716,7 @@ export function BuilderPreview({
   const [refreshKey, setRefreshKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [internalBgColor, setInternalBgColor] = useState('#0a0a0c');
-  const bgColor = externalBgColor || internalBgColor;
-  const setBgColor = setInternalBgColor;
+  const bgColor = externalBgColor || '#0a0a0c';
 
   // Auto-retry on build failure
   useEffect(() => {
@@ -952,8 +833,6 @@ export function BuilderPreview({
         onTabChange={setActiveTab}
         consoleCount={consoleEntries.filter((e) => e.type === 'error').length}
         onRefresh={handleRefresh}
-        bgColor={bgColor}
-        onBgColorChange={setBgColor}
       />
 
       <div className="preview-content">

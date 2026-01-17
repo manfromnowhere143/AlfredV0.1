@@ -124,13 +124,13 @@ const styles = {
     margin: '0 0 6px',
     fontSize: '15px',
     fontWeight: 600,
-    color: 'rgba(255, 255, 255, 0.95)',
+    color: 'var(--text, rgba(255, 255, 255, 0.95))',
     letterSpacing: '-0.01em',
   },
   subtitle: {
     margin: 0,
     fontSize: '12px',
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'var(--text-muted, rgba(255, 255, 255, 0.4))',
   },
   grid: {
     display: 'grid',
@@ -145,8 +145,8 @@ const styles = {
     alignItems: 'center',
     gap: '6px',
     padding: '12px 8px 10px',
-    background: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
+    background: 'var(--surface, rgba(255, 255, 255, 0.03))',
+    border: '1px solid var(--border, rgba(255, 255, 255, 0.06))',
     borderRadius: '10px',
     cursor: 'pointer',
   },
@@ -167,13 +167,13 @@ const styles = {
   label: {
     fontSize: '10px',
     fontWeight: 500,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'var(--text-secondary, rgba(255, 255, 255, 0.75))',
     margin: 0,
   },
   hint: {
     marginTop: '16px',
     fontSize: '10px',
-    color: 'rgba(255, 255, 255, 0.25)',
+    color: 'var(--text-muted, rgba(255, 255, 255, 0.25))',
   },
 };
 
