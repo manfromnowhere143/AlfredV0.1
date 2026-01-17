@@ -10,6 +10,24 @@ const nextConfig = {
     instrumentationHook: true,
   },
 
+  // Enable WASM support for ESBuild
+  webpack: (config, { isServer }) => {
+    // Enable WebAssembly
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+
+    // Add rule for .wasm files
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'webassembly/async',
+    });
+
+    return config;
+  },
+
   typescript: {
     // TODO: Remove once persona database schema is merged
     ignoreBuildErrors: true,

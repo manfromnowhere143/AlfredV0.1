@@ -172,13 +172,21 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
         managerRef.current = manager;
 
         // Initialize ESBuild on OUR manager instance (not the singleton!)
+        console.log('[useBuilder] 🚀 Starting ESBuild initialization...');
+        const initStart = performance.now();
         await manager.initialize();
+        console.log('[useBuilder] ✅ ESBuild initialized in', Math.round(performance.now() - initStart), 'ms');
 
         if (mounted) {
           setIsInitialized(true);
+          console.log('[useBuilder] ✅ Builder fully initialized and ready!');
         }
       } catch (error) {
-        console.error('Failed to initialize builder:', error);
+        console.error('[useBuilder] ❌ Failed to initialize builder:', error);
+        // Still mark as initialized so we don't block forever, but builds will fail
+        if (mounted) {
+          setIsInitialized(true);
+        }
       }
     };
 
@@ -268,9 +276,15 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     }
   }, [selectedPath]);
 
+  // Track when rebuild started to detect stale locks
+  const rebuildStartTimeRef = useRef<number>(0);
+
   const rebuild = useCallback(async (providedFiles?: VirtualFile[]): Promise<PreviewResult> => {
+    console.log('[useBuilder] 🔨 rebuild() called. Manager:', !!managerRef.current, '| Lock:', rebuildInProgressRef.current);
+
     const manager = managerRef.current;
     if (!manager) {
+      console.error('[useBuilder] ❌ Manager not initialized!');
       return {
         success: false,
         errors: [{
@@ -282,36 +296,71 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       };
     }
 
-    // Prevent concurrent rebuilds - this prevents race conditions
+    // Check for stale lock - if lock has been held for > 60s, force reset
     if (rebuildInProgressRef.current) {
-      console.log('[useBuilder] ⏳ Rebuild already in progress, skipping duplicate call');
-      // Return current result or wait for existing rebuild
-      return previewResult || {
-        success: false,
-        errors: [{
-          line: 0,
-          column: 0,
-          message: 'Rebuild in progress',
-          severity: 'warning' as const,
-        }],
-      };
+      const lockAge = Date.now() - rebuildStartTimeRef.current;
+      if (lockAge > 60000) {
+        console.warn('[useBuilder] ⚠️ Stale lock detected (held for', Math.round(lockAge / 1000), 's), forcing reset');
+        rebuildInProgressRef.current = false;
+      } else {
+        console.log('[useBuilder] ⏳ Rebuild already in progress for', Math.round(lockAge / 1000), 's, skipping duplicate call');
+        // Return current result or wait for existing rebuild
+        return previewResult || {
+          success: false,
+          errors: [{
+            line: 0,
+            column: 0,
+            message: 'Rebuild in progress',
+            severity: 'warning' as const,
+          }],
+        };
+      }
     }
 
     rebuildInProgressRef.current = true;
+    rebuildStartTimeRef.current = Date.now();
     console.log('[useBuilder] 🔨 rebuild() starting, setting isBuilding=true');
     console.log('[useBuilder] 🔨 Files provided:', providedFiles?.length || 'none (will use internal)');
     setIsBuilding(true);
 
-    // Add timeout to prevent hanging forever
-    const timeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Build timeout after 30s')), 30000);
-    });
+    // HARD TIMEOUT: Force completion after 45s no matter what
+    // First WASM load can take 20-30s, so give it more time
+    const HARD_TIMEOUT = 45000;
+    let hardTimeoutId: NodeJS.Timeout | null = null;
+    let resolved = false;
+
+    const forceComplete = (error: string) => {
+      if (resolved) return;
+      resolved = true;
+      console.error('[useBuilder] 🚨 HARD TIMEOUT:', error);
+      rebuildInProgressRef.current = false;
+      setIsBuilding(false);
+      const errorResult: PreviewResult = {
+        success: false,
+        errors: [{
+          line: 0,
+          column: 0,
+          message: error,
+          severity: 'error' as const,
+        }],
+      };
+      setPreviewResult(errorResult);
+    };
+
+    hardTimeoutId = setTimeout(() => {
+      forceComplete('Build timed out after 30s. Check browser console for [ESBuild] logs.');
+    }, HARD_TIMEOUT);
 
     try {
-      const result = await Promise.race([
-        manager.rebuild(providedFiles),
-        timeoutPromise
-      ]) as Awaited<ReturnType<typeof manager.rebuild>>;
+      const result = await manager.rebuild(providedFiles);
+
+      if (resolved) {
+        console.log('[useBuilder] ⚠️ Build completed after timeout was triggered');
+        return result;
+      }
+
+      if (hardTimeoutId) clearTimeout(hardTimeoutId);
+      resolved = true;
 
       console.log('[useBuilder] ✅ rebuild() completed, success:', result?.success, 'HTML length:', result?.html?.length || 0);
       // Explicitly set preview result here as well (in addition to onPreviewUpdate callback)
@@ -320,8 +369,16 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       }
       return result;
     } catch (error) {
+      if (resolved) {
+        console.log('[useBuilder] ⚠️ Build errored after timeout was triggered');
+        throw error;
+      }
+
+      if (hardTimeoutId) clearTimeout(hardTimeoutId);
+      resolved = true;
+
       console.error('[useBuilder] ❌ Rebuild failed:', error);
-      const errorResult = {
+      const errorResult: PreviewResult = {
         success: false,
         errors: [{
           line: 0,
@@ -334,12 +391,15 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
       setPreviewResult(errorResult);
       return errorResult;
     } finally {
-      // Always reset isBuilding, even if rebuild throws
-      rebuildInProgressRef.current = false;
-      console.log('[useBuilder] 🏁 rebuild() finally block, setting isBuilding=false');
-      setIsBuilding(false);
+      // Always cleanup, even if rebuild throws
+      if (hardTimeoutId) clearTimeout(hardTimeoutId);
+      if (!resolved) {
+        rebuildInProgressRef.current = false;
+        console.log('[useBuilder] 🏁 rebuild() finally block, setting isBuilding=false');
+        setIsBuilding(false);
+      }
     }
-  }, [previewResult]);
+  }, []);
 
   const reset = useCallback(() => {
     const manager = managerRef.current;
@@ -353,6 +413,8 @@ export function useBuilder(options: UseBuilderOptions = {}): UseBuilderResult {
     setConsoleEntries([]);
     setProjectName(initialProjectName);
     setIsBuilding(false);  // Ensure isBuilding is reset
+    rebuildInProgressRef.current = false;  // CRITICAL: Reset rebuild lock
+    console.log('[useBuilder] 🔄 Reset complete, rebuild lock cleared');
   }, [initialProjectName]);
 
   const clearConsole = useCallback(() => {

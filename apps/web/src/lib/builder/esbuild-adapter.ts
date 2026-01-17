@@ -154,15 +154,27 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
   private async doInitialize(): Promise<void> {
     try {
       console.log('[ESBuild] Starting initialization...');
+      console.log('[ESBuild] 📦 Importing esbuild-wasm module...');
 
       // Dynamic import to avoid SSR issues
-      const esbuildModule = await import('esbuild-wasm');
+      const importStart = performance.now();
+      let esbuildModule: ESBuild;
+      try {
+        esbuildModule = await import('esbuild-wasm');
+        console.log('[ESBuild] ✅ Module imported in', Math.round(performance.now() - importStart), 'ms');
+        console.log('[ESBuild] Module keys:', Object.keys(esbuildModule).join(', '));
+      } catch (importError) {
+        console.error('[ESBuild] ❌ FAILED to import esbuild-wasm module:', importError);
+        throw new Error(`Failed to import esbuild-wasm: ${importError instanceof Error ? importError.message : String(importError)}`);
+      }
+
       this.esbuild = esbuildModule;
 
       console.log('[ESBuild] Module loaded, initializing WASM...');
 
-      // Try multiple WASM sources in case one fails
+      // Try multiple WASM sources - local first, then CDN fallbacks
       const wasmSources = [
+        '/esbuild.wasm',  // Local file in /public - fastest
         'https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm',
         'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.1/esbuild.wasm',
         'https://esm.sh/esbuild-wasm@0.20.1/esbuild.wasm',
@@ -223,10 +235,13 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
    * Build and preview a project
    */
   async preview(project: AlfredProject, activeFile?: string): Promise<PreviewResult> {
+    console.log('[ESBuild] 🚀 preview() called with', project.fileCount, 'files');
     const startTime = performance.now();
 
     try {
+      console.log('[ESBuild] ⏳ Calling initialize()...');
       await this.initialize();
+      console.log('[ESBuild] ✅ initialize() completed');
 
       if (!this.esbuild || !this.initialized) {
         return {

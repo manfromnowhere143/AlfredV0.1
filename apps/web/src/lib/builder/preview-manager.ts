@@ -94,7 +94,15 @@ export class PreviewManager {
    * Initialize the preview manager (warm up ESBuild)
    */
   async initialize(): Promise<void> {
-    await initializeEsbuild();
+    console.log('[PreviewManager] 🚀 initialize() called, warming up ESBuild...');
+    const startTime = performance.now();
+    try {
+      await initializeEsbuild();
+      console.log('[PreviewManager] ✅ ESBuild initialized in', Math.round(performance.now() - startTime), 'ms');
+    } catch (err) {
+      console.error('[PreviewManager] ❌ ESBuild initialization failed:', err);
+      throw err;
+    }
   }
 
   // ==========================================================================
@@ -253,7 +261,9 @@ export class PreviewManager {
     }
 
     // Create project with the files we've gathered
+    console.log('[PreviewManager] 🔧 Getting ESBuild adapter...');
     const adapter = getEsbuildAdapter();
+    console.log('[PreviewManager] ✅ Got adapter, creating project...');
     const project = this.createProjectWithFiles(filesToUse);
 
     console.log('[PreviewManager] 🔨 Rebuilding project:', project.name);
@@ -261,7 +271,9 @@ export class PreviewManager {
     console.log('[PreviewManager] 🎯 Entry point:', project.entryPoint);
     console.log('[PreviewManager] Files:', Array.from(project.files.keys()).join(', '));
 
+    console.log('[PreviewManager] 🚀 Calling adapter.preview()...');
     const result = await adapter.preview(project);
+    console.log('[PreviewManager] ✅ adapter.preview() returned');
 
     console.log('[PreviewManager] Build result:', result.success ? '✅ Success' : '❌ Failed');
     if (!result.success && result.errors?.length) {

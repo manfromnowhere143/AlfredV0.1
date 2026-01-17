@@ -325,21 +325,19 @@ export default function BuilderPage() {
   }, [isStreaming, builder.isBuilding, builder.files.length, builder.selectedFile, builder.previewResult]);
 
   // SAFETY: Force reset stuck states after stream completes
-  // If we have files but isBuilding is stuck true for 5 seconds, force reset
+  // If we have files but isBuilding is stuck true for too long, force reset
+  // NOTE: ESBuild WASM can take 20-30s to load first time, so use 60s timeout
   useEffect(() => {
     if (builder.files.length > 0 && (isStreaming || builder.isBuilding)) {
       const timeout = setTimeout(() => {
-        console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 5s');
+        console.warn('[Builder Page] ⚠️ SAFETY TIMEOUT: Forcing state reset after 60s');
         setIsStreaming(false);
-        // Force a rebuild to ensure preview updates - PASS FILES DIRECTLY
-        if (builder.files.length > 0 && !builder.previewResult?.html) {
-          console.log('[Builder Page] 🔄 Forcing rebuild after timeout with', builder.files.length, 'files...');
-          builder.rebuild?.(builder.files);
-        }
-      }, 5000);
+        // Don't try to rebuild here - the hard timeout in useBuilder will handle it
+        // This just resets the streaming state
+      }, 60000);
       return () => clearTimeout(timeout);
     }
-  }, [builder.files.length, isStreaming, builder.isBuilding, builder.previewResult?.html, builder.rebuild]);
+  }, [builder.files.length, isStreaming, builder.isBuilding]);
 
   // Auto-scroll
   useEffect(() => {
@@ -608,6 +606,9 @@ export default function BuilderPage() {
     setInputValue('');
     setStreamingSteps([]);
     setShowEnhancer(false);
+
+    // CRITICAL: Reset builder state to clear any stale locks from previous builds
+    console.log('[Builder] 🔄 Resetting builder state...');
     builder.reset();
     if (chatMinimized) setChatMinimized(false);
 
@@ -940,6 +941,9 @@ export default function BuilderPage() {
                   <div>React files:{builder.files.length} | Manager files:{builder.manager?.getFiles?.()?.length ?? 'N/A'}</div>
                   <div>selected:{builder.selectedFile?.path?.slice(-20) || 'none'}</div>
                   <div>preview:{builder.previewResult ? `${builder.previewResult.success ? '✓' : '✗'} ${builder.previewResult.html?.length || 0}b` : 'null'}</div>
+                  {builder.previewResult?.errors?.[0] && (
+                    <div style={{color:'#f66',fontSize:9,marginTop:2}}>Error: {builder.previewResult.errors[0].message?.slice(0,80)}</div>
+                  )}
                 </div>
               )}
               <BuilderPreview
