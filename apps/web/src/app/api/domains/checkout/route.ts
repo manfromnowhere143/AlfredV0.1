@@ -172,25 +172,32 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, userId));
     }
 
-    // Step 4: Create pending domain purchase record
-    const [purchase] = await db.insert(domainPurchases)
-      .values({
-        userId,
-        domain: domainLower,
-        tld,
-        vercelPriceCents,
-        alfredFeeCents,
-        totalPriceCents,
-        years: 1,
-        status: 'pending_payment',
-        projectId: projectId || null,
-        vercelProjectId: vercelProjectId || null,
-        autoRenew: true,
-        metadata: { source },
-      })
-      .returning();
-
-    console.log(`[Domain Checkout] Created purchase record: ${purchase.id}`);
+    // Step 4: Create pending domain purchase record (optional - table may not exist yet)
+    let purchaseId: string | null = null;
+    try {
+      const [purchase] = await db.insert(domainPurchases)
+        .values({
+          userId,
+          domain: domainLower,
+          tld,
+          vercelPriceCents,
+          alfredFeeCents,
+          totalPriceCents,
+          years: 1,
+          status: 'pending_payment',
+          projectId: projectId || null,
+          vercelProjectId: vercelProjectId || null,
+          autoRenew: true,
+          metadata: { source },
+        })
+        .returning();
+      purchaseId = purchase.id;
+      console.log(`[Domain Checkout] Created purchase record: ${purchaseId}`);
+    } catch (dbError) {
+      // Table may not exist yet - continue without purchase record
+      console.warn('[Domain Checkout] Could not create purchase record (table may not exist):', dbError);
+      purchaseId = crypto.randomUUID(); // Use temporary ID for tracking
+    }
 
     // Step 5: Create Stripe Checkout session
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
@@ -218,28 +225,32 @@ export async function POST(request: NextRequest) {
       ],
       metadata: {
         type: 'domain_purchase',
-        domainPurchaseId: purchase.id,
+        domainPurchaseId: purchaseId,
         domain: domainLower,
         userId,
         projectId: projectId || '',
         vercelProjectId: vercelProjectId || '',
       },
-      success_url: `${baseUrl}/builder?domain_purchased=${domainLower}&purchase_id=${purchase.id}`,
+      success_url: `${baseUrl}/builder?domain_purchased=${domainLower}&purchase_id=${purchaseId}`,
       cancel_url: `${baseUrl}/builder?domain_cancelled=${domainLower}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
     });
 
-    // Update purchase with Stripe session ID
-    await db.update(domainPurchases)
-      .set({ stripeCheckoutSessionId: checkoutSession.id })
-      .where(eq(domainPurchases.id, purchase.id));
+    // Update purchase with Stripe session ID (if table exists)
+    try {
+      await db.update(domainPurchases)
+        .set({ stripeCheckoutSessionId: checkoutSession.id })
+        .where(eq(domainPurchases.id, purchaseId));
+    } catch {
+      // Table may not exist yet
+    }
 
     console.log(`[Domain Checkout] Created Stripe session: ${checkoutSession.id}`);
 
     return NextResponse.json({
       success: true,
       checkoutUrl: checkoutSession.url,
-      purchaseId: purchase.id,
+      purchaseId,
       domain: domainLower,
       price: {
         vercel: vercelPriceCents / 100,
@@ -250,6 +261,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Domain Checkout] Error:', error);
-    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({
+      error: 'Failed to create checkout session',
+      details: errorMessage
+    }, { status: 500 });
   }
 }
