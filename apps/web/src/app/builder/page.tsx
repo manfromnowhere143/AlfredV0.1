@@ -1359,11 +1359,40 @@ export default function BuilderPage() {
           onDeploy={async () => { handleDeploy(); }}
           isDeploying={isDeploying}
           deployedUrl={deployedUrl}
-          // Export
-          onExport={() => {}}
+          // Export - Download as ZIP
+          onExport={() => {
+            const syncedFiles = builder.syncFiles?.() || builder.files;
+            if (syncedFiles.length === 0) {
+              alert('No files to export. Create some code first!');
+              return;
+            }
+            // Create a simple text file with all code for now
+            // TODO: Implement proper ZIP export
+            const content = syncedFiles.map(f => `// ${f.path}\n${f.content}`).join('\n\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${builder.projectName || 'alfred-project'}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
           // Load project
           onLoadProject={loadProject}
         />
+
+        {/* Deploy Modal for Mobile */}
+        {showDeployModal && (
+          <BuilderDeploymentCard
+            files={filesToDeploy}
+            projectName={builder.projectName || 'alfred-project'}
+            artifactId={currentProjectId || `builder-${Date.now()}`}
+            artifactTitle={builder.projectName || 'Alfred Project'}
+            onClose={() => setShowDeployModal(false)}
+            onDeployed={handleDeployed}
+          />
+        )}
+
         {limitReached && (
           <LimitReached
             limitType={limitReached.type}
