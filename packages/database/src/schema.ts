@@ -120,6 +120,16 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'paused',
 ]);
 
+// Domain purchase status enum
+export const domainPurchaseStatusEnum = pgEnum('domain_purchase_status', [
+  'pending_payment',    // Stripe checkout created, waiting for payment
+  'payment_completed',  // Stripe payment received, purchasing from Vercel
+  'purchasing',         // Actively calling Vercel API
+  'completed',          // Domain purchased and linked
+  'failed',             // Purchase failed
+  'refunded',           // User refunded
+]);
+
 // ============================================================================
 // ALFRED BUILDER - Multi-File Project Enums
 // ============================================================================
@@ -1086,6 +1096,83 @@ export const usageRecords = pgTable(
 );
 
 // ============================================================================
+// DOMAIN PURCHASES - State-of-the-Art Domain Purchase Flow
+// ============================================================================
+
+/**
+ * domainPurchases - Tracks domain purchases through Alfred
+ *
+ * Flow:
+ * 1. User searches domain → Check Vercel API for availability/price
+ * 2. User clicks Buy → Create Stripe Checkout session
+ * 3. User pays → Webhook triggers Vercel purchase
+ * 4. Domain purchased → Auto-link to project, DNS auto-configured
+ */
+export const domainPurchases = pgTable(
+  'domain_purchases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+    // Domain info
+    domain: varchar('domain', { length: 255 }).notNull(),
+    tld: varchar('tld', { length: 50 }).notNull(), // .com, .io, .dev, etc.
+
+    // Pricing (in cents to avoid floating point issues)
+    vercelPriceCents: integer('vercel_price_cents').notNull(), // What Vercel charges
+    alfredFeeCents: integer('alfred_fee_cents').notNull().default(0), // Our markup (if any)
+    totalPriceCents: integer('total_price_cents').notNull(), // What user pays
+    years: integer('years').notNull().default(1), // Purchase duration
+
+    // Status tracking
+    status: domainPurchaseStatusEnum('status').notNull().default('pending_payment'),
+    statusMessage: text('status_message'),
+
+    // Stripe integration
+    stripeCheckoutSessionId: varchar('stripe_checkout_session_id', { length: 255 }),
+    stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    stripePaidAt: timestamp('stripe_paid_at', { withTimezone: true }),
+
+    // Vercel integration
+    vercelOrderId: varchar('vercel_order_id', { length: 255 }),
+    vercelPurchasedAt: timestamp('vercel_purchased_at', { withTimezone: true }),
+
+    // Link to project (for auto DNS config)
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    vercelProjectId: varchar('vercel_project_id', { length: 255 }),
+
+    // Auto-renewal settings
+    autoRenew: boolean('auto_renew').notNull().default(true),
+
+    // Error handling
+    lastError: text('last_error'),
+    retryCount: integer('retry_count').notNull().default(0),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<{
+      userAgent?: string;
+      ipAddress?: string;
+      referrer?: string;
+      source?: string; // 'builder' | 'dashboard'
+    }>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }), // Domain expiration
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('domain_purchases_user_id_idx').on(table.userId),
+    index('domain_purchases_domain_idx').on(table.domain),
+    index('domain_purchases_status_idx').on(table.status),
+    index('domain_purchases_stripe_session_idx').on(table.stripeCheckoutSessionId),
+    index('domain_purchases_project_id_idx').on(table.projectId),
+    index('domain_purchases_created_at_idx').on(table.createdAt),
+  ]
+);
+
+// ============================================================================
 // PERSONAS
 // ============================================================================
 
@@ -1782,6 +1869,11 @@ export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
   user: one(users, { fields: [usageRecords.userId], references: [users.id] }),
 }));
 
+export const domainPurchasesRelations = relations(domainPurchases, ({ one }) => ({
+  user: one(users, { fields: [domainPurchases.userId], references: [users.id] }),
+  project: one(projects, { fields: [domainPurchases.projectId], references: [projects.id] }),
+}));
+
 // Persona relations
 export const personasRelations = relations(personas, ({ one, many }) => ({
   user: one(users, { fields: [personas.userId], references: [users.id] }),
@@ -1891,6 +1983,9 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 
 export type UsageRecord = typeof usageRecords.$inferSelect;
 export type NewUsageRecord = typeof usageRecords.$inferInsert;
+
+export type DomainPurchase = typeof domainPurchases.$inferSelect;
+export type NewDomainPurchase = typeof domainPurchases.$inferInsert;
 
 // Persona types
 export type Persona = typeof personas.$inferSelect;

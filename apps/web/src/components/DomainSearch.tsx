@@ -37,9 +37,9 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
   const [state, setState] = useState<SearchState>('idle');
   const [result, setResult] = useState<DomainCheckResult | null>(null);
   const [suggestions, setSuggestions] = useState<DomainCheckResult[]>([]);
-  const [isPurchasing, setIsPurchasing] = useState(false);
   const [mode, setMode] = useState<'search' | 'byod'>('search');
   const [byodDomain, setByodDomain] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null); // domain being purchased
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const abortControllerRef = useRef<AbortController>();
 
@@ -118,29 +118,39 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
     searchTimeoutRef.current = setTimeout(() => searchDomain(value), 500);
   }, [searchDomain]);
 
-  // Purchase domain
-  const handlePurchase = useCallback(async (domain: string) => {
-    setIsPurchasing(true);
+  // Start checkout flow for domain purchase
+  const handleBuyDomain = useCallback(async (domain: string) => {
+    setCheckoutLoading(domain);
     try {
-      const res = await fetch('/api/domains/purchase', {
+      const res = await fetch('/api/domains/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, projectId }),
+        body: JSON.stringify({
+          domain,
+          projectId,
+          source: 'builder'
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to purchase');
+        throw new Error(data.error || 'Failed to create checkout');
       }
 
-      onDomainSelect(domain, true);
+      // Redirect to Stripe Checkout
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error('No checkout URL received');
+      }
     } catch (error) {
-      alert(`Purchase failed: ${(error as Error).message}`);
-    } finally {
-      setIsPurchasing(false);
+      console.error('[DomainSearch] Checkout error:', error);
+      alert(`Checkout failed: ${(error as Error).message}`);
+      setCheckoutLoading(null);
     }
-  }, [onDomainSelect, projectId]);
+    // Note: Don't reset checkoutLoading on success - we're redirecting away
+  }, [projectId]);
 
   // Use BYOD
   const handleUseBYOD = useCallback(() => {
@@ -229,13 +239,20 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
               <div className="result-action">
                 <button
                   className="purchase-btn"
-                  onClick={() => {
-                    // Show purchase info - full purchase flow requires Vercel payment setup
-                    alert(`To use ${result.domain}, you need to purchase it.\n\nPrice: ${result.price ? `$${result.price}/yr` : 'Check Vercel'}\n\nPurchase domains at: vercel.com/domains\n\nOr use "Use My Domain" tab if you already own a domain.`);
-                  }}
+                  onClick={() => handleBuyDomain(result.domain)}
+                  disabled={checkoutLoading === result.domain}
                 >
-                  <span className="price">{result.price ? `$${result.price}/yr` : 'Check price'}</span>
-                  <span className="buy-text">Buy</span>
+                  {checkoutLoading === result.domain ? (
+                    <>
+                      <div className="spinner small" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="price">{result.price ? `$${result.price}/yr` : 'Check price'}</span>
+                      <span className="buy-text">Buy Now</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -263,18 +280,21 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
               {suggestions.map((s) => (
                 <div key={s.domain} className="suggestion-item">
                   <span className="suggestion-domain">{s.domain}</span>
-                  {/* Available domains show price - clicking shows purchase info */}
                   <button
                     type="button"
                     className="suggestion-btn purchase"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      // Show info that purchase is required
-                      alert(`To use ${s.domain}, you need to purchase it.\n\nPrice: ${s.price ? `$${s.price}/yr` : 'Check Vercel'}\n\nPurchase domains at: vercel.com/domains`);
+                      handleBuyDomain(s.domain);
                     }}
+                    disabled={checkoutLoading === s.domain}
                   >
-                    {s.price ? `$${s.price}/yr` : 'Buy'}
+                    {checkoutLoading === s.domain ? (
+                      <span>Processing...</span>
+                    ) : (
+                      s.price ? `$${s.price}/yr` : 'Buy'
+                    )}
                   </button>
                 </div>
               ))}
