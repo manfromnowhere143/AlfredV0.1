@@ -1387,6 +1387,11 @@ export default function BuilderPage() {
           modificationSteps={modificationSteps}
           onApplyModification={handleApplyModification}
           onCancelModification={handleCancelModification}
+          // File Upload
+          uploadedFiles={fileUpload.files}
+          isUploading={fileUpload.isUploading}
+          onAddFiles={fileUpload.addFiles}
+          onRemoveFile={fileUpload.removeFile}
         />
 
         {/* Deploy Modal for Mobile */}

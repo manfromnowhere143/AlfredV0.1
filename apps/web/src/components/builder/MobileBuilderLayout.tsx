@@ -24,6 +24,7 @@ import type { VirtualFile, VirtualDirectory, PreviewResult } from '@alfred/core'
 import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
 import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
 import { ModificationPreview, ForensicInvestigation, ModificationProgress } from '@/components/alfred-code';
+import type { FileAttachment } from '@/lib/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -91,6 +92,11 @@ interface MobileBuilderLayoutProps {
   modificationSteps?: ProgressStep[];
   onApplyModification?: () => void;
   onCancelModification?: () => void;
+  // File Upload
+  uploadedFiles?: FileAttachment[];
+  isUploading?: boolean;
+  onAddFiles?: (files: File[]) => Promise<void>;
+  onRemoveFile?: (id: string) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2255,6 +2261,11 @@ function MobileChat({
   onApplyModification,
   onCancelModification,
   projectName,
+  // File Upload
+  uploadedFiles,
+  isUploading,
+  onAddFiles,
+  onRemoveFile,
 }: {
   messages: MobileBuilderLayoutProps['messages'];
   streamingSteps: MobileBuilderLayoutProps['streamingSteps'];
@@ -2281,6 +2292,11 @@ function MobileChat({
   onApplyModification?: () => void;
   onCancelModification?: () => void;
   projectName?: string;
+  // File Upload
+  uploadedFiles?: FileAttachment[];
+  isUploading?: boolean;
+  onAddFiles?: (files: File[]) => Promise<void>;
+  onRemoveFile?: (id: string) => void;
 }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2294,6 +2310,19 @@ function MobileChat({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
+
+  // File upload refs
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // File input change handler
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && onAddFiles) {
+      onAddFiles(Array.from(e.target.files));
+      e.target.value = ''; // Reset input
+    }
+  }, [onAddFiles]);
 
   // Voice recording functions
   const startRecording = useCallback(async () => {
@@ -2682,37 +2711,107 @@ function MobileChat({
             <div className="dots"><span /><span /><span /></div>
           </div>
         ) : (
-          <div className="input-row">
-            {/* Upload Buttons - Desktop Identical */}
-            <div className="upload-buttons">
-              <button className="btn-upload" disabled={isStreaming} title="Add image">
-                {Icons.image}
-              </button>
-              <button className="btn-upload" disabled={isStreaming} title="Add video">
-                {Icons.video}
-              </button>
-              <button className="btn-upload" disabled={isStreaming} title="Add file">
-                {Icons.paperclip}
-              </button>
-            </div>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Describe what you want to build..."
-              disabled={isStreaming}
-              rows={1}
+          <>
+            {/* Hidden File Inputs */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileInputChange}
             />
-            {input.trim() ? (
-              <button className="btn-send" onClick={handleSend} disabled={isStreaming}>
-                {Icons.send}
-              </button>
-            ) : (
-              <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>
-                {Icons.mic}
-              </button>
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileInputChange}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.md,.csv,.html,.css,.json,.js,.ts,.tsx,.jsx"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileInputChange}
+            />
+
+            {/* File Preview Bar */}
+            {uploadedFiles && uploadedFiles.length > 0 && (
+              <div className="attachments-preview">
+                {uploadedFiles.map((file) => (
+                  <div key={file.id} className={`attachment-chip ${file.category}`}>
+                    {file.preview ? (
+                      <img src={file.preview} alt={file.name} className="attachment-thumb" />
+                    ) : (
+                      <span className="attachment-icon">
+                        {file.category === 'document' && Icons.paperclip}
+                        {file.category === 'code' && Icons.code}
+                        {file.category === 'video' && Icons.video}
+                      </span>
+                    )}
+                    <span className="attachment-name">{file.name}</span>
+                    <button
+                      className="attachment-remove"
+                      onClick={() => onRemoveFile?.(file.id)}
+                      aria-label="Remove file"
+                    >
+                      {Icons.x}
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-          </div>
+
+            <div className="input-row">
+              {/* Upload Buttons - Desktop Identical */}
+              <div className="upload-buttons">
+                <button
+                  className="btn-upload"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isStreaming || isUploading}
+                  title="Add image"
+                >
+                  {Icons.image}
+                </button>
+                <button
+                  className="btn-upload"
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={isStreaming || isUploading}
+                  title="Add video"
+                >
+                  {Icons.video}
+                </button>
+                <button
+                  className="btn-upload"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || isUploading}
+                  title="Add file"
+                >
+                  {Icons.paperclip}
+                </button>
+              </div>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Describe what you want to build..."
+                disabled={isStreaming}
+                rows={1}
+              />
+              {input.trim() ? (
+                <button className="btn-send" onClick={handleSend} disabled={isStreaming}>
+                  {Icons.send}
+                </button>
+              ) : (
+                <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>
+                  {Icons.mic}
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
       <style jsx>{`
@@ -3108,6 +3207,69 @@ function MobileChat({
         .btn-upload:active { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text-secondary, rgba(255,255,255,0.6)); }
         .btn-upload:disabled { opacity: 0.3; cursor: not-allowed; }
 
+        /* Attachments Preview */
+        .attachments-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 8px 12px;
+          background: var(--surface, rgba(255,255,255,0.02));
+          border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+        }
+        .attachment-chip {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 10px;
+          background: var(--surface-elevated, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 8px;
+          font-size: 12px;
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+        }
+        .attachment-chip.image { border-color: rgba(59, 130, 246, 0.3); }
+        .attachment-chip.video { border-color: rgba(168, 85, 247, 0.3); }
+        .attachment-chip.document { border-color: rgba(245, 158, 11, 0.3); }
+        .attachment-chip.code { border-color: rgba(34, 197, 94, 0.3); }
+        .attachment-thumb {
+          width: 28px;
+          height: 28px;
+          border-radius: 4px;
+          object-fit: cover;
+        }
+        .attachment-icon {
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.5));
+        }
+        .attachment-name {
+          max-width: 100px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .attachment-remove {
+          width: 18px;
+          height: 18px;
+          padding: 0;
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+        }
+        .attachment-remove:hover {
+          background: rgba(239, 68, 68, 0.1);
+          color: #ef4444;
+        }
+
         /* Send & Mic Buttons - Desktop Style */
         .btn-mic, .btn-send {
           width: 32px; height: 32px;
@@ -3453,6 +3615,11 @@ export default function MobileBuilderLayout({
   modificationSteps,
   onApplyModification,
   onCancelModification,
+  // File Upload
+  uploadedFiles,
+  isUploading,
+  onAddFiles,
+  onRemoveFile,
 }: MobileBuilderLayoutProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('chat');
   const [showProjectsModal, setShowProjectsModal] = useState(false);
@@ -3579,6 +3746,11 @@ export default function MobileBuilderLayout({
             onApplyModification={onApplyModification}
             onCancelModification={onCancelModification}
             projectName={projectName}
+            // File Upload
+            uploadedFiles={uploadedFiles}
+            isUploading={isUploading}
+            onAddFiles={onAddFiles}
+            onRemoveFile={onRemoveFile}
           />
         )}
       </div>
