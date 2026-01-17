@@ -426,6 +426,18 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       try {
         const buildStart = performance.now();
 
+        // Log files we're building
+        console.log('[ESBuild] 📁 Building with files:', files.map(f => f.path).join(', '));
+        console.log('[ESBuild] 🎯 Entry point:', entryPoint);
+
+        // Verify entry point exists
+        const entryExists = files.some(f => f.path === entryPoint);
+        console.log('[ESBuild] 🎯 Entry point exists:', entryExists);
+        if (!entryExists) {
+          console.error('[ESBuild] ❌ Entry point not found in files!');
+          console.log('[ESBuild] Available files:', files.map(f => f.path));
+        }
+
         // Create virtual filesystem plugin
         const vfsPlugin = this.createVirtualFsPlugin(files);
 
@@ -433,8 +445,10 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         const cdnPlugin: Plugin = {
           name: 'cdn-external',
           setup: (build) => {
+            console.log('[ESBuild:CDN] 🔧 cdn-external plugin setup');
             // Match all bare imports (npm packages - don't start with . or /)
             build.onResolve({ filter: /^[^./]/ }, (args) => {
+              console.log('[ESBuild:CDN] 📦 Marking as external:', args.path);
               // Mark as external - will be resolved via import map
               return { path: args.path, external: true };
             });
@@ -464,12 +478,42 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         ]);
 
         console.log('[ESBuild] ✅ Build completed in', Math.round(performance.now() - buildStart), 'ms');
+        console.log('[ESBuild] 📊 Build result:', {
+          errors: buildResult.errors?.length || 0,
+          warnings: buildResult.warnings?.length || 0,
+          outputFiles: buildResult.outputFiles?.length || 0,
+        });
+
+        if (buildResult.errors && buildResult.errors.length > 0) {
+          console.error('[ESBuild] ❌ Build errors:', buildResult.errors);
+        }
+        if (buildResult.warnings && buildResult.warnings.length > 0) {
+          console.warn('[ESBuild] ⚠️ Build warnings:', buildResult.warnings);
+        }
 
         // Get the bundled output
         if (buildResult.outputFiles && buildResult.outputFiles.length > 0) {
           bundledCode = buildResult.outputFiles[0].text;
           console.log('[ESBuild] 📦 Bundle size:', bundledCode.length, 'chars');
+          // Log first 200 chars to see what we got
+          // Log first 500 chars and look for import statements
+          console.log('[ESBuild] 📝 Bundle preview (first 500 chars):');
+          console.log(bundledCode.substring(0, 500));
+
+          // Check for problematic patterns
+          const importCount = (bundledCode.match(/^import /gm) || []).length;
+          console.log('[ESBuild] 📊 Import statement count:', importCount);
+
+          // Log first few import lines
+          const importLines = bundledCode.split('\n').filter(l => l.trim().startsWith('import ')).slice(0, 5);
+          console.log('[ESBuild] 📋 First imports:', importLines);
+
+          // Check for template literal issues (backticks, ${} in code)
+          const backtickCount = (bundledCode.match(/`/g) || []).length;
+          const templateExprCount = (bundledCode.match(/\$\{/g) || []).length;
+          console.log('[ESBuild] ⚠️ Template hazards: backticks:', backtickCount, '| ${}:', templateExprCount);
         } else {
+          console.error('[ESBuild] ❌ No output files! Build may have silently failed.');
           throw new Error('ESBuild produced no output files');
         }
 
@@ -596,21 +640,33 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
     }
 
     console.log('[ESBuild:VFS] 📁 Created file map with', fileMap.size, 'entries');
+    console.log('[ESBuild:VFS] 📁 Files:', Array.from(fileMap.keys()).join(', '));
+
+    // Store reference for use in arrow functions
+    const self = this;
 
     return {
       name: 'virtual-fs',
       setup: (build) => {
         console.log('[ESBuild:VFS] 🔧 Plugin setup called');
 
-        // Resolve virtual files
-        build.onResolve({ filter: /^[./]/ }, (args) => {
-          console.log('[ESBuild:VFS] 🔍 Resolving:', args.path, 'from:', args.importer);
+        // Resolve local files (entry points and relative/absolute imports)
+        // Use a filter that only matches local paths to avoid intercepting npm packages
+        build.onResolve({ filter: /^[./]|^virtual-fs:/ }, (args) => {
+
+          console.log('[ESBuild:VFS] 🔍 Resolving:', args.path, '| kind:', args.kind, '| from:', args.importer || '(entry)');
+
           let path = args.path;
 
           // Handle relative imports
           if (path.startsWith('./') || path.startsWith('../')) {
-            const dir = args.importer.split('/').slice(0, -1).join('/');
-            path = this.resolvePath(dir, path);
+            // Strip namespace prefix from importer if present
+            let importer = args.importer || '';
+            if (importer.startsWith('virtual-fs:')) {
+              importer = importer.slice('virtual-fs:'.length);
+            }
+            const dir = importer ? importer.split('/').slice(0, -1).join('/') : '';
+            path = self.resolvePath(dir, path);
           }
 
           // Normalize path
@@ -643,34 +699,49 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
 
         // Load virtual files
         build.onLoad({ filter: /.*/, namespace: 'virtual-fs' }, (args) => {
-          console.log('[ESBuild:VFS] 📄 Loading:', args.path);
-          const file = fileMap.get(args.path) || fileMap.get(args.path.slice(1));
+          // Strip namespace prefix if present (shouldn't happen but defensive)
+          let loadPath = args.path;
+          if (loadPath.startsWith('virtual-fs:')) {
+            loadPath = loadPath.slice('virtual-fs:'.length);
+          }
+          console.log('[ESBuild:VFS] 📄 Loading:', loadPath);
+
+          // CRITICAL: Handle CSS imports as empty modules
+          // CSS is extracted separately and injected via <style> tags
+          const ext = loadPath.split('.').pop()?.toLowerCase();
+          if (ext === 'css') {
+            console.log('[ESBuild:VFS] 🎨 CSS file - returning empty module (CSS extracted separately)');
+            return {
+              contents: '/* CSS extracted */\nexport default {};',
+              loader: 'js',
+            };
+          }
+
+          const file = fileMap.get(loadPath) || fileMap.get(loadPath.slice(1));
 
           if (!file) {
-            console.log('[ESBuild:VFS] ❌ File not found:', args.path);
+            console.log('[ESBuild:VFS] ❌ File not found:', loadPath);
             return {
               errors: [{
-                text: `File not found: ${args.path}`,
+                text: `File not found: ${loadPath}`,
                 location: null,
               }],
             };
           }
 
           // Determine loader based on extension
-          const ext = args.path.split('.').pop()?.toLowerCase();
-          let loader: 'tsx' | 'ts' | 'jsx' | 'js' | 'css' | 'json' | 'text' = 'tsx';
+          let loader: 'tsx' | 'ts' | 'jsx' | 'js' | 'json' | 'text' = 'tsx';
 
           switch (ext) {
             case 'ts': loader = 'ts'; break;
             case 'jsx': loader = 'jsx'; break;
             case 'js': loader = 'js'; break;
-            case 'css': loader = 'css'; break;
             case 'json': loader = 'json'; break;
             case 'tsx':
             default: loader = 'tsx'; break;
           }
 
-          console.log('[ESBuild:VFS] ✅ Loaded:', args.path, '| Size:', file.content.length, '| Loader:', loader);
+          console.log('[ESBuild:VFS] ✅ Loaded:', loadPath, '| Size:', file.content.length, '| Loader:', loader);
           return {
             contents: file.content,
             loader,
@@ -727,6 +798,8 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
   private generatePreviewHTML(bundledCode: string, project: AlfredProject, cssCode: string = ''): string {
     const deps = project.dependencies || {};
     const importMap = this.generateImportMap(deps);
+
+    console.log('[ESBuild] 🗺️ Import map:', JSON.stringify(importMap, null, 2));
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -880,25 +953,12 @@ ${cssCode}
 
   <!-- Application Bundle -->
   <script type="module">
-    console.log('[Preview] 🚀 Bundle script starting...');
-    console.log('[Preview] 📊 Bundle size:', ${bundledCode.length}, 'chars');
-    try {
-${bundledCode}
-      console.log('[Preview] ✅ Bundle executed successfully');
-    } catch (error) {
-      console.error('[Preview] ❌ Bundle execution error:', error);
-      const overlay = document.createElement('div');
-      overlay.className = 'alfred-error-overlay';
-      overlay.innerHTML = \`
-        <div class="alfred-error-title">Bundle Error</div>
-        <div>\${error.message}</div>
-        <div class="alfred-error-stack">\${error.stack || ''}</div>
-      \`;
-      document.body.appendChild(overlay);
-    }
+// ESM imports must be at top level (not inside try/catch)
+__BUNDLE_CODE_PLACEHOLDER__
+console.log('[Preview] ✅ Bundle executed');
   </script>
 </body>
-</html>`;
+</html>`.replace('__BUNDLE_CODE_PLACEHOLDER__', bundledCode);
   }
 
   /**
@@ -1165,6 +1225,17 @@ ${bundledCode}
       const bScore = isEntry(b.path) ? 4 : isApp(b.path) ? 3 : isUtil(b.path) ? 1 : 2;
       return aScore - bScore;
     });
+  }
+
+  /**
+   * Escape a string for safe embedding in template literals
+   * Critical: bundled code may contain backticks and ${} which break template strings
+   */
+  private escapeTemplateString(str: string): string {
+    return str
+      .replace(/\\/g, '\\\\')     // Escape backslashes first
+      .replace(/`/g, '\\`')       // Escape backticks
+      .replace(/\$\{/g, '\\${');  // Escape template expressions
   }
 
   /**
