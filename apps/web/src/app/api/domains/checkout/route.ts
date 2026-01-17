@@ -109,16 +109,24 @@ export async function POST(request: NextRequest) {
     const priceData = await priceRes.json();
     console.log('[Domain Checkout] Price API response:', JSON.stringify(priceData, null, 2));
 
-    // Try multiple paths where price might be located
-    const vercelPrice =
-      priceData.registration?.price ||
-      priceData.price ||
-      priceData.purchasePrice ||
-      priceData.registrationPrice ||
-      (priceData.prices?.registration) ||
-      null;
+    // Vercel returns purchasePrice which can be a number or string
+    // Also try legacy formats for backwards compatibility
+    let vercelPrice: number | null = null;
 
-    if (!vercelPrice || vercelPrice <= 0) {
+    if (priceData.purchasePrice !== undefined) {
+      // New Vercel API format: purchasePrice can be number or string
+      vercelPrice = typeof priceData.purchasePrice === 'string'
+        ? parseFloat(priceData.purchasePrice)
+        : priceData.purchasePrice;
+    } else if (priceData.registration?.price !== undefined) {
+      // Legacy format with registration object
+      vercelPrice = priceData.registration.price;
+    } else if (priceData.price !== undefined) {
+      // Simple price field
+      vercelPrice = priceData.price;
+    }
+
+    if (vercelPrice === null || isNaN(vercelPrice) || vercelPrice <= 0) {
       console.error('[Domain Checkout] Could not find price in response:', priceData);
       return NextResponse.json({
         error: 'Could not determine domain price',

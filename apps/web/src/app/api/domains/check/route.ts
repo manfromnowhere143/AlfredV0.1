@@ -103,9 +103,17 @@ export async function GET(request: NextRequest) {
 
       if (priceRes.ok) {
         const priceData = await priceRes.json();
-        // API returns pricing object with registration, renewal, transfer prices
-        price = priceData.registration?.price || priceData.price;
-        period = priceData.registration?.period || priceData.period || 1;
+        // Vercel returns purchasePrice which can be a number or string
+        if (priceData.purchasePrice !== undefined) {
+          price = typeof priceData.purchasePrice === 'string'
+            ? parseFloat(priceData.purchasePrice)
+            : priceData.purchasePrice;
+        } else if (priceData.registration?.price !== undefined) {
+          price = priceData.registration.price;
+        } else if (priceData.price !== undefined) {
+          price = priceData.price;
+        }
+        period = priceData.years || priceData.registration?.period || priceData.period || 1;
       }
     }
 
