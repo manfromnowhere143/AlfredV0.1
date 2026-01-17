@@ -21,6 +21,7 @@ import { useBuilder } from '@/hooks/useBuilder';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
+import { DeploymentCard } from '@/components/DeploymentCard';
 import type { VirtualFile, StreamingEvent } from '@alfred/core';
 
 const MonacoEditor = nextDynamic(
@@ -234,6 +235,11 @@ export default function BuilderPage() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Deploy modal state
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
+
   // Refs
   const conversationId = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -360,7 +366,11 @@ export default function BuilderPage() {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   const saveProject = useCallback(async () => {
-    if (builder.files.length === 0) {
+    // CRITICAL: Sync files from manager before checking length
+    const syncedFiles = builder.syncFiles?.() || builder.files;
+    console.log('[Builder:Save] Synced files count:', syncedFiles.length);
+
+    if (syncedFiles.length === 0) {
       alert('No files to save. Create some code first!');
       return;
     }
@@ -374,40 +384,58 @@ export default function BuilderPage() {
         dependencies: {},
         devDependencies: {},
       };
-      const files = builder.files.map(f => ({
+
+      // Use synced files, not potentially stale builder.files
+      const files = syncedFiles.map(f => ({
         path: f.path,
-        name: f.name,
-        content: f.content,
-        language: f.language,
-        fileType: f.fileType,
-        isEntryPoint: f.isEntryPoint,
-        generatedBy: f.generatedBy,
+        name: f.name || f.path.split('/').pop() || 'unknown',
+        content: f.content || '',
+        language: f.language || 'typescript',
+        fileType: f.fileType || 'component',
+        isEntryPoint: f.isEntryPoint || false,
+        generatedBy: f.generatedBy || 'llm',
       }));
+
+      const payload = {
+        name: projectMeta.name || builder.projectName || 'Untitled Project',
+        description: projectMeta.description || '',
+        framework: projectMeta.framework || 'react',
+        dependencies: projectMeta.dependencies || {},
+        devDependencies: projectMeta.devDependencies || {},
+        files,
+      };
+
+      console.log('[Builder:Save] Saving payload:', {
+        name: payload.name,
+        fileCount: files.length,
+        totalSize: files.reduce((s, f) => s + (f.content?.length || 0), 0),
+      });
 
       const res = await fetch('/api/builder/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: projectMeta.name || 'Untitled Project',
-          description: projectMeta.description || '',
-          framework: projectMeta.framework || 'react',
-          dependencies: projectMeta.dependencies || {},
-          devDependencies: projectMeta.devDependencies || {},
-          files,
-        }),
+        body: JSON.stringify(payload),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to save');
+        console.error('[Builder:Save] API Error:', res.status, data);
+        throw new Error(data.error || `Failed to save (${res.status})`);
       }
 
-      const data = await res.json();
       setCurrentProjectId(data.project.id);
-      console.log('[Builder] Project saved:', data.project.id);
+      console.log('[Builder:Save] Project saved successfully:', data.project.id);
+
+      // Show success feedback (brief toast-style)
+      const toast = document.createElement('div');
+      toast.innerHTML = `<div style="position:fixed;bottom:24px;right:24px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;z-index:9999;animation:fadeIn 0.2s">Project saved successfully!</div>`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
     } catch (error) {
-      console.error('[Builder] Save failed:', error);
-      alert('Failed to save project. Please try again.');
+      console.error('[Builder:Save] Save failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to save';
+      alert(`Save failed: ${message}`);
     } finally {
       setIsSaving(false);
     }
@@ -457,6 +485,94 @@ export default function BuilderPage() {
       alert('Failed to load project. Please try again.');
     }
   }, [builder]);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // DEPLOY FUNCTIONALITY
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  // Generate artifact code from all project files for deployment
+  const generateArtifactCode = useCallback(() => {
+    const syncedFiles = builder.syncFiles?.() || builder.files;
+    if (syncedFiles.length === 0) return '';
+
+    // Find the main app file (App.tsx, App.jsx, or main entry)
+    const appFile = syncedFiles.find(f =>
+      f.path.includes('App.tsx') ||
+      f.path.includes('App.jsx') ||
+      f.path.includes('App.ts') ||
+      f.path.includes('App.js')
+    );
+
+    // If we have an App file, use it as the main artifact code
+    // Otherwise, combine all component files
+    if (appFile) {
+      // For complex projects, we include all code as a multi-file artifact
+      // Format: Each file is wrapped with a comment header
+      const allCode = syncedFiles
+        .filter(f => f.path.match(/\.(tsx?|jsx?|css)$/))
+        .sort((a, b) => {
+          // Order: CSS first, then utils/lib, then components, then App, then main
+          const order = (p: string) => {
+            if (p.includes('.css')) return 0;
+            if (p.includes('lib/') || p.includes('utils/') || p.includes('hooks/')) return 1;
+            if (p.includes('components/')) return 2;
+            if (p.includes('context/') || p.includes('store/')) return 3;
+            if (p.includes('App.')) return 4;
+            if (p.includes('main.') || p.includes('index.')) return 5;
+            return 3;
+          };
+          return order(a.path) - order(b.path);
+        })
+        .map(f => `// FILE: ${f.path}\n${f.content}`)
+        .join('\n\n// ═══════════════════════════════════════════════════════════════\n\n');
+
+      return allCode;
+    }
+
+    // Fallback: return first tsx/jsx file
+    const firstComponent = syncedFiles.find(f => f.path.match(/\.(tsx|jsx)$/));
+    return firstComponent?.content || '';
+  }, [builder]);
+
+  // State for artifact code (generated when deploy modal opens)
+  const [artifactCode, setArtifactCode] = useState('');
+
+  // Handle deploy button click
+  const handleDeploy = useCallback(() => {
+    const syncedFiles = builder.syncFiles?.() || builder.files;
+    if (syncedFiles.length === 0) {
+      alert('No files to deploy. Create some code first!');
+      return;
+    }
+    // Generate artifact code when modal opens
+    setArtifactCode(generateArtifactCode());
+    setShowDeployModal(true);
+  }, [builder, generateArtifactCode]);
+
+  // Handle deployment complete
+  const handleDeployed = useCallback((url: string) => {
+    setDeployedUrl(url);
+    setShowDeployModal(false);
+
+    // Show success toast
+    const toast = document.createElement('div');
+    toast.innerHTML = `
+      <div style="position:fixed;bottom:24px;right:24px;background:linear-gradient(135deg,#8b5cf6,#6366f1);color:white;padding:16px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:9999;box-shadow:0 8px 32px rgba(139,92,246,0.4);animation:fadeIn 0.3s;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
+            <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
+          </svg>
+          <span>Deployed successfully!</span>
+        </div>
+        <a href="${url}" target="_blank" style="color:rgba(255,255,255,0.9);font-size:12px;text-decoration:underline;">${url}</a>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+
+    console.log('[Builder:Deploy] Deployed to:', url);
+  }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // VOICE RECORDING
@@ -879,6 +995,40 @@ export default function BuilderPage() {
             </svg>
             <span>Projects</span>
           </button>
+          <button
+            className="header-btn primary"
+            onClick={handleDeploy}
+            disabled={builder.files.length === 0 || isDeploying}
+            title="Deploy to web"
+          >
+            {isDeploying ? (
+              <div className="btn-spinner" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z" />
+                <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z" />
+                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+              </svg>
+            )}
+            <span>Deploy</span>
+          </button>
+          {deployedUrl && (
+            <a
+              href={deployedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="header-btn deployed-link"
+              title="View deployed site"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+              <span>Live</span>
+            </a>
+          )}
           <div className={`status-badge ${isStreaming ? 'streaming' : builder.isBuilding ? 'building' : 'ready'}`}>
             <div className="status-dot" />
             <span>{isStreaming ? 'Generating' : builder.isBuilding ? 'Building' : 'Ready'}</span>
@@ -1077,6 +1227,26 @@ export default function BuilderPage() {
             />
           </div>
         )}
+
+        {/* Deploy Modal */}
+        {showDeployModal && (
+          <DeploymentCard
+            artifactId={currentProjectId || `builder-${Date.now()}`}
+            artifactTitle={builder.projectName || 'Alfred Project'}
+            artifactCode={artifactCode}
+            onClose={() => setShowDeployModal(false)}
+            onDeployed={handleDeployed}
+          />
+        )}
+
+        {/* Limit Reached Modal */}
+        {limitReached && (
+          <LimitReached
+            limitType={limitReached.type}
+            resetIn={limitReached.resetIn}
+            onDismiss={() => setLimitReached(null)}
+          />
+        )}
       </div>
 
       <style jsx>{`
@@ -1095,6 +1265,10 @@ export default function BuilderPage() {
         .header-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(139,92,246,0.4); color: rgba(255,255,255,0.9); }
         .header-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .header-btn svg { flex-shrink: 0; }
+        .header-btn.primary { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: rgba(139,92,246,0.5); color: white; }
+        .header-btn.primary:hover { background: linear-gradient(135deg, #9b6cf6, #7376f1); border-color: rgba(139,92,246,0.7); box-shadow: 0 4px 16px rgba(139,92,246,0.3); transform: translateY(-1px); }
+        .header-btn.deployed-link { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: #22c55e; text-decoration: none; }
+        .header-btn.deployed-link:hover { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.5); }
         .btn-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.1); border-top-color: rgba(255,255,255,0.7); border-radius: 50%; animation: spin 0.8s linear infinite; }
         .status-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.7); }
         .status-dot { width: 6px; height: 6px; border-radius: 50%; }
