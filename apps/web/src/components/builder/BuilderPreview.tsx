@@ -367,7 +367,7 @@ const PreviewHeader = memo(function PreviewHeader({
           justify-content: space-between;
           height: 44px;
           padding: 0 12px;
-          background: var(--surface, rgba(15, 15, 20, 0.98));
+          background: var(--bg, #0f0f12);
           border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
           transition: all 0.3s ease;
         }
