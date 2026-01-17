@@ -21,6 +21,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, TouchEvent } from 'react';
 import type { VirtualFile, VirtualDirectory, PreviewResult } from '@alfred/core';
+import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
+import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
+import { ModificationPreview, ForensicInvestigation, ModificationProgress } from '@/components/alfred-code';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -80,6 +83,14 @@ interface MobileBuilderLayoutProps {
   onExport?: () => void;
   // Load project
   onLoadProject?: (projectId: string) => void;
+  // Alfred Code - Modification Mode
+  modificationPlan?: ModificationPlan | null;
+  forensicReport?: ForensicReport | null;
+  isAnalyzingModification?: boolean;
+  isApplyingModification?: boolean;
+  modificationSteps?: ProgressStep[];
+  onApplyModification?: () => void;
+  onCancelModification?: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -940,7 +951,7 @@ function MobileFileExplorer({
   isLightTheme?: boolean;
 }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
-    new Set(['/src', '/components', '/lib', '/app'])
+    new Set(['/src', '/components', '/lib', '/app', '/'])
   );
 
   const toggleExpand = useCallback((path: string) => {
@@ -960,32 +971,35 @@ function MobileFileExplorer({
   const renderFile = (file: VirtualFile, depth: number = 0) => (
     <button
       key={file.path}
-      className={`file-item ${selectedPath === file.path ? 'selected' : ''}`}
+      className={`tree-file ${selectedPath === file.path ? 'selected' : ''}`}
       onClick={() => handleFileClick(file)}
-      style={{ paddingLeft: `${20 + depth * 20}px` }}
+      style={{ paddingLeft: `${16 + depth * 16}px` }}
     >
-      <span className="file-icon">{getFileIcon(file.path)}</span>
-      <span className="file-name">{file.name}</span>
-      {file.isEntryPoint && <span className="entry-badge">ENTRY</span>}
-      <span className="chevron">{Icons.chevronRight}</span>
+      <span className="tree-icon">{getFileIcon(file.path)}</span>
+      <span className="tree-name">{file.name}</span>
+      {file.isEntryPoint && <span className="entry-dot" />}
     </button>
   );
 
   const renderDirectory = (dir: VirtualDirectory, depth: number = 0) => {
     const isExpanded = expandedPaths.has(dir.path);
     return (
-      <div key={dir.path} className="directory-item">
+      <div key={dir.path} className="tree-folder">
         <button
-          className="directory-header"
+          className={`tree-folder-header ${isExpanded ? 'open' : ''}`}
           onClick={() => toggleExpand(dir.path)}
-          style={{ paddingLeft: `${20 + depth * 20}px` }}
+          style={{ paddingLeft: `${16 + depth * 16}px` }}
         >
-          <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>{Icons.chevronRight}</span>
-          {Icons.folder}
-          <span className="directory-name">{dir.name}</span>
+          <span className={`tree-chevron ${isExpanded ? 'open' : ''}`}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </span>
+          <span className="tree-folder-icon">{Icons.folder}</span>
+          <span className="tree-name">{dir.name}</span>
         </button>
         {isExpanded && (
-          <div className="directory-children">
+          <div className="tree-folder-children">
             {dir.children
               .filter((c): c is VirtualDirectory => 'children' in c)
               .sort((a, b) => a.name.localeCompare(b.name))
@@ -1002,28 +1016,23 @@ function MobileFileExplorer({
 
   return (
     <div className={`mobile-file-explorer ${isLightTheme ? 'light' : ''}`}>
-      <MobileHeader title={projectName} subtitle={`${files.length} files`} isLightTheme={isLightTheme} />
-      <div className="file-list">
+      <MobileHeader
+        title={projectName || 'Files'}
+        subtitle={`${files.length} files`}
+        isLightTheme={isLightTheme}
+      />
+
+      <div className="tree-container">
         {files.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-visual">
-              <div className="empty-folder">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
-                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="url(#emptyGrad)" strokeWidth="1.5"/>
-                  <defs>
-                    <linearGradient id="emptyGrad" x1="2" y1="3" x2="22" y2="21">
-                      <stop stopColor="#8b5cf6" stopOpacity="0.5"/>
-                      <stop offset="1" stopColor="#6366f1" stopOpacity="0.3"/>
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-              <div className="empty-particles">
-                {[...Array(3)].map((_, i) => <div key={i} className="particle" style={{ animationDelay: `${i * 0.4}s` }} />)}
-              </div>
+            <div className="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                <path d="M12 11v6M9 14h6" strokeLinecap="round"/>
+              </svg>
             </div>
-            <h3>No files yet</h3>
-            <p>Start a conversation with Alfred to generate code</p>
+            <p>No files yet</p>
+            <span>Chat with Alfred to generate code</span>
           </div>
         ) : tree ? (
           <>
@@ -1043,135 +1052,164 @@ function MobileFileExplorer({
           background: var(--bg, #09090b);
         }
 
-        .file-list {
+        .tree-container {
           flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
+          padding: 8px 0;
           padding-bottom: 100px;
         }
 
-        .file-item, .directory-header {
+        /* Tree File Item */
+        .tree-file {
           display: flex;
           align-items: center;
+          gap: 10px;
           width: 100%;
-          min-height: 56px;
-          padding: 14px 20px;
+          height: 36px;
+          padding-right: 16px;
           background: transparent;
           border: none;
-          border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.04));
-          text-align: left;
           cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: background 0.15s;
           -webkit-tap-highlight-color: transparent;
         }
 
-        .file-item:active, .directory-header:active {
-          background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+        .tree-file:active {
+          background: var(--surface-hover, rgba(255,255,255,0.05));
         }
 
-        .file-item.selected {
-          background: linear-gradient(90deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
-          border-left: 3px solid #8b5cf6;
+        .tree-file.selected {
+          background: linear-gradient(90deg, rgba(139,92,246,0.15), transparent);
         }
 
-        .file-icon { margin-right: 14px; flex-shrink: 0; }
-        .expand-icon {
-          margin-right: 8px;
-          color: var(--text-muted, rgba(255, 255, 255, 0.4));
-          transition: transform 0.2s;
+        .tree-file.selected .tree-name {
+          color: #a78bfa;
+        }
+
+        .tree-icon {
           flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-        .expand-icon.expanded { transform: rotate(90deg); }
 
-        .directory-header svg:not(.expand-icon svg) { margin-right: 12px; }
-
-        .file-name, .directory-name {
+        .tree-name {
           flex: 1;
-          font-size: 15px;
+          font-size: 13px;
           font-weight: 450;
-          color: var(--text, rgba(255, 255, 255, 0.9));
+          color: var(--text-secondary, rgba(255,255,255,0.75));
+          text-align: left;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        .directory-name { font-weight: 550; }
-
-        .entry-badge {
-          padding: 4px 10px;
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.15));
-          border: 1px solid rgba(245, 158, 11, 0.3);
-          border-radius: 8px;
-          font-size: 9px;
-          font-weight: 650;
-          color: #f59e0b;
-          margin-right: 10px;
-          letter-spacing: 0.05em;
+        .entry-dot {
+          width: 6px;
+          height: 6px;
+          background: #8b5cf6;
+          border-radius: 50%;
+          flex-shrink: 0;
         }
 
-        .chevron { flex-shrink: 0; color: var(--text-muted, rgba(255, 255, 255, 0.2)); }
+        /* Tree Folder */
+        .tree-folder-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
+          height: 36px;
+          padding-right: 16px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: background 0.15s;
+          -webkit-tap-highlight-color: transparent;
+        }
 
+        .tree-folder-header:active {
+          background: var(--surface-hover, rgba(255,255,255,0.05));
+        }
+
+        .tree-folder-header .tree-name {
+          font-weight: 550;
+          color: var(--text, rgba(255,255,255,0.9));
+        }
+
+        .tree-chevron {
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted, rgba(255,255,255,0.35));
+          transition: transform 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .tree-chevron.open {
+          transform: rotate(90deg);
+        }
+
+        .tree-folder-icon {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+        }
+
+        .tree-folder-children {
+          animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        /* Empty State */
         .empty-state {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           height: 100%;
-          padding: 48px 32px;
+          padding: 48px 24px;
           text-align: center;
         }
 
-        .empty-visual {
-          position: relative;
-          width: 120px;
-          height: 120px;
+        .empty-icon {
+          width: 72px;
+          height: 72px;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 24px;
-        }
-
-        .empty-folder {
-          position: relative;
-          z-index: 1;
-        }
-
-        .empty-particles {
-          position: absolute;
-          inset: 0;
-        }
-
-        .particle {
-          position: absolute;
-          width: 6px;
-          height: 6px;
-          background: #8b5cf6;
-          border-radius: 50%;
-          animation: float 3s ease-in-out infinite;
-        }
-
-        .particle:nth-child(1) { top: 10%; left: 20%; }
-        .particle:nth-child(2) { top: 60%; right: 15%; }
-        .particle:nth-child(3) { bottom: 20%; left: 10%; }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
-          50% { transform: translateY(-10px) scale(1.2); opacity: 1; }
-        }
-
-        .empty-state h3 {
-          font-size: 20px;
-          font-weight: 650;
-          color: var(--text, rgba(255, 255, 255, 0.9));
-          margin: 0 0 8px;
-          letter-spacing: -0.01em;
+          background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(99,102,241,0.05));
+          border: 1px solid rgba(139,92,246,0.15);
+          border-radius: 18px;
+          color: rgba(139,92,246,0.5);
+          margin-bottom: 20px;
         }
 
         .empty-state p {
-          font-size: 14px;
-          color: var(--text-muted, rgba(255, 255, 255, 0.45));
-          margin: 0;
-          max-width: 240px;
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--text, rgba(255,255,255,0.85));
+          margin: 0 0 6px;
+        }
+
+        .empty-state span {
+          font-size: 13px;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+        }
+
+        /* Light Theme */
+        .mobile-file-explorer.light .tree-file:active,
+        .mobile-file-explorer.light .tree-folder-header:active {
+          background: rgba(0,0,0,0.05);
+        }
+        .mobile-file-explorer.light .tree-file.selected {
+          background: linear-gradient(90deg, rgba(139,92,246,0.12), transparent);
         }
       `}</style>
     </div>
@@ -2208,6 +2246,15 @@ function MobileChat({
   themes,
   currentTheme,
   onThemeChange,
+  // Modification Mode
+  modificationPlan,
+  forensicReport,
+  isAnalyzingModification,
+  isApplyingModification,
+  modificationSteps,
+  onApplyModification,
+  onCancelModification,
+  projectName,
 }: {
   messages: MobileBuilderLayoutProps['messages'];
   streamingSteps: MobileBuilderLayoutProps['streamingSteps'];
@@ -2225,6 +2272,15 @@ function MobileChat({
   themes?: Theme[];
   currentTheme?: Theme;
   onThemeChange?: (theme: Theme) => void;
+  // Modification Mode
+  modificationPlan?: ModificationPlan | null;
+  forensicReport?: ForensicReport | null;
+  isAnalyzingModification?: boolean;
+  isApplyingModification?: boolean;
+  modificationSteps?: ProgressStep[];
+  onApplyModification?: () => void;
+  onCancelModification?: () => void;
+  projectName?: string;
 }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2567,6 +2623,41 @@ function MobileChat({
                     <span>Thinking...</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Alfred Code - Forensic Investigation (State of the Art) */}
+            {forensicReport && onApplyModification && onCancelModification && (
+              <div className="modification-ui-container">
+                <ForensicInvestigation
+                  report={forensicReport}
+                  onApply={onApplyModification}
+                  onCancel={onCancelModification}
+                  isApplying={isApplyingModification}
+                />
+              </div>
+            )}
+
+            {/* Fallback to simple preview if no forensic report but has plan */}
+            {modificationPlan && !forensicReport && onApplyModification && onCancelModification && (
+              <div className="modification-ui-container">
+                <ModificationPreview
+                  plan={modificationPlan}
+                  onApply={onApplyModification}
+                  onCancel={onCancelModification}
+                  isApplying={isApplyingModification}
+                />
+              </div>
+            )}
+
+            {/* Modification Progress - Shows analyzing progress */}
+            {isAnalyzingModification && modificationSteps && modificationSteps.length > 0 && (
+              <div className="modification-ui-container">
+                <ModificationProgress
+                  steps={modificationSteps}
+                  isActive={isAnalyzingModification}
+                  projectName={projectName}
+                />
               </div>
             )}
           </>
@@ -2961,6 +3052,20 @@ function MobileChat({
           to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Modification UI Container - State of the Art Mobile */
+        .modification-ui-container {
+          margin: 16px 0;
+          animation: fadeInScale 0.3s ease-out;
+        }
+        @keyframes fadeInScale {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .modification-ui-container > div {
+          border-radius: 16px;
+          overflow: hidden;
+        }
+
         /* Desktop-Identical Chat Input Area */
         .chat-input-area {
           position: fixed; bottom: 84px; left: 0; right: 0;
@@ -3340,6 +3445,14 @@ export default function MobileBuilderLayout({
   deployedUrl,
   onExport,
   onLoadProject,
+  // Modification Mode
+  modificationPlan,
+  forensicReport,
+  isAnalyzingModification,
+  isApplyingModification,
+  modificationSteps,
+  onApplyModification,
+  onCancelModification,
 }: MobileBuilderLayoutProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('chat');
   const [showProjectsModal, setShowProjectsModal] = useState(false);
@@ -3457,6 +3570,15 @@ export default function MobileBuilderLayout({
             themes={themes}
             currentTheme={currentTheme}
             onThemeChange={onThemeChange}
+            // Modification Mode
+            modificationPlan={modificationPlan}
+            forensicReport={forensicReport}
+            isAnalyzingModification={isAnalyzingModification}
+            isApplyingModification={isApplyingModification}
+            modificationSteps={modificationSteps}
+            onApplyModification={onApplyModification}
+            onCancelModification={onCancelModification}
+            projectName={projectName}
           />
         )}
       </div>

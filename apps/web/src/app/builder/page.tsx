@@ -1379,6 +1379,14 @@ export default function BuilderPage() {
           }}
           // Load project
           onLoadProject={loadProject}
+          // Alfred Code - Modification Mode
+          modificationPlan={modificationPlan}
+          forensicReport={forensicReport}
+          isAnalyzingModification={isAnalyzingModification}
+          isApplyingModification={isApplyingModification}
+          modificationSteps={modificationSteps}
+          onApplyModification={handleApplyModification}
+          onCancelModification={handleCancelModification}
         />
 
         {/* Deploy Modal for Mobile */}
