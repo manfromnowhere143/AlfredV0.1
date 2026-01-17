@@ -12,18 +12,11 @@ const nextConfig = {
 
   // Enable WASM support for ESBuild
   webpack: (config, { isServer }) => {
-    // Enable WebAssembly
+    // Enable WebAssembly experiments
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
-      layers: true,
     };
-
-    // Add rule for .wasm files
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: 'webassembly/async',
-    });
 
     return config;
   },
