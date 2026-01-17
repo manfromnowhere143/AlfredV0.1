@@ -169,7 +169,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          Find Domain
+          Buy New Domain
         </button>
         <button
           className={`mode-btn ${mode === 'byod' ? 'active' : ''}`}
@@ -179,7 +179,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
             <circle cx="12" cy="12" r="10"/>
             <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
           </svg>
-          Use My Domain
+          I Own a Domain
         </button>
       </div>
 
@@ -201,7 +201,7 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
               type="text"
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
-              placeholder="Search for your perfect domain..."
+              placeholder="Search domains to buy..."
               className="search-input"
             />
             {query && (
@@ -224,32 +224,19 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
               </div>
               <div className="result-info">
                 <span className="domain-name">{result.domain}</span>
-                <span className="status available">Available!</span>
+                <span className="status available">Available for purchase!</span>
               </div>
               <div className="result-action">
-                {result.price ? (
-                  <button
-                    className="purchase-btn"
-                    onClick={() => handlePurchase(result.domain)}
-                    disabled={isPurchasing}
-                  >
-                    {isPurchasing ? (
-                      <div className="spinner small" />
-                    ) : (
-                      <>
-                        <span className="price">${result.price}/yr</span>
-                        <span className="buy-text">Buy</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    className="use-btn"
-                    onClick={() => onDomainSelect(result.domain, false)}
-                  >
-                    Use Domain
-                  </button>
-                )}
+                <button
+                  className="purchase-btn"
+                  onClick={() => {
+                    // Show purchase info - full purchase flow requires Vercel payment setup
+                    alert(`To use ${result.domain}, you need to purchase it.\n\nPrice: ${result.price ? `$${result.price}/yr` : 'Check Vercel'}\n\nPurchase domains at: vercel.com/domains\n\nOr use "Use My Domain" tab if you already own a domain.`);
+                  }}
+                >
+                  <span className="price">{result.price ? `$${result.price}/yr` : 'Check price'}</span>
+                  <span className="buy-text">Buy</span>
+                </button>
               </div>
             </div>
           )}
@@ -276,32 +263,19 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
               {suggestions.map((s) => (
                 <div key={s.domain} className="suggestion-item">
                   <span className="suggestion-domain">{s.domain}</span>
-                  {s.price ? (
-                    <button
-                      type="button"
-                      className="suggestion-btn"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handlePurchase(s.domain);
-                      }}
-                      disabled={isPurchasing}
-                    >
-                      ${s.price}/yr
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="suggestion-btn"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onDomainSelect(s.domain, false);
-                      }}
-                    >
-                      Use
-                    </button>
-                  )}
+                  {/* Available domains show price - clicking shows purchase info */}
+                  <button
+                    type="button"
+                    className="suggestion-btn purchase"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Show info that purchase is required
+                      alert(`To use ${s.domain}, you need to purchase it.\n\nPrice: ${s.price ? `$${s.price}/yr` : 'Check Vercel'}\n\nPurchase domains at: vercel.com/domains`);
+                    }}
+                  >
+                    {s.price ? `$${s.price}/yr` : 'Buy'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -627,6 +601,16 @@ export function DomainSearch({ onDomainSelect, projectId, className = '' }: Doma
 
         .suggestion-btn:active {
           transform: scale(0.98);
+        }
+
+        .suggestion-btn.purchase {
+          background: rgba(139,92,246,0.1);
+          border-color: rgba(139,92,246,0.3);
+          color: var(--purple);
+        }
+
+        .suggestion-btn.purchase:hover {
+          background: rgba(139,92,246,0.2);
         }
 
         .error-message {
