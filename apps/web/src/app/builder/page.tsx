@@ -22,7 +22,7 @@ import { useDeviceType } from '@/hooks/useDeviceType';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
-import { DeploymentCard } from '@/components/DeploymentCard';
+import { BuilderDeploymentCard } from '@/components/BuilderDeploymentCard';
 import MessageAttachments from '@/components/MessageAttachments';
 import { ModificationPreview, ForensicInvestigation, SaveBar, ExportToClaudeCode, createForensicReport, WelcomePanel, ModificationProgress, ProgressSteps, createProgressStep, markStepDone } from '@/components/alfred-code';
 import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
@@ -596,8 +596,8 @@ export default function BuilderPage() {
     return firstComponent?.content || '';
   }, [builder]);
 
-  // State for artifact code (generated when deploy modal opens)
-  const [artifactCode, setArtifactCode] = useState('');
+  // State for files to deploy (synced when deploy modal opens)
+  const [filesToDeploy, setFilesToDeploy] = useState<Array<{ path: string; content: string }>>([]);
 
   // Handle deploy button click
   const handleDeploy = useCallback(() => {
@@ -606,10 +606,13 @@ export default function BuilderPage() {
       alert('No files to deploy. Create some code first!');
       return;
     }
-    // Generate artifact code when modal opens
-    setArtifactCode(generateArtifactCode());
+    // Store files for direct deployment (preserves exact structure)
+    setFilesToDeploy(syncedFiles.map(f => ({
+      path: f.path.startsWith('/') ? f.path.slice(1) : f.path,
+      content: f.content,
+    })));
     setShowDeployModal(true);
-  }, [builder, generateArtifactCode]);
+  }, [builder]);
 
   // Handle deployment complete
   const handleDeployed = useCallback((url: string) => {
@@ -1681,12 +1684,13 @@ export default function BuilderPage() {
           </div>
         )}
 
-        {/* Deploy Modal */}
+        {/* Deploy Modal - Direct deployment preserving exact file structure */}
         {showDeployModal && (
-          <DeploymentCard
+          <BuilderDeploymentCard
+            files={filesToDeploy}
+            projectName={builder.projectName || 'alfred-project'}
             artifactId={currentProjectId || `builder-${Date.now()}`}
             artifactTitle={builder.projectName || 'Alfred Project'}
-            artifactCode={artifactCode}
             onClose={() => setShowDeployModal(false)}
             onDeployed={handleDeployed}
           />
