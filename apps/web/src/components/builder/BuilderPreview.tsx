@@ -974,11 +974,13 @@ export function BuilderPreview({
           border: none;
           background: white;
           opacity: 0;
+          pointer-events: none; /* Don't block clicks when hidden */
           transition: opacity 0.4s ease;
         }
 
         .preview-iframe.loaded {
           opacity: 1;
+          pointer-events: auto; /* Allow interaction when visible */
         }
 
         .preview-loading {
@@ -1124,6 +1126,8 @@ export function BuilderPreview({
           cursor: pointer;
           transition: all 0.2s ease;
           box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+          position: relative;
+          z-index: 30;
         }
 
         .rebuild-button:hover {
