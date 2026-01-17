@@ -2724,6 +2724,11 @@ function MobileChat({
           display: flex; flex-direction: column; align-items: center;
           justify-content: flex-start; min-height: 100%; text-align: center;
           padding: 32px 20px; padding-bottom: 200px;
+          animation: welcomeFadeIn 0.4s ease-out;
+        }
+        @keyframes welcomeFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
         .welcome-icon {
           position: relative; width: 72px; height: 72px;
@@ -2731,16 +2736,33 @@ function MobileChat({
           background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.08));
           border: 1px solid rgba(139,92,246,0.2);
           border-radius: 20px; color: #8b5cf6; margin-bottom: 20px;
+          animation: iconPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+        }
+        @keyframes iconPop {
+          from { opacity: 0; transform: scale(0.8); }
+          to { opacity: 1; transform: scale(1); }
         }
         .icon-glow {
           position: absolute; inset: -16px;
           background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
           filter: blur(16px);
         }
-        .welcome-state h3 { font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95)); margin: 0 0 6px; letter-spacing: -0.02em; }
-        .welcome-state p { font-size: 14px; color: var(--text-muted, rgba(255,255,255,0.45)); margin: 0 0 24px; }
+        .welcome-state h3 {
+          font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95));
+          margin: 0 0 6px; letter-spacing: -0.02em;
+          animation: textFadeIn 0.4s ease-out 0.15s both;
+        }
+        .welcome-state p {
+          font-size: 14px; color: var(--text-muted, rgba(255,255,255,0.45));
+          margin: 0 0 24px;
+          animation: textFadeIn 0.4s ease-out 0.2s both;
+        }
+        @keyframes textFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
 
-        /* Suggestion Grid - Beautiful Template Cards */
+        /* Suggestion Grid - Beautiful Template Cards with Staggered Animation */
         .suggestion-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -2759,6 +2781,19 @@ function MobileChat({
           border-radius: 14px;
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          animation: cardFadeIn 0.35s ease-out both;
+        }
+        .suggestion-card:nth-child(1) { animation-delay: 0.15s; }
+        .suggestion-card:nth-child(2) { animation-delay: 0.2s; }
+        .suggestion-card:nth-child(3) { animation-delay: 0.25s; }
+        .suggestion-card:nth-child(4) { animation-delay: 0.3s; }
+        .suggestion-card:nth-child(5) { animation-delay: 0.35s; }
+        .suggestion-card:nth-child(6) { animation-delay: 0.4s; }
+        .suggestion-card:nth-child(7) { animation-delay: 0.45s; }
+        .suggestion-card:nth-child(8) { animation-delay: 0.5s; }
+        @keyframes cardFadeIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
         }
         .suggestion-card:active {
           transform: scale(0.96);
