@@ -2,16 +2,24 @@
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * MOBILE BUILDER LAYOUT — State of the Art Premium Experience
+ * MOBILE BUILDER LAYOUT — Steve Jobs Level Mobile Experience
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Zero generic elements. Every icon hand-crafted. Every animation intentional.
- * This is what happens when obsession meets execution.
+ * Full feature parity with desktop. This is what happens when obsession meets execution.
  *
  * "Details matter, it's worth waiting to get it right." - Steve Jobs
+ *
+ * Features:
+ * - Theme System with 6 themes (full CSS variable support)
+ * - Save/Projects/Deploy/Export - all desktop features
+ * - Voice Input with real-time visualizer
+ * - Gesture Navigation (swipe between tabs)
+ * - Pull-to-refresh on preview
+ * - Haptic feedback patterns
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, TouchEvent } from 'react';
 import type { VirtualFile, VirtualDirectory, PreviewResult } from '@alfred/core';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -19,6 +27,13 @@ import type { VirtualFile, VirtualDirectory, PreviewResult } from '@alfred/core'
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type MobileTab = 'files' | 'code' | 'preview' | 'chat';
+
+interface Theme {
+  id: string;
+  bg: string;
+  label: string;
+  mode: 'dark' | 'light';
+}
 
 interface MobileBuilderLayoutProps {
   fileTree: VirtualDirectory | null;
@@ -47,6 +62,24 @@ interface MobileBuilderLayoutProps {
     timestamp: Date;
     isStreaming?: boolean;
   }>;
+  // Theme System
+  themes?: Theme[];
+  currentTheme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
+  isLightTheme?: boolean;
+  // Save/Projects
+  onSave?: () => Promise<void>;
+  isSaving?: boolean;
+  currentProjectId?: string | null;
+  onOpenProjects?: () => void;
+  // Deploy
+  onDeploy?: () => Promise<void>;
+  isDeploying?: boolean;
+  deployedUrl?: string | null;
+  // Export
+  onExport?: () => void;
+  // Load project
+  onLoadProject?: (projectId: string) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -240,6 +273,110 @@ const Icons = {
       <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" strokeWidth="1.75"/>
     </svg>
   ),
+  // New icons for mobile features
+  mic: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M19 10v2a7 7 0 01-14 0v-2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  save: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="7 3 7 8 15 8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  deploy: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  export: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="17 8 12 3 7 8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  projects: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  theme: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </svg>
+  ),
+  more: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+      <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+    </svg>
+  ),
+  globe: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" stroke="currentColor" strokeWidth="1.75"/>
+    </svg>
+  ),
+  externalLink: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="15 3 21 3 21 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  stop: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </svg>
+  ),
+  // File type icons for upload buttons
+  image: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" strokeWidth="1.75"/>
+      <polyline points="21 15 16 10 5 21" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  video: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" stroke="currentColor" strokeWidth="1.75"/>
+    </svg>
+  ),
+  paperclip: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  trash: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  close: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  ),
+  layers: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="2 17 12 22 22 17" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="2 12 12 17 22 12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 };
 
 // File type icons
@@ -294,7 +431,7 @@ const getFileIcon = (path: string) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MOBILE HEADER — Glass morphism premium
+// MOBILE HEADER — Glass morphism premium with theme support
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function MobileHeader({
@@ -304,6 +441,7 @@ function MobileHeader({
   isBuilding,
   onBack,
   rightAction,
+  isLightTheme,
 }: {
   title: string;
   subtitle?: string;
@@ -311,9 +449,10 @@ function MobileHeader({
   isBuilding?: boolean;
   onBack?: () => void;
   rightAction?: React.ReactNode;
+  isLightTheme?: boolean;
 }) {
   return (
-    <header className="mobile-header">
+    <header className={`mobile-header ${isLightTheme ? 'light' : ''}`}>
       <div className="header-glow" />
       <div className="header-content">
         <div className="header-left">
@@ -347,10 +486,14 @@ function MobileHeader({
           position: sticky;
           top: 0;
           z-index: 40;
-          background: rgba(9, 9, 11, 0.85);
+          background: var(--header-bg, rgba(9, 9, 11, 0.85));
           backdrop-filter: blur(24px) saturate(180%);
           -webkit-backdrop-filter: blur(24px) saturate(180%);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+        }
+
+        .mobile-header.light {
+          --header-bg: rgba(255, 255, 255, 0.85);
         }
 
         .header-glow {
@@ -385,7 +528,7 @@ function MobileHeader({
           justify-content: center;
           background: transparent;
           border: none;
-          color: rgba(255, 255, 255, 0.7);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.7));
           cursor: pointer;
           border-radius: 12px;
           margin-left: -8px;
@@ -393,7 +536,7 @@ function MobileHeader({
         }
 
         .back-btn:active {
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.08));
           transform: scale(0.92);
         }
 
@@ -406,7 +549,7 @@ function MobileHeader({
         .header-title {
           font-size: 18px;
           font-weight: 650;
-          color: rgba(255, 255, 255, 0.97);
+          color: var(--text, rgba(255, 255, 255, 0.97));
           margin: 0;
           line-height: 1.2;
           letter-spacing: -0.02em;
@@ -414,7 +557,7 @@ function MobileHeader({
 
         .header-subtitle {
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.45);
+          color: var(--text-muted, rgba(255, 255, 255, 0.45));
           font-weight: 450;
         }
 
@@ -480,11 +623,13 @@ function BottomNavigation({
   onTabChange,
   hasUnreadChat,
   fileCount,
+  isLightTheme,
 }: {
   activeTab: MobileTab;
   onTabChange: (tab: MobileTab) => void;
   hasUnreadChat?: boolean;
   fileCount: number;
+  isLightTheme?: boolean;
 }) {
   const tabs: { id: MobileTab; label: string; icon: React.ReactNode }[] = [
     { id: 'files', label: 'Files', icon: Icons.files },
@@ -493,15 +638,24 @@ function BottomNavigation({
     { id: 'chat', label: 'Alfred', icon: Icons.chat },
   ];
 
+  // Trigger haptic feedback on tab change
+  const handleTabChange = useCallback((tab: MobileTab) => {
+    // Haptic feedback (if supported)
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+    onTabChange(tab);
+  }, [onTabChange]);
+
   return (
-    <nav className="bottom-nav">
+    <nav className={`bottom-nav ${isLightTheme ? 'light' : ''}`}>
       <div className="nav-glow" />
       <div className="nav-content">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
           >
             <div className="nav-icon-wrapper">
               <div className="nav-icon">{tab.icon}</div>
@@ -525,10 +679,14 @@ function BottomNavigation({
           z-index: 50;
           padding: 8px 12px;
           padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
-          background: rgba(9, 9, 11, 0.92);
+          background: var(--nav-bg, rgba(9, 9, 11, 0.92));
           backdrop-filter: blur(24px) saturate(180%);
           -webkit-backdrop-filter: blur(24px) saturate(180%);
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          border-top: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+        }
+
+        .bottom-nav.light {
+          --nav-bg: rgba(255, 255, 255, 0.92);
         }
 
         .nav-glow {
@@ -545,8 +703,8 @@ function BottomNavigation({
           display: flex;
           align-items: center;
           justify-content: space-around;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: var(--surface, rgba(255, 255, 255, 0.03));
+          border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
           border-radius: 20px;
           padding: 6px;
         }
@@ -584,7 +742,7 @@ function BottomNavigation({
           display: flex;
           align-items: center;
           justify-content: center;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           transition: all 0.25s;
         }
 
@@ -619,14 +777,14 @@ function BottomNavigation({
           height: 10px;
           background: linear-gradient(135deg, #ef4444, #dc2626);
           border-radius: 50%;
-          border: 2px solid #09090b;
+          border: 2px solid var(--bg, #09090b);
           box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
         }
 
         .nav-label {
           font-size: 10px;
           font-weight: 550;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           margin-top: 4px;
           transition: all 0.25s;
           letter-spacing: 0.01em;
@@ -663,6 +821,7 @@ function MobileFileExplorer({
   projectName,
   onFileSelect,
   onNavigateToCode,
+  isLightTheme,
 }: {
   tree: VirtualDirectory | null;
   files: VirtualFile[];
@@ -670,6 +829,7 @@ function MobileFileExplorer({
   projectName: string;
   onFileSelect: (file: VirtualFile) => void;
   onNavigateToCode: () => void;
+  isLightTheme?: boolean;
 }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     new Set(['/src', '/components', '/lib', '/app'])
@@ -733,8 +893,8 @@ function MobileFileExplorer({
   };
 
   return (
-    <div className="mobile-file-explorer">
-      <MobileHeader title={projectName} subtitle={`${files.length} files`} />
+    <div className={`mobile-file-explorer ${isLightTheme ? 'light' : ''}`}>
+      <MobileHeader title={projectName} subtitle={`${files.length} files`} isLightTheme={isLightTheme} />
       <div className="file-list">
         {files.length === 0 ? (
           <div className="empty-state">
@@ -772,7 +932,7 @@ function MobileFileExplorer({
           display: flex;
           flex-direction: column;
           height: 100%;
-          background: #09090b;
+          background: var(--bg, #09090b);
         }
 
         .file-list {
@@ -790,7 +950,7 @@ function MobileFileExplorer({
           padding: 14px 20px;
           background: transparent;
           border: none;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+          border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.04));
           text-align: left;
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -798,7 +958,7 @@ function MobileFileExplorer({
         }
 
         .file-item:active, .directory-header:active {
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--surface-hover, rgba(255, 255, 255, 0.04));
         }
 
         .file-item.selected {
@@ -809,7 +969,7 @@ function MobileFileExplorer({
         .file-icon { margin-right: 14px; flex-shrink: 0; }
         .expand-icon {
           margin-right: 8px;
-          color: rgba(255, 255, 255, 0.4);
+          color: var(--text-muted, rgba(255, 255, 255, 0.4));
           transition: transform 0.2s;
           flex-shrink: 0;
         }
@@ -821,7 +981,7 @@ function MobileFileExplorer({
           flex: 1;
           font-size: 15px;
           font-weight: 450;
-          color: rgba(255, 255, 255, 0.9);
+          color: var(--text, rgba(255, 255, 255, 0.9));
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -841,7 +1001,7 @@ function MobileFileExplorer({
           letter-spacing: 0.05em;
         }
 
-        .chevron { flex-shrink: 0; color: rgba(255, 255, 255, 0.2); }
+        .chevron { flex-shrink: 0; color: var(--text-muted, rgba(255, 255, 255, 0.2)); }
 
         .empty-state {
           display: flex;
@@ -894,14 +1054,14 @@ function MobileFileExplorer({
         .empty-state h3 {
           font-size: 20px;
           font-weight: 650;
-          color: rgba(255, 255, 255, 0.9);
+          color: var(--text, rgba(255, 255, 255, 0.9));
           margin: 0 0 8px;
           letter-spacing: -0.01em;
         }
 
         .empty-state p {
           font-size: 14px;
-          color: rgba(255, 255, 255, 0.45);
+          color: var(--text-muted, rgba(255, 255, 255, 0.45));
           margin: 0;
           max-width: 240px;
         }
@@ -920,12 +1080,14 @@ function MobileCodeEditor({
   isStreaming,
   streamingCode,
   streamingFile,
+  isLightTheme,
 }: {
   file: VirtualFile | null;
   onChange: (content: string) => void;
   isStreaming: boolean;
   streamingCode: string;
   streamingFile: string | null;
+  isLightTheme?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -965,7 +1127,7 @@ function MobileCodeEditor({
 
   if (!file && !streamingFile) {
     return (
-      <div className="mobile-code-empty">
+      <div className={`mobile-code-empty ${isLightTheme ? 'light' : ''}`}>
         <div className="empty-visual">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
             <path d="M16 18L22 12L16 6" stroke="url(#codeGrad)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -989,21 +1151,22 @@ function MobileCodeEditor({
             height: 100%;
             padding: 48px 32px;
             text-align: center;
-            background: #09090b;
+            background: var(--bg, #09090b);
           }
           .empty-visual { margin-bottom: 24px; }
-          h3 { font-size: 20px; font-weight: 650; color: rgba(255,255,255,0.9); margin: 0 0 8px; }
-          p { font-size: 14px; color: rgba(255,255,255,0.45); margin: 0; }
+          h3 { font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.9)); margin: 0 0 8px; }
+          p { font-size: 14px; color: var(--text-muted, rgba(255,255,255,0.45)); margin: 0; }
         `}</style>
       </div>
     );
   }
 
   return (
-    <div className="mobile-code-editor">
+    <div className={`mobile-code-editor ${isLightTheme ? 'light' : ''}`}>
       <MobileHeader
         title={displayName}
         subtitle={isStreaming ? 'Generating...' : file ? `${displayContent.split('\n').length} lines` : undefined}
+        isLightTheme={isLightTheme}
         rightAction={!isStreaming && file && (
           <button className={`edit-toggle ${isEditing ? 'active' : ''}`} onClick={() => setIsEditing(!isEditing)}>
             {Icons.edit}
@@ -1053,15 +1216,18 @@ function MobileCodeEditor({
           display: flex;
           flex-direction: column;
           height: 100%;
-          background: linear-gradient(180deg, #0d0d12 0%, #0a0a0c 100%);
+          background: var(--bg, #0d0d12);
+        }
+        .mobile-code-editor.light {
+          background: var(--bg, #f5f5f7);
         }
         .edit-toggle {
           width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: var(--surface, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
           border-radius: 12px;
-          color: rgba(255,255,255,0.6);
+          color: var(--text-secondary, rgba(255,255,255,0.6));
           cursor: pointer;
           transition: all 0.2s;
         }
@@ -1071,7 +1237,10 @@ function MobileCodeEditor({
           overflow: auto;
           -webkit-overflow-scrolling: touch;
           padding-bottom: 100px;
-          background: linear-gradient(180deg, #0d0d12 0%, #0a0a0c 100%);
+          background: var(--bg, #0d0d12);
+        }
+        .mobile-code-editor.light .code-container {
+          background: var(--bg, #f5f5f7);
         }
         .code-wrapper {
           display: flex;
@@ -1083,16 +1252,19 @@ function MobileCodeEditor({
           padding: 20px 0;
           min-width: 44px;
           text-align: right;
-          background: rgba(0,0,0,0.3);
-          border-right: 1px solid rgba(255,255,255,0.06);
+          background: var(--surface, rgba(0,0,0,0.3));
+          border-right: 1px solid var(--border, rgba(255,255,255,0.06));
           user-select: none;
+        }
+        .mobile-code-editor.light .line-numbers {
+          background: rgba(0,0,0,0.03);
         }
         .line-numbers span {
           padding: 0 12px;
           font-family: 'SF Mono', 'Fira Code', Monaco, monospace;
           font-size: 13px;
           line-height: 1.7;
-          color: rgba(255,255,255,0.25);
+          color: var(--text-muted, rgba(255,255,255,0.25));
         }
         .code-display, .code-textarea {
           flex: 1;
@@ -1102,9 +1274,13 @@ function MobileCodeEditor({
           font-family: 'SF Mono', 'Fira Code', Monaco, monospace;
           font-size: 13px;
           line-height: 1.7;
-          color: #e5e7eb;
+          color: var(--text, #e5e7eb);
           white-space: pre;
           overflow-x: auto;
+        }
+        .mobile-code-editor.light .code-display,
+        .mobile-code-editor.light .code-textarea {
+          color: #1a1a1a;
         }
         .code-textarea {
           border: none;
@@ -1135,8 +1311,8 @@ function MobileCodeEditor({
           display: flex;
           gap: 8px;
           padding: 12px 16px;
-          background: rgba(0,0,0,0.6);
-          border-top: 1px solid rgba(255,255,255,0.06);
+          background: var(--surface, rgba(0,0,0,0.6));
+          border-top: 1px solid var(--border, rgba(255,255,255,0.06));
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           position: sticky;
@@ -1148,10 +1324,10 @@ function MobileCodeEditor({
           min-width: 44px;
           height: 40px;
           padding: 0 14px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: var(--surface, rgba(255,255,255,0.06));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
           border-radius: 10px;
-          color: rgba(255,255,255,0.9);
+          color: var(--text, rgba(255,255,255,0.9));
           font-family: 'SF Mono', Monaco, monospace;
           font-size: 15px;
           font-weight: 500;
@@ -1159,7 +1335,7 @@ function MobileCodeEditor({
           transition: all 0.15s;
           -webkit-tap-highlight-color: transparent;
         }
-        .code-key:active { background: rgba(255,255,255,0.12); transform: scale(0.94); }
+        .code-key:active { background: var(--surface-hover, rgba(255,255,255,0.12)); transform: scale(0.94); }
       `}</style>
     </div>
   );
@@ -1173,10 +1349,14 @@ function MobilePreview({
   preview,
   isBuilding,
   onRefresh,
+  isLightTheme,
+  deployedUrl,
 }: {
   preview: PreviewResult | null;
   isBuilding: boolean;
   onRefresh: () => void;
+  isLightTheme?: boolean;
+  deployedUrl?: string | null;
 }) {
   const [viewport, setViewport] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1198,13 +1378,49 @@ function MobilePreview({
 
   const viewportSizes = { mobile: { width: 375, height: 667 }, tablet: { width: 768, height: 1024 }, desktop: { width: '100%', height: '100%' } };
 
+  // Pull to refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const pullStartY = useRef(0);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (iframeRef.current && iframeRef.current.parentElement?.scrollTop === 0) {
+      pullStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isPulling) return;
+    const distance = Math.max(0, Math.min(100, e.touches[0].clientY - pullStartY.current));
+    setPullDistance(distance);
+  }, [isPulling]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (pullDistance > 60) {
+      // Trigger haptic feedback
+      if ('vibrate' in navigator) navigator.vibrate(20);
+      onRefresh();
+    }
+    setPullDistance(0);
+    setIsPulling(false);
+  }, [pullDistance, onRefresh]);
+
   return (
-    <div className="mobile-preview">
+    <div className={`mobile-preview ${isLightTheme ? 'light' : ''}`}>
       <MobileHeader
         title="Preview"
         isBuilding={isBuilding}
+        isLightTheme={isLightTheme}
         rightAction={
           <div className="preview-actions">
+            {deployedUrl && (
+              <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge">
+                <span className="live-dot" />
+                <span>LIVE</span>
+                {Icons.externalLink}
+              </a>
+            )}
             <div className="viewport-toggle">
               {(['mobile', 'tablet', 'desktop'] as const).map((vp) => (
                 <button key={vp} className={viewport === vp ? 'active' : ''} onClick={() => setViewport(vp)}>
@@ -1218,7 +1434,20 @@ function MobilePreview({
           </div>
         }
       />
-      <div className="preview-container">
+      {/* Pull to refresh indicator */}
+      {pullDistance > 0 && (
+        <div className="pull-indicator" style={{ height: pullDistance, opacity: pullDistance / 100 }}>
+          <div className={`pull-spinner ${pullDistance > 60 ? 'ready' : ''}`}>
+            {Icons.refresh}
+          </div>
+        </div>
+      )}
+      <div
+        className="preview-container"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Building State */}
         {isBuilding && (
           <div className="building-state">
@@ -1297,30 +1526,75 @@ function MobilePreview({
         )}
       </div>
       <style jsx>{`
-        .mobile-preview { display: flex; flex-direction: column; height: 100%; background: #09090b; }
+        .mobile-preview { display: flex; flex-direction: column; height: 100%; background: var(--bg, #09090b); }
         .preview-actions { display: flex; align-items: center; gap: 10px; }
+        .live-badge {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(22, 163, 74, 0.1));
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          border-radius: 16px;
+          font-size: 10px;
+          font-weight: 650;
+          color: #22c55e;
+          text-decoration: none;
+          letter-spacing: 0.02em;
+        }
+        .live-dot {
+          width: 6px;
+          height: 6px;
+          background: #22c55e;
+          border-radius: 50%;
+          animation: livePulse 2s ease-in-out infinite;
+        }
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.2); }
+        }
         .viewport-toggle {
           display: flex;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: var(--surface, rgba(255,255,255,0.04));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
           border-radius: 10px; padding: 3px;
         }
         .viewport-toggle button {
           width: 36px; height: 32px;
           display: flex; align-items: center; justify-content: center;
           background: transparent; border: none; border-radius: 8px;
-          color: rgba(255,255,255,0.4); cursor: pointer;
+          color: var(--text-muted, rgba(255,255,255,0.4)); cursor: pointer;
           transition: all 0.2s;
         }
-        .viewport-toggle button.active { background: rgba(255,255,255,0.1); color: white; }
+        .viewport-toggle button.active { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text, white); }
         .refresh-btn {
           width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
           background: transparent; border: none;
-          color: rgba(255,255,255,0.6); cursor: pointer;
+          color: var(--text-secondary, rgba(255,255,255,0.6)); cursor: pointer;
           border-radius: 12px; transition: all 0.3s;
         }
-        .refresh-btn:active { background: rgba(255,255,255,0.08); transform: rotate(180deg); }
+        .refresh-btn:active { background: var(--surface-hover, rgba(255,255,255,0.08)); transform: rotate(180deg); }
+        .pull-indicator {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(180deg, rgba(139, 92, 246, 0.1), transparent);
+          overflow: hidden;
+        }
+        .pull-spinner {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          transition: all 0.2s;
+        }
+        .pull-spinner.ready {
+          color: #8b5cf6;
+          transform: rotate(180deg);
+        }
         .preview-container {
           flex: 1; display: flex; align-items: center; justify-content: center;
           padding: 20px; padding-bottom: 100px; overflow: hidden;
@@ -1351,7 +1625,7 @@ function MobilePreview({
           inset: 0;
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; text-align: center; padding: 48px;
-          background: linear-gradient(180deg, #0d0d12 0%, #09090b 100%);
+          background: var(--bg, #09090b);
           z-index: 10;
         }
         .building-orb {
@@ -1463,14 +1737,121 @@ function MobileChat({
   streamingSteps,
   isStreaming,
   onSendMessage,
+  isLightTheme,
+  // Action handlers
+  onSave,
+  isSaving,
+  onOpenProjects,
+  onDeploy,
+  isDeploying,
+  deployedUrl,
+  onExport,
+  hasFiles,
+  // Theme
+  themes,
+  currentTheme,
+  onThemeChange,
 }: {
   messages: MobileBuilderLayoutProps['messages'];
   streamingSteps: MobileBuilderLayoutProps['streamingSteps'];
   isStreaming: boolean;
   onSendMessage: (message: string) => void;
+  isLightTheme?: boolean;
+  onSave?: () => Promise<void>;
+  isSaving?: boolean;
+  onOpenProjects?: () => void;
+  onDeploy?: () => Promise<void>;
+  isDeploying?: boolean;
+  deployedUrl?: string | null;
+  onExport?: () => void;
+  hasFiles?: boolean;
+  themes?: Theme[];
+  currentTheme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
 }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showActions, setShowActions] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(12).fill(0));
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  // Voice recording functions
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      // Set up audio visualization
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      analyser.fftSize = 32;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateLevels = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const levels = Array.from(dataArray).slice(0, 12).map(v => v / 255);
+        setAudioLevels(levels);
+        animationRef.current = requestAnimationFrame(updateLevels);
+      };
+      updateLevels();
+
+      const chunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        audioContext.close();
+        stream.getTracks().forEach(t => t.stop());
+
+        setIsTranscribing(true);
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob, 'recording.webm');
+
+        try {
+          const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+          if (res.ok) {
+            const { text } = await res.json();
+            if (text?.trim()) {
+              setInput(prev => prev + (prev ? ' ' : '') + text.trim());
+            }
+          }
+        } catch (err) {
+          console.error('Transcription failed:', err);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      // Haptic feedback
+      if ('vibrate' in navigator) navigator.vibrate(20);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setAudioLevels(new Array(12).fill(0));
+      // Haptic feedback
+      if ('vibrate' in navigator) navigator.vibrate([10, 50, 10]);
+    }
+  }, [isRecording]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -1483,23 +1864,98 @@ function MobileChat({
     onSendMessage(text);
   }, [input, isStreaming, onSendMessage]);
 
-  const quickActions = [
-    { icon: Icons.addFile, label: 'Add file', prompt: 'Create a new file for ' },
-    { icon: Icons.refactor, label: 'Refactor', prompt: 'Refactor the ' },
-    { icon: Icons.debug, label: 'Debug', prompt: 'Help me debug ' },
-    { icon: Icons.style, label: 'Style', prompt: 'Improve the styling of ' },
-  ];
+  // Cancel recording
+  const cancelRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();
+      setIsRecording(false);
+      setAudioLevels(new Array(20).fill(0));
+    }
+  }, [isRecording]);
 
-  const suggestions = [
-    { icon: Icons.todo, label: 'Todo App', prompt: 'Create a modern todo app with React and local storage' },
-    { icon: Icons.calculator, label: 'Calculator', prompt: 'Build a calculator with a clean minimal design' },
-    { icon: Icons.rocket, label: 'Landing Page', prompt: 'Create a beautiful landing page for a SaaS product' },
-    { icon: Icons.weather, label: 'Weather App', prompt: 'Build a weather dashboard that shows current conditions' },
-  ];
+  // Transcribing state
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   return (
-    <div className="mobile-chat">
-      <MobileHeader title="Alfred AI" subtitle={isStreaming ? 'Generating...' : 'Online'} isStreaming={isStreaming} />
+    <div className={`mobile-chat ${isLightTheme ? 'light' : ''}`}>
+      <MobileHeader
+        title="Alfred AI"
+        subtitle={isStreaming ? 'Generating...' : 'Online'}
+        isStreaming={isStreaming}
+        isLightTheme={isLightTheme}
+        rightAction={
+          <button className="actions-btn" onClick={() => setShowActions(!showActions)}>
+            {Icons.more}
+          </button>
+        }
+      />
+
+      {/* Action Sheet */}
+      {showActions && (
+        <div className="action-sheet-overlay" onClick={() => setShowActions(false)}>
+          <div className="action-sheet" onClick={e => e.stopPropagation()}>
+            <div className="action-sheet-handle" />
+            <div className="action-sheet-header">
+              <h3>Actions</h3>
+              {deployedUrl && (
+                <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge-small">
+                  <span className="live-dot" />
+                  LIVE
+                </a>
+              )}
+            </div>
+            <div className="action-grid">
+              {onSave && (
+                <button className="action-item" onClick={() => { onSave(); setShowActions(false); }} disabled={isSaving || !hasFiles}>
+                  {isSaving ? <div className="mini-spinner" /> : Icons.save}
+                  <span>Save</span>
+                </button>
+              )}
+              {onOpenProjects && (
+                <button className="action-item" onClick={() => { onOpenProjects(); setShowActions(false); }}>
+                  {Icons.projects}
+                  <span>Projects</span>
+                </button>
+              )}
+              {onDeploy && (
+                <button className="action-item primary" onClick={() => { onDeploy(); setShowActions(false); }} disabled={isDeploying || !hasFiles}>
+                  {isDeploying ? <div className="mini-spinner" /> : Icons.deploy}
+                  <span>Deploy</span>
+                </button>
+              )}
+              {onExport && hasFiles && (
+                <button className="action-item" onClick={() => { onExport(); setShowActions(false); }}>
+                  {Icons.export}
+                  <span>Export</span>
+                </button>
+              )}
+            </div>
+            {/* Theme Picker Section */}
+            {themes && themes.length > 0 && (
+              <>
+                <div className="action-divider" />
+                <div className="theme-section">
+                  <span className="theme-label">Theme</span>
+                  <div className="theme-grid">
+                    {themes.map((t) => (
+                      <button
+                        key={t.id}
+                        className={`theme-dot-btn ${currentTheme?.id === t.id ? 'active' : ''}`}
+                        onClick={() => { onThemeChange?.(t); }}
+                        style={{ background: t.bg }}
+                        title={t.label}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="messages-container" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="welcome-state">
@@ -1508,15 +1964,7 @@ function MobileChat({
               {Icons.alfred}
             </div>
             <h3>What would you like to build?</h3>
-            <p>Describe your idea and I'll generate the code.</p>
-            <div className="suggestion-grid">
-              {suggestions.map((s, i) => (
-                <button key={i} onClick={() => setInput(s.prompt)}>
-                  <span className="suggestion-icon">{s.icon}</span>
-                  <span className="suggestion-label">{s.label}</span>
-                </button>
-              ))}
-            </div>
+            <p>Describe your idea and Alfred will generate the code.</p>
           </div>
         ) : (
           messages.map((msg) => (
@@ -1549,32 +1997,205 @@ function MobileChat({
           ))
         )}
       </div>
-      <div className="input-area">
-        <div className="quick-actions">
-          {quickActions.map((action, i) => (
-            <button key={i} className="quick-action" onClick={() => setInput(action.prompt)}>
-              <span className="action-icon">{action.icon}</span>
-              <span>{action.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="input-row">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Describe what you want to build..."
-            disabled={isStreaming}
-            rows={1}
-          />
-          <button className="send-btn" onClick={handleSend} disabled={!input.trim() || isStreaming}>
-            {Icons.send}
-          </button>
-        </div>
+      {/* Input Area - Desktop Identical */}
+      <div className="chat-input-area">
+        {/* Recording UI with Orb Visualizer */}
+        {isRecording ? (
+          <div className="recording-ui">
+            <button className="recording-cancel" onClick={cancelRecording}>{Icons.stop}</button>
+            <div className="recording-visualizer">
+              <div className="orb" style={{ transform: `scale(${1 + (audioLevels.reduce((a, b) => a + b, 0) / audioLevels.length) * 0.6})` }} />
+              <div className="orb-ring r1" style={{ transform: `scale(${1.3 + (audioLevels[5] || 0) * 0.5})`, opacity: 0.15 + (audioLevels[5] || 0) * 0.25 }} />
+              <div className="orb-ring r2" style={{ transform: `scale(${1.6 + (audioLevels[15] || 0) * 0.6})`, opacity: 0.08 + (audioLevels[15] || 0) * 0.15 }} />
+            </div>
+            <button className="recording-done" onClick={stopRecording}>{Icons.check}</button>
+          </div>
+        ) : isTranscribing ? (
+          <div className="transcribing">
+            <span>Processing</span>
+            <div className="dots"><span /><span /><span /></div>
+          </div>
+        ) : (
+          <div className="input-row">
+            {/* Upload Buttons - Desktop Identical */}
+            <div className="upload-buttons">
+              <button className="btn-upload" disabled={isStreaming} title="Add image">
+                {Icons.image}
+              </button>
+              <button className="btn-upload" disabled={isStreaming} title="Add video">
+                {Icons.video}
+              </button>
+              <button className="btn-upload" disabled={isStreaming} title="Add file">
+                {Icons.paperclip}
+              </button>
+            </div>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="Describe what you want to build..."
+              disabled={isStreaming}
+              rows={1}
+            />
+            {input.trim() ? (
+              <button className="btn-send" onClick={handleSend} disabled={isStreaming}>
+                {Icons.send}
+              </button>
+            ) : (
+              <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>
+                {Icons.mic}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <style jsx>{`
-        .mobile-chat { display: flex; flex-direction: column; height: 100%; background: #09090b; }
+        .mobile-chat { display: flex; flex-direction: column; height: 100%; background: var(--bg, #09090b); }
         .messages-container { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-bottom: 200px; }
+
+        /* Actions Button */
+        .actions-btn {
+          width: 40px; height: 40px;
+          display: flex; align-items: center; justify-content: center;
+          background: var(--surface, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 12px;
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .actions-btn:active { background: var(--surface-hover, rgba(255,255,255,0.1)); transform: scale(0.95); }
+
+        /* Action Sheet */
+        .action-sheet-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          z-index: 100;
+          display: flex;
+          align-items: flex-end;
+          animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .action-sheet {
+          width: 100%;
+          background: var(--bg, #18181b);
+          border-radius: 24px 24px 0 0;
+          padding: 12px 20px 32px;
+          padding-bottom: calc(32px + env(safe-area-inset-bottom));
+          animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .mobile-chat.light .action-sheet {
+          background: #ffffff;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .action-sheet-handle {
+          width: 36px; height: 4px;
+          background: var(--border, rgba(255,255,255,0.2));
+          border-radius: 2px;
+          margin: 0 auto 16px;
+        }
+        .action-sheet-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+        .action-sheet-header h3 {
+          font-size: 18px;
+          font-weight: 650;
+          color: var(--text, rgba(255,255,255,0.95));
+          margin: 0;
+        }
+        .live-badge-small {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          background: rgba(34, 197, 94, 0.15);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          border-radius: 12px;
+          font-size: 9px;
+          font-weight: 650;
+          color: #22c55e;
+          text-decoration: none;
+        }
+        .live-badge-small .live-dot {
+          width: 5px; height: 5px;
+          background: #22c55e;
+          border-radius: 50%;
+          animation: livePulse 2s infinite;
+        }
+        @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .action-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+        }
+        .action-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          padding: 16px 8px;
+          background: var(--surface, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 16px;
+          color: var(--text, rgba(255,255,255,0.9));
+          font-size: 11px;
+          font-weight: 550;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .action-item:disabled { opacity: 0.4; cursor: not-allowed; }
+        .action-item:active:not(:disabled) { background: var(--surface-hover, rgba(255,255,255,0.1)); transform: scale(0.96); }
+        .action-item.primary {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(99, 102, 241, 0.15));
+          border-color: rgba(139, 92, 246, 0.3);
+          color: #a78bfa;
+        }
+        .mini-spinner {
+          width: 18px; height: 18px;
+          border: 2px solid var(--border, rgba(255,255,255,0.2));
+          border-top-color: var(--text, white);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .action-divider {
+          height: 1px;
+          background: var(--border, rgba(255,255,255,0.08));
+          margin: 20px 0;
+        }
+        .theme-section {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .theme-label {
+          font-size: 14px;
+          font-weight: 550;
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+        }
+        .theme-grid {
+          display: flex;
+          gap: 10px;
+        }
+        .theme-dot-btn {
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .theme-dot-btn.active {
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
+        }
+        .theme-dot-btn:active { transform: scale(0.9); }
         .welcome-state {
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; height: 100%; text-align: center; padding: 24px;
@@ -1591,40 +2212,22 @@ function MobileChat({
           background: radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%);
           filter: blur(20px);
         }
-        .welcome-state h3 { font-size: 22px; font-weight: 650; color: rgba(255,255,255,0.97); margin: 0 0 8px; letter-spacing: -0.02em; }
-        .welcome-state p { font-size: 15px; color: rgba(255,255,255,0.5); margin: 0 0 32px; }
-        .suggestion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 340px; }
-        .suggestion-grid button {
-          display: flex; flex-direction: column; align-items: center; gap: 12px;
-          padding: 20px 16px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 16px; color: rgba(255,255,255,0.85);
-          font-size: 13px; font-weight: 550; cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
-          -webkit-tap-highlight-color: transparent;
-        }
-        .suggestion-grid button:active {
-          background: rgba(139,92,246,0.12);
-          border-color: rgba(139,92,246,0.3);
-          transform: scale(0.96);
-        }
-        .suggestion-icon { display: flex; }
-        .suggestion-label { letter-spacing: 0.01em; }
-        .message { display: flex; gap: 12px; margin-bottom: 20px; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .welcome-state h3 { font-size: 22px; font-weight: 650; color: var(--text, rgba(255,255,255,0.97)); margin: 0 0 8px; letter-spacing: -0.02em; }
+        .welcome-state p { font-size: 15px; color: var(--text-muted, rgba(255,255,255,0.5)); margin: 0; }
+        .message { display: flex; gap: 12px; margin-bottom: 20px; animation: msgFadeIn 0.3s ease; }
+        @keyframes msgFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .message-avatar {
           width: 36px; height: 36px; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
           border-radius: 12px; font-size: 13px; font-weight: 650;
         }
-        .message.user .message-avatar { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        .message.user .message-avatar { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text-secondary, rgba(255,255,255,0.8)); }
         .message.alfred .message-avatar { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; }
         .message-body { flex: 1; min-width: 0; }
         .message-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-        .message-sender { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.95); }
-        .message-time { font-size: 11px; color: rgba(255,255,255,0.35); }
-        .message-content { font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.85); }
+        .message-sender { font-size: 14px; font-weight: 600; color: var(--text, rgba(255,255,255,0.95)); }
+        .message-time { font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.35)); }
+        .message-content { font-size: 15px; line-height: 1.6; color: var(--text-secondary, rgba(255,255,255,0.85)); }
         .streaming-indicator { display: flex; flex-direction: column; gap: 8px; }
         .step {
           display: flex; align-items: center; gap: 10px;
@@ -1640,8 +2243,7 @@ function MobileChat({
           border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6;
           border-radius: 50%; animation: spin 0.8s linear infinite;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .step-name { font-size: 12px; color: rgba(255,255,255,0.75); font-family: 'SF Mono', Monaco, monospace; }
+        .step-name { font-size: 12px; color: var(--text-secondary, rgba(255,255,255,0.75)); font-family: 'SF Mono', Monaco, monospace; }
         .typing-dots { display: flex; gap: 5px; padding: 10px 0; }
         .typing-dots span {
           width: 8px; height: 8px;
@@ -1651,61 +2253,346 @@ function MobileChat({
         .typing-dots span:nth-child(2) { animation-delay: 0.16s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.32s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-        .input-area {
+
+        /* Desktop-Identical Chat Input Area */
+        .chat-input-area {
           position: fixed; bottom: 84px; left: 0; right: 0;
-          padding: 12px 16px;
-          padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
-          background: rgba(9,9,11,0.95);
-          border-top: 1px solid rgba(255,255,255,0.06);
+          padding: 14px 16px;
+          background: var(--surface, rgba(9,9,11,0.95));
+          border-top: 1px solid var(--border, rgba(255,255,255,0.06));
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
         }
-        .quick-actions {
-          display: flex; gap: 8px; margin-bottom: 12px;
-          overflow-x: auto; -webkit-overflow-scrolling: touch;
-          padding-bottom: 4px;
-        }
-        .quick-action {
-          flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-          padding: 10px 16px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 24px;
-          color: rgba(255,255,255,0.75);
-          font-size: 13px; font-weight: 500;
-          cursor: pointer; transition: all 0.2s;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .quick-action:active { background: rgba(255,255,255,0.08); transform: scale(0.96); }
-        .action-icon { display: flex; color: rgba(255,255,255,0.5); }
+        .mobile-chat.light .chat-input-area { background: rgba(255,255,255,0.95); }
+
         .input-row {
-          display: flex; align-items: flex-end; gap: 12px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 20px; padding: 12px 16px;
+          display: flex; align-items: flex-end; gap: 8px;
+          background: var(--surface-hover, rgba(255,255,255,0.04));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 14px; padding: 10px 12px;
           transition: border-color 0.2s;
         }
         .input-row:focus-within { border-color: rgba(139,92,246,0.4); }
         .input-row textarea {
           flex: 1; background: transparent; border: none; outline: none;
-          color: rgba(255,255,255,0.95);
-          font-size: 16px; font-family: inherit;
+          color: var(--text, rgba(255,255,255,0.95));
+          font-size: 14px; font-family: inherit;
           line-height: 1.5; resize: none;
-          min-height: 26px; max-height: 120px;
+          min-height: 20px; max-height: 100px;
         }
-        .input-row textarea::placeholder { color: rgba(255,255,255,0.35); }
-        .send-btn {
-          width: 44px; height: 44px; flex-shrink: 0;
+        .input-row textarea::placeholder { color: var(--text-muted, rgba(255,255,255,0.35)); }
+
+        /* Upload Buttons - Desktop Style */
+        .upload-buttons { display: flex; gap: 2px; margin-right: 4px; }
+        .btn-upload {
+          width: 28px; height: 28px;
+          border: none; border-radius: 6px;
+          background: transparent;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          cursor: pointer;
           display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, #8b5cf6, #6366f1);
-          border: none; border-radius: 14px;
-          color: white; cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
-          -webkit-tap-highlight-color: transparent;
-          box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+          transition: all 0.15s ease;
         }
-        .send-btn:active:not(:disabled) { transform: scale(0.92); }
-        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+        .btn-upload:active { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text-secondary, rgba(255,255,255,0.6)); }
+        .btn-upload:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Send & Mic Buttons - Desktop Style */
+        .btn-mic, .btn-send {
+          width: 32px; height: 32px;
+          border-radius: 8px; border: none;
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.15s;
+        }
+        .btn-mic { background: transparent; color: var(--icon, rgba(255,255,255,0.6)); }
+        .btn-mic:active { color: var(--text, white); }
+        .btn-send {
+          background: linear-gradient(135deg, #8b5cf6, #6366f1);
+          color: white;
+          box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+        }
+        .btn-send:active:not(:disabled) { transform: scale(0.94); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
+        .btn-send:disabled, .btn-mic:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Recording UI - Desktop Orb Style */
+        .recording-ui { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+        .recording-cancel, .recording-done {
+          width: 38px; height: 38px;
+          border-radius: 50%; border: none;
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        }
+        .recording-cancel { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text-muted, rgba(255,255,255,0.5)); }
+        .recording-cancel:active { background: var(--surface, rgba(255,255,255,0.15)); }
+        .recording-done { background: #8b5cf6; color: white; }
+        .recording-done:active { transform: scale(1.05); }
+        .recording-visualizer { position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+        .orb { width: 16px; height: 16px; background: #8b5cf6; border-radius: 50%; transition: transform 0.03s linear; }
+        .orb-ring { position: absolute; inset: 0; border: 1.5px solid #8b5cf6; border-radius: 50%; transition: all 0.04s linear; pointer-events: none; }
+        .orb-ring.r1 { inset: 4px; }
+        .orb-ring.r2 { inset: -2px; }
+        .transcribing { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 16px 0; color: var(--text-secondary, rgba(255,255,255,0.6)); font-size: 14px; }
+        .dots { display: flex; gap: 3px; }
+        .dots span { width: 4px; height: 4px; background: currentColor; border-radius: 50%; animation: dot 1.3s infinite; }
+        .dots span:nth-child(2) { animation-delay: 0.15s; }
+        .dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes dot { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; }
+        }
+        @keyframes voicePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOBILE PROJECTS MODAL — Like Desktop Projects Sidebar
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface Project {
+  id: string;
+  name: string;
+  fileCount: number;
+  totalSize: number;
+  updatedAt: string;
+}
+
+function MobileProjectsModal({
+  isOpen,
+  onClose,
+  onLoadProject,
+  currentProjectId,
+  isLightTheme,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onLoadProject: (projectId: string) => void;
+  currentProjectId?: string | null;
+  isLightTheme?: boolean;
+}) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Load projects
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsLoading(true);
+    fetch('/api/builder/projects?limit=50')
+      .then(res => res.json())
+      .then(data => setProjects(data.projects || []))
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, [isOpen]);
+
+  const handleDelete = useCallback(async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Delete this project? This cannot be undone.')) return;
+    setDeletingId(projectId);
+    try {
+      await fetch(`/api/builder/projects/${projectId}`, { method: 'DELETE' });
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+    } catch (err) {
+      console.error('Failed to delete:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className={`projects-modal-overlay ${isLightTheme ? 'light' : ''}`} onClick={onClose}>
+      <div className="projects-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-handle" />
+        <div className="modal-header">
+          <h3>Your Projects</h3>
+          <button className="close-btn" onClick={onClose}>{Icons.close}</button>
+        </div>
+        <div className="modal-content">
+          {isLoading ? (
+            <div className="loading-state">
+              <div className="spinner" />
+              <span>Loading projects...</span>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="empty-state">
+              {Icons.projects}
+              <span>No saved projects yet</span>
+              <p>Create a project and save it to see it here.</p>
+            </div>
+          ) : (
+            <div className="projects-list">
+              {projects.map(project => (
+                <button
+                  key={project.id}
+                  className={`project-item ${currentProjectId === project.id ? 'active' : ''}`}
+                  onClick={() => { onLoadProject(project.id); onClose(); }}
+                >
+                  <div className="project-icon">{Icons.layers}</div>
+                  <div className="project-info">
+                    <span className="project-name">{project.name}</span>
+                    <span className="project-meta">
+                      {project.fileCount} files • {formatSize(project.totalSize)} • {formatDate(project.updatedAt)}
+                    </span>
+                  </div>
+                  <button
+                    className="delete-btn"
+                    onClick={(e) => handleDelete(project.id, e)}
+                    disabled={deletingId === project.id}
+                  >
+                    {deletingId === project.id ? <div className="mini-spinner" /> : Icons.trash}
+                  </button>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <style jsx>{`
+        .projects-modal-overlay {
+          position: fixed; inset: 0; z-index: 200;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          display: flex; align-items: flex-end;
+          animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .projects-modal {
+          width: 100%;
+          max-height: 80vh;
+          background: var(--bg, #18181b);
+          border-radius: 24px 24px 0 0;
+          display: flex; flex-direction: column;
+          animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .projects-modal-overlay.light .projects-modal {
+          background: #ffffff;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-handle {
+          width: 36px; height: 4px;
+          background: var(--border, rgba(255,255,255,0.2));
+          border-radius: 2px;
+          margin: 12px auto 0;
+        }
+        .modal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+        }
+        .modal-header h3 {
+          font-size: 18px; font-weight: 650;
+          color: var(--text, rgba(255,255,255,0.95));
+          margin: 0;
+        }
+        .close-btn {
+          width: 32px; height: 32px;
+          display: flex; align-items: center; justify-content: center;
+          background: var(--surface, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 8px;
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+          cursor: pointer;
+        }
+        .modal-content {
+          flex: 1; overflow-y: auto;
+          padding: 16px 20px 32px;
+          padding-bottom: calc(32px + env(safe-area-inset-bottom));
+        }
+        .loading-state, .empty-state {
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          padding: 48px 24px; text-align: center;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+        }
+        .spinner {
+          width: 24px; height: 24px;
+          border: 2px solid var(--border, rgba(255,255,255,0.1));
+          border-top-color: #8b5cf6;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { gap: 8px; }
+        .empty-state p { font-size: 13px; margin: 0; color: var(--text-muted, rgba(255,255,255,0.3)); }
+        .projects-list { display: flex; flex-direction: column; gap: 8px; }
+        .project-item {
+          display: flex; align-items: center; gap: 12px;
+          padding: 14px 16px;
+          background: var(--surface, rgba(255,255,255,0.03));
+          border: 1px solid var(--border, rgba(255,255,255,0.06));
+          border-radius: 14px;
+          cursor: pointer;
+          transition: all 0.2s;
+          width: 100%; text-align: left;
+        }
+        .project-item:active { background: var(--surface-hover, rgba(255,255,255,0.06)); transform: scale(0.98); }
+        .project-item.active {
+          background: rgba(139,92,246,0.1);
+          border-color: rgba(139,92,246,0.3);
+        }
+        .project-icon {
+          width: 36px; height: 36px;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(139,92,246,0.15);
+          border-radius: 10px;
+          color: #8b5cf6;
+          flex-shrink: 0;
+        }
+        .project-info { flex: 1; min-width: 0; }
+        .project-name {
+          display: block;
+          font-size: 14px; font-weight: 550;
+          color: var(--text, rgba(255,255,255,0.9));
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .project-meta {
+          display: block;
+          font-size: 12px;
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          margin-top: 2px;
+        }
+        .delete-btn {
+          width: 32px; height: 32px;
+          display: flex; align-items: center; justify-content: center;
+          background: transparent;
+          border: none; border-radius: 8px;
+          color: var(--text-muted, rgba(255,255,255,0.3));
+          cursor: pointer;
+          transition: all 0.15s;
+          flex-shrink: 0;
+        }
+        .delete-btn:active { background: rgba(239,68,68,0.1); color: #ef4444; }
+        .mini-spinner {
+          width: 14px; height: 14px;
+          border: 2px solid var(--border, rgba(255,255,255,0.1));
+          border-top-color: var(--text-secondary, rgba(255,255,255,0.5));
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
       `}</style>
     </div>
   );
@@ -1731,9 +2618,47 @@ export default function MobileBuilderLayout({
   streamingCode,
   streamingSteps,
   messages,
+  // Theme
+  themes,
+  currentTheme,
+  onThemeChange,
+  isLightTheme,
+  // Actions
+  onSave,
+  isSaving,
+  currentProjectId,
+  onOpenProjects,
+  onDeploy,
+  isDeploying,
+  deployedUrl,
+  onExport,
+  onLoadProject,
 }: MobileBuilderLayoutProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('chat');
+  const [showProjectsModal, setShowProjectsModal] = useState(false);
 
+  // Swipe gesture state
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isSwiping = useRef(false);
+
+  // Tab order for swipe navigation
+  const tabOrder: MobileTab[] = ['files', 'code', 'preview', 'chat'];
+
+  // Computed theme vars for root element
+  const themeVars = currentTheme ? {
+    '--bg': currentTheme.bg,
+    '--text': isLightTheme ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.9)',
+    '--text-secondary': isLightTheme ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)',
+    '--text-muted': isLightTheme ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
+    '--border': isLightTheme ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)',
+    '--border-light': isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)',
+    '--surface': isLightTheme ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+    '--surface-hover': isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+    '--icon': isLightTheme ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)',
+  } as React.CSSProperties : {};
+
+  // Auto-switch to preview when build completes
   useEffect(() => {
     if (!isBuilding && !isStreaming && previewResult?.html && activeTab === 'chat') {
       const timer = setTimeout(() => setActiveTab('preview'), 500);
@@ -1743,34 +2668,121 @@ export default function MobileBuilderLayout({
 
   const navigateToCode = useCallback(() => setActiveTab('code'), []);
 
+  // Swipe gesture handlers
+  const handleTouchStart = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isSwiping.current = true;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    if (!isSwiping.current) return;
+    isSwiping.current = false;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
+
+    // Only trigger if horizontal swipe is dominant and significant
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      const currentIndex = tabOrder.indexOf(activeTab);
+
+      if (deltaX > 0 && currentIndex > 0) {
+        // Swipe right - go to previous tab
+        setActiveTab(tabOrder[currentIndex - 1]);
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      } else if (deltaX < 0 && currentIndex < tabOrder.length - 1) {
+        // Swipe left - go to next tab
+        setActiveTab(tabOrder[currentIndex + 1]);
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      }
+    }
+  }, [activeTab, tabOrder]);
+
   return (
-    <div className="mobile-builder">
+    <div
+      className={`mobile-builder ${isLightTheme ? 'light' : ''}`}
+      style={themeVars}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="tab-content">
         {activeTab === 'files' && (
           <MobileFileExplorer
-            tree={fileTree} files={files} selectedPath={selectedFile?.path || null}
-            projectName={projectName} onFileSelect={onFileSelect} onNavigateToCode={navigateToCode}
+            tree={fileTree}
+            files={files}
+            selectedPath={selectedFile?.path || null}
+            projectName={projectName}
+            onFileSelect={onFileSelect}
+            onNavigateToCode={navigateToCode}
+            isLightTheme={isLightTheme}
           />
         )}
         {activeTab === 'code' && (
           <MobileCodeEditor
-            file={selectedFile} onChange={onFileChange} isStreaming={isStreaming}
-            streamingCode={streamingCode} streamingFile={streamingFile}
+            file={selectedFile}
+            onChange={onFileChange}
+            isStreaming={isStreaming}
+            streamingCode={streamingCode}
+            streamingFile={streamingFile}
+            isLightTheme={isLightTheme}
           />
         )}
         {activeTab === 'preview' && (
-          <MobilePreview preview={previewResult} isBuilding={isBuilding || isStreaming} onRefresh={onRebuild} />
+          <MobilePreview
+            preview={previewResult}
+            isBuilding={isBuilding || isStreaming}
+            onRefresh={onRebuild}
+            isLightTheme={isLightTheme}
+            deployedUrl={deployedUrl}
+          />
         )}
         {activeTab === 'chat' && (
-          <MobileChat messages={messages} streamingSteps={streamingSteps} isStreaming={isStreaming} onSendMessage={onSendMessage} />
+          <MobileChat
+            messages={messages}
+            streamingSteps={streamingSteps}
+            isStreaming={isStreaming}
+            onSendMessage={onSendMessage}
+            isLightTheme={isLightTheme}
+            onSave={onSave}
+            isSaving={isSaving}
+            onOpenProjects={() => setShowProjectsModal(true)}
+            onDeploy={onDeploy}
+            isDeploying={isDeploying}
+            deployedUrl={deployedUrl}
+            onExport={onExport}
+            hasFiles={files.length > 0}
+            themes={themes}
+            currentTheme={currentTheme}
+            onThemeChange={onThemeChange}
+          />
         )}
       </div>
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} fileCount={files.length} hasUnreadChat={false} />
+      <BottomNavigation
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        fileCount={files.length}
+        hasUnreadChat={false}
+        isLightTheme={isLightTheme}
+      />
+
+      {/* Projects Modal */}
+      <MobileProjectsModal
+        isOpen={showProjectsModal}
+        onClose={() => setShowProjectsModal(false)}
+        onLoadProject={onLoadProject || (() => {})}
+        currentProjectId={currentProjectId}
+        isLightTheme={isLightTheme}
+      />
+
       <style jsx>{`
         .mobile-builder {
           display: flex; flex-direction: column;
           height: 100vh; height: 100dvh;
-          background: #09090b; overflow: hidden;
+          background: var(--bg, #09090b);
+          overflow: hidden;
+          transition: background 0.3s ease;
         }
         .tab-content { flex: 1; min-height: 0; overflow: hidden; }
       `}</style>

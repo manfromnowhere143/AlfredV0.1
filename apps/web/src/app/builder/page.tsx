@@ -1345,6 +1345,24 @@ export default function BuilderPage() {
           streamingCode={streamingCode}
           streamingSteps={streamingSteps}
           messages={messages}
+          // Theme System
+          themes={themes}
+          currentTheme={currentTheme}
+          onThemeChange={setCurrentTheme}
+          isLightTheme={isLightTheme}
+          // Save/Projects
+          onSave={saveProject}
+          isSaving={isSaving}
+          currentProjectId={currentProjectId}
+          onOpenProjects={() => setShowProjects(true)}
+          // Deploy
+          onDeploy={async () => { handleDeploy(); }}
+          isDeploying={isDeploying}
+          deployedUrl={deployedUrl}
+          // Export
+          onExport={() => {}}
+          // Load project
+          onLoadProject={loadProject}
         />
         {limitReached && (
           <LimitReached
