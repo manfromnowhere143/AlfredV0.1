@@ -377,6 +377,14 @@ const Icons = {
       <polyline points="2 12 12 17 22 12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+  expand: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <polyline points="15 3 21 3 21 9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="9 21 3 21 3 15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="21" y1="3" x2="14" y2="10" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="3" y1="21" x2="10" y2="14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 };
 
 // File type icons
@@ -1358,8 +1366,8 @@ function MobilePreview({
   isLightTheme?: boolean;
   deployedUrl?: string | null;
 }) {
-  const [viewport, setViewport] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -1371,12 +1379,16 @@ function MobilePreview({
 
   const handleLoad = useCallback(() => setIsLoaded(true), []);
 
+  // Toggle fullscreen with haptic
+  const toggleFullscreen = useCallback(() => {
+    if ('vibrate' in navigator) navigator.vibrate(15);
+    setIsFullscreen(prev => !prev);
+  }, []);
+
   // Check for errors
   const hasErrors = !isBuilding && preview?.errors && preview.errors.length > 0;
   const firstError = hasErrors && preview?.errors ? preview.errors[0] : null;
   const hasPreviewContent = !!preview?.html && preview.html.length > 100;
-
-  const viewportSizes = { mobile: { width: 375, height: 667 }, tablet: { width: 768, height: 1024 }, desktop: { width: '100%', height: '100%' } };
 
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);
@@ -1398,13 +1410,137 @@ function MobilePreview({
 
   const handleTouchEnd = useCallback(() => {
     if (pullDistance > 60) {
-      // Trigger haptic feedback
       if ('vibrate' in navigator) navigator.vibrate(20);
       onRefresh();
     }
     setPullDistance(0);
     setIsPulling(false);
   }, [pullDistance, onRefresh]);
+
+  // Fullscreen view
+  if (isFullscreen) {
+    return (
+      <div className={`fullscreen-preview ${isLightTheme ? 'light' : ''}`}>
+        {/* Fullscreen Header */}
+        <div className="fullscreen-header">
+          <button className="close-fullscreen" onClick={toggleFullscreen}>
+            {Icons.chevronLeft}
+            <span>Back</span>
+          </button>
+          <div className="fullscreen-actions">
+            {deployedUrl && (
+              <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge-mini">
+                <span className="live-dot" />
+                LIVE
+              </a>
+            )}
+            <button className="action-btn" onClick={onRefresh}>{Icons.refresh}</button>
+          </div>
+        </div>
+        {/* Fullscreen iframe */}
+        <div className="fullscreen-content">
+          {hasPreviewContent && (
+            <iframe
+              ref={iframeRef}
+              title="Fullscreen Preview"
+              sandbox="allow-scripts allow-same-origin"
+              onLoad={handleLoad}
+              className={isLoaded ? 'loaded' : ''}
+            />
+          )}
+        </div>
+        <style jsx>{`
+          .fullscreen-preview {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: var(--bg, #09090b);
+            display: flex;
+            flex-direction: column;
+            animation: fullscreenIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          @keyframes fullscreenIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .fullscreen-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            padding-top: calc(12px + env(safe-area-inset-top));
+            background: var(--bg, #09090b);
+            border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+          }
+          .close-fullscreen {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 12px 8px 8px;
+            background: var(--surface, rgba(255,255,255,0.05));
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
+            border-radius: 10px;
+            color: var(--text, rgba(255,255,255,0.9));
+            font-size: 14px;
+            font-weight: 550;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .close-fullscreen:active { transform: scale(0.96); background: var(--surface-hover, rgba(255,255,255,0.08)); }
+          .fullscreen-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+          .live-badge-mini {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 650;
+            color: #22c55e;
+            text-decoration: none;
+          }
+          .live-badge-mini .live-dot {
+            width: 5px; height: 5px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: livePulse 2s infinite;
+          }
+          .action-btn {
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--surface, rgba(255,255,255,0.05));
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
+            border-radius: 10px;
+            color: var(--text-secondary, rgba(255,255,255,0.6));
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .action-btn:active { transform: scale(0.94); }
+          .fullscreen-content {
+            flex: 1;
+            overflow: hidden;
+            padding-bottom: env(safe-area-inset-bottom);
+          }
+          .fullscreen-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+          }
+          .fullscreen-content iframe.loaded { opacity: 1; }
+          @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className={`mobile-preview ${isLightTheme ? 'light' : ''}`}>
@@ -1421,15 +1557,9 @@ function MobilePreview({
                 {Icons.externalLink}
               </a>
             )}
-            <div className="viewport-toggle">
-              {(['mobile', 'tablet', 'desktop'] as const).map((vp) => (
-                <button key={vp} className={viewport === vp ? 'active' : ''} onClick={() => setViewport(vp)}>
-                  {vp === 'mobile' && Icons.mobile}
-                  {vp === 'tablet' && Icons.tablet}
-                  {vp === 'desktop' && Icons.desktop}
-                </button>
-              ))}
-            </div>
+            <button className="expand-btn" onClick={toggleFullscreen} title="Fullscreen">
+              {Icons.expand}
+            </button>
             <button className="refresh-btn" onClick={onRefresh}>{Icons.refresh}</button>
           </div>
         }
@@ -1510,18 +1640,17 @@ function MobilePreview({
           </div>
         )}
 
-        {/* Actual Preview */}
+        {/* Actual Preview - Mobile Optimized */}
         {!isBuilding && hasPreviewContent && !hasErrors && (
-          <div className={`iframe-wrapper ${viewport} ${isLoaded ? 'loaded' : ''}`}>
-            {viewport === 'mobile' && <div className="device-notch" />}
+          <div className={`iframe-wrapper ${isLoaded ? 'loaded' : ''}`}>
+            <div className="device-notch" />
             <iframe
               ref={iframeRef}
               title="Preview"
               sandbox="allow-scripts allow-same-origin allow-forms"
               onLoad={handleLoad}
-              style={viewport === 'desktop' ? { width: '100%', height: '100%' } : { width: viewportSizes[viewport].width, height: viewportSizes[viewport].height }}
             />
-            {viewport === 'mobile' && <div className="device-home" />}
+            <div className="device-home" />
           </div>
         )}
       </div>
@@ -1553,20 +1682,22 @@ function MobilePreview({
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.6; transform: scale(1.2); }
         }
-        .viewport-toggle {
-          display: flex;
-          background: var(--surface, rgba(255,255,255,0.04));
-          border: 1px solid var(--border, rgba(255,255,255,0.08));
-          border-radius: 10px; padding: 3px;
-        }
-        .viewport-toggle button {
-          width: 36px; height: 32px;
+        .expand-btn {
+          width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
-          background: transparent; border: none; border-radius: 8px;
-          color: var(--text-muted, rgba(255,255,255,0.4)); cursor: pointer;
+          background: var(--surface, rgba(255,255,255,0.05));
+          border: 1px solid var(--border, rgba(255,255,255,0.08));
+          border-radius: 12px;
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+          cursor: pointer;
           transition: all 0.2s;
         }
-        .viewport-toggle button.active { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text, white); }
+        .expand-btn:active {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: rgba(139, 92, 246, 0.3);
+          color: #8b5cf6;
+          transform: scale(0.94);
+        }
         .refresh-btn {
           width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
@@ -1600,26 +1731,47 @@ function MobilePreview({
           padding: 20px; padding-bottom: 100px; overflow: hidden;
         }
         .iframe-wrapper {
-          background: #1a1a1c; border-radius: 24px;
+          background: #1a1a1c;
+          border-radius: 32px;
           overflow: hidden;
           box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
-          display: flex; flex-direction: column;
+          display: flex;
+          flex-direction: column;
+          padding: 12px 8px;
+          width: 100%;
+          max-width: 380px;
+          height: auto;
+          aspect-ratio: 9/16;
         }
-        .iframe-wrapper.mobile { padding: 12px 8px; }
         .device-notch {
-          width: 80px; height: 24px;
-          background: #0a0a0c; border-radius: 0 0 16px 16px;
+          width: 100px; height: 28px;
+          background: #0a0a0c;
+          border-radius: 0 0 20px 20px;
           margin: 0 auto 8px;
+          position: relative;
+        }
+        .device-notch::after {
+          content: '';
+          position: absolute;
+          top: 8px; left: 50%;
+          transform: translateX(-50%);
+          width: 60px; height: 6px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 3px;
         }
         .device-home {
-          width: 100px; height: 5px;
-          background: rgba(255,255,255,0.2); border-radius: 3px;
-          margin: 12px auto 0;
+          width: 120px; height: 5px;
+          background: rgba(255,255,255,0.25);
+          border-radius: 3px;
+          margin: 12px auto 4px;
         }
-        .iframe-wrapper.tablet { border-radius: 20px; max-height: 80vh; }
-        .iframe-wrapper.desktop { width: 100%; height: 100%; border-radius: 12px; }
-        .iframe-wrapper iframe { display: block; border: none; background: white; border-radius: 12px; }
-        .iframe-wrapper.mobile iframe { border-radius: 20px; }
+        .iframe-wrapper iframe {
+          flex: 1;
+          width: 100%;
+          border: none;
+          background: white;
+          border-radius: 24px;
+        }
         .building-state, .empty-state, .error-state, .loading-state {
           position: absolute;
           inset: 0;
@@ -1720,8 +1872,15 @@ function MobilePreview({
         }
 
         /* Iframe loaded state */
-        .iframe-wrapper { opacity: 0; transition: opacity 0.4s ease; }
-        .iframe-wrapper.loaded { opacity: 1; }
+        .iframe-wrapper {
+          opacity: 0;
+          transform: scale(0.95);
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .iframe-wrapper.loaded {
+          opacity: 1;
+          transform: scale(1);
+        }
         .preview-container { position: relative; }
       `}</style>
     </div>
