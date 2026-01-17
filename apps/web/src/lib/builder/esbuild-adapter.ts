@@ -159,27 +159,6 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       const esbuildModule = await import('esbuild-wasm');
       this.esbuild = esbuildModule;
 
-      // Check if ESBuild was already initialized in a previous session
-      // (this can happen with HMR or if the singleton persists)
-      try {
-        // Try a simple transform to see if already initialized (with 2 min timeout)
-        console.log('[ESBuild] Testing if already initialized...');
-        const testStart = performance.now();
-        const testResult = await Promise.race([
-          esbuildModule.transform('const x = 1', { loader: 'js' }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Test transform timeout')), 120000))
-        ]);
-        console.log('[ESBuild] Test transform completed in', Math.round(performance.now() - testStart), 'ms');
-        if (testResult) {
-          console.log('[ESBuild] ✅ Already initialized (transform test passed)');
-          this.initialized = true;
-          return;
-        }
-      } catch (testErr) {
-        // Not initialized yet, continue with normal init
-        console.log('[ESBuild] Not yet initialized, proceeding with WASM load...', testErr);
-      }
-
       console.log('[ESBuild] Module loaded, initializing WASM...');
 
       // Try multiple WASM sources in case one fails
@@ -193,14 +172,14 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       for (const wasmURL of wasmSources) {
         try {
           console.log('[ESBuild] Trying WASM URL:', wasmURL);
-
-          // Add timeout for each initialization attempt (2 min max per URL)
           console.log('[ESBuild] ⏳ Starting WASM initialization...');
           const wasmStart = performance.now();
+
+          // Add timeout for initialization (30s should be enough)
           const initWithTimeout = Promise.race([
             esbuildModule.initialize({ wasmURL }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`Timeout loading WASM from ${wasmURL}`)), 120000)
+              setTimeout(() => reject(new Error(`Timeout loading WASM from ${wasmURL}`)), 30000)
             )
           ]);
 
@@ -208,7 +187,6 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           console.log('[ESBuild] ✅ WASM loaded from:', wasmURL, 'in', Math.round(performance.now() - wasmStart), 'ms');
 
           // Do a warm-up transform to ensure WASM is fully ready
-          // The first transform after init is often slow
           console.log('[ESBuild] 🔥 Running warm-up transform...');
           const warmupStart = performance.now();
           await esbuildModule.transform('const warmup = 1;', { loader: 'js' });
@@ -218,10 +196,19 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           console.log('[ESBuild] ✅ ESBuild fully initialized and ready!');
           return;
         } catch (err) {
-          console.warn('[ESBuild] Failed to load from:', wasmURL, err);
+          const errorMsg = err instanceof Error ? err.message : String(err);
+
+          // Check if already initialized (this is OK)
+          if (errorMsg.includes('Already initialized') || errorMsg.includes('already been called')) {
+            console.log('[ESBuild] ✅ Already initialized, skipping WASM load');
+            this.initialized = true;
+            return;
+          }
+
+          console.warn('[ESBuild] Failed to load from:', wasmURL, errorMsg);
           lastError = err instanceof Error ? err : new Error(String(err));
           // Small delay before trying next source
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise(r => setTimeout(r, 500));
         }
       }
 
@@ -327,7 +314,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           const transformStart = performance.now();
           console.log('[ESBuild] 📄 Transforming:', file.path, '| Size:', file.content.length, 'chars');
 
-          // Add 2 min timeout per file transform to allow for slow WASM execution
+          // Add 30s timeout per file transform
           const transformPromise = this.esbuild.transform(file.content, {
             loader: file.path.endsWith('.tsx') ? 'tsx' :
                     file.path.endsWith('.ts') ? 'ts' :
@@ -341,7 +328,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           const result = await Promise.race([
             transformPromise,
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), 120000)
+              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), 30000)
             )
           ]);
 
