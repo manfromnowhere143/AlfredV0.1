@@ -15,6 +15,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import type { PreviewResult, ConsoleEntry } from '@alfred/core';
+import { ProcessingAnimation } from './ProcessingAnimation';
 
 // ============================================================================
 // TYPES
@@ -679,6 +680,10 @@ const ConsolePanel = memo(function ConsolePanel({ entries, onClear }: ConsolePan
 // MAIN COMPONENT
 // ============================================================================
 
+// Auto-retry configuration
+const MAX_RETRIES = 5;
+const RETRY_DELAY_BASE = 2000; // 2 seconds base delay
+
 export function BuilderPreview({
   preview,
   isBuilding = false,
@@ -703,6 +708,39 @@ export function BuilderPreview({
   const [activeTab, setActiveTab] = useState<PanelTab>('preview');
   const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  // Auto-retry on build failure
+  useEffect(() => {
+    const hasErrors = preview?.errors && preview.errors.length > 0 && !preview.success;
+    const canRetry = hasErrors && retryCount < MAX_RETRIES && !isBuilding && onRebuild;
+
+    if (canRetry) {
+      setIsRetrying(true);
+      const delay = RETRY_DELAY_BASE + retryCount * 1000; // Increasing delay
+
+      console.log(`[BuilderPreview] 🔄 Auto-retry ${retryCount + 1}/${MAX_RETRIES} in ${delay}ms`);
+
+      const timeout = setTimeout(() => {
+        setRetryCount(r => r + 1);
+        onRebuild?.();
+      }, delay);
+
+      return () => clearTimeout(timeout);
+    } else if (!hasErrors) {
+      // Reset retry count on success
+      setRetryCount(0);
+      setIsRetrying(false);
+    }
+  }, [preview, retryCount, isBuilding, onRebuild]);
+
+  // Reset retry count when build starts
+  useEffect(() => {
+    if (isBuilding) {
+      setIsRetrying(false);
+    }
+  }, [isBuilding]);
 
   // Handle messages from iframe
   useEffect(() => {
@@ -757,9 +795,18 @@ export function BuilderPreview({
 
   const handleClearConsole = useCallback(() => setConsoleEntries([]), []);
 
-  // Only show errors when NOT building - building state takes priority
-  const hasErrors = !isBuilding && preview?.errors && preview.errors.length > 0;
-  const firstError = hasErrors && preview?.errors ? preview.errors[0] : null;
+  // Only show errors when NOT building AND NOT retrying - building/retry state takes priority
+  const hasErrors = !isBuilding && !isRetrying && preview?.errors && preview.errors.length > 0;
+  const retriesExhausted = retryCount >= MAX_RETRIES;
+  const showFinalError = hasErrors && retriesExhausted;
+  const firstError = showFinalError && preview?.errors ? preview.errors[0] : null;
+
+  // Get status message for processing animation
+  const getStatusMessage = () => {
+    if (isBuilding) return "Compiling your app...";
+    if (isRetrying) return `Optimizing build... (attempt ${retryCount + 1}/${MAX_RETRIES})`;
+    return "Preparing your preview...";
+  };
 
   // Has valid preview HTML
   const hasPreviewContent = !!preview?.html && preview.html.length > 100;
@@ -794,8 +841,16 @@ export function BuilderPreview({
                 <CraftingAnimation />
               )}
 
-              {/* PRIORITY 2: Error State - Only when NOT building AND has errors */}
-              {!isBuilding && hasErrors && (
+              {/* PRIORITY 1.5: Processing Animation - Shows during retries */}
+              {!isBuilding && isRetrying && (
+                <ProcessingAnimation
+                  status={getStatusMessage()}
+                  subtitle="Complex projects need more time"
+                />
+              )}
+
+              {/* PRIORITY 2: Error State - Only when NOT building AND retries exhausted */}
+              {!isBuilding && !isRetrying && showFinalError && (
                 <div className="preview-error">
                   <div className="error-glow" />
                   <div className="error-icon">
@@ -813,18 +868,18 @@ export function BuilderPreview({
                     </div>
                   ) : null}
                   {onRebuild && (
-                    <button className="rebuild-button" onClick={onRebuild}>
+                    <button className="rebuild-button" onClick={() => { setRetryCount(0); onRebuild(); }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                       </svg>
-                      Retry Build
+                      Try Again
                     </button>
                   )}
                 </div>
               )}
 
               {/* PRIORITY 3: Empty State - Idle, waiting for user input */}
-              {!isBuilding && !hasErrors && !hasPreviewContent && (
+              {!isBuilding && !isRetrying && !showFinalError && !hasPreviewContent && (
                 <div className="preview-empty">
                   <div className="empty-icon">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -847,7 +902,7 @@ export function BuilderPreview({
               )}
 
               {/* PRIORITY 4: Loading - Preview content exists but iframe not loaded */}
-              {!isBuilding && hasPreviewContent && !isLoaded && !hasErrors && (
+              {!isBuilding && !isRetrying && hasPreviewContent && !isLoaded && !showFinalError && (
                 <div className="preview-loading">
                   <div className="loading-orb">
                     <div className="orb-ring" />
@@ -876,7 +931,7 @@ export function BuilderPreview({
               <iframe
                 ref={iframeRef}
                 key={refreshKey}
-                className={`preview-iframe ${isLoaded && !hasErrors && !isBuilding ? 'loaded' : ''}`}
+                className={`preview-iframe ${isLoaded && !showFinalError && !isBuilding && !isRetrying ? 'loaded' : ''}`}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                 onLoad={handleLoad}
                 onError={handleError}

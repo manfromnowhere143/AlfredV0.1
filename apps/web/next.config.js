@@ -67,8 +67,8 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh https://cdn.tailwindcss.com https://www.googletagmanager.com",
               // Workers: allow blob URLs for ESBuild/Monaco workers
               "worker-src 'self' blob:",
-              // Styles: self + inline (required for styled-jsx and Tailwind)
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              // Styles: self + inline (required for styled-jsx and Tailwind) + Monaco Editor CSS
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
               // Images: self + data URIs + blob + common image hosts
               "img-src 'self' data: blob: https: http:",
               // Fonts: self + Google Fonts

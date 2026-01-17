@@ -72,6 +72,7 @@ const Icons = {
   weather: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/></svg>,
   stop: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
   layers: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>,
+  loading: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2a10 10 0 019.5 13" strokeLinecap="round"/></svg>,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -207,6 +208,7 @@ export default function BuilderPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isSending, setIsSending] = useState(false); // Prevents double-click race conditions
   const [streamingSteps, setStreamingSteps] = useState<StreamingStep[]>([]);
   const [chatMinimized, setChatMinimized] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('split');
@@ -576,7 +578,11 @@ export default function BuilderPage() {
 
   const sendMessage = useCallback(async (overrideContent?: string) => {
     const content = (overrideContent || inputValue).trim();
-    if (!content || isStreaming) return;
+    // Prevent double-click race conditions
+    if (!content || isStreaming || isSending) return;
+
+    // Immediately disable button to prevent multiple clicks
+    setIsSending(true);
 
     // Ensure builder is initialized
     if (!builder.isInitialized) {
@@ -785,11 +791,12 @@ export default function BuilderPage() {
       setMessages(prev => prev.map(m => m.isStreaming ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false } : m));
     }
     finally {
-      // Safety net: ensure isStreaming is always false when done
-      console.log('[Builder] 🏁 finally block, ensuring isStreaming=false');
+      // Safety net: ensure streaming/sending states are always reset when done
+      console.log('[Builder] 🏁 finally block, resetting all states');
       setIsStreaming(false);
+      setIsSending(false);
     }
-  }, [inputValue, isStreaming, builder, chatMinimized]);
+  }, [inputValue, isStreaming, isSending, builder, chatMinimized]);
 
   // Loading/Auth
   if (status === 'loading') return <div className="loading-screen"><div className="loading-orb"><div className="orb-ring" /><div className="orb-core" /></div><style jsx>{`.loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:#09090b}.loading-orb{position:relative;width:48px;height:48px}.orb-ring{position:absolute;inset:0;border:2px solid transparent;border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite}.orb-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:50%}@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>;
@@ -910,7 +917,14 @@ export default function BuilderPage() {
               ) : builder.selectedFile ? (
                 <>
                   <div className="editor-tabs"><div className="tab active"><span>{builder.selectedFile.name}</span></div></div>
-                  <div className="editor-content"><MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} onChange={handleEditorChange} theme="dark" /></div>
+                  <div className="editor-content" style={{position: 'relative'}}>
+                    <MonacoEditor key={builder.selectedFile.path} value={builder.selectedFile.content} language={builder.selectedFile.language} onChange={handleEditorChange} theme="dark" />
+                    <div className="press-enter-hint">
+                      <span>Press</span>
+                      <kbd>Enter</kbd>
+                      <span>to edit</span>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <div className="editor-empty">{Icons.file}<span>Select a file to edit</span></div>
@@ -1035,9 +1049,9 @@ export default function BuilderPage() {
                       rows={1}
                     />
                     {inputValue.trim() ? (
-                      <button className="btn-send" onClick={() => sendMessage()} disabled={isStreaming}>{Icons.send}</button>
+                      <button className="btn-send" onClick={() => sendMessage()} disabled={isStreaming || isSending}>{isSending ? Icons.loading : Icons.send}</button>
                     ) : (
-                      <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>{Icons.mic}</button>
+                      <button className="btn-mic" onClick={startRecording} disabled={isStreaming || isSending}>{Icons.mic}</button>
                     )}
                   </div>
                 )}
@@ -1098,6 +1112,8 @@ export default function BuilderPage() {
         .editor-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
         .editor-content.streaming { padding: 0; background: #0d0d10; height: 100%; position: relative; }
         .editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: rgba(255,255,255,0.25); font-size: 12px; }
+        .press-enter-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(24,24,27,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: rgba(255,255,255,0.6); font-size: 13px; backdrop-filter: blur(8px); pointer-events: none; }
+        .press-enter-hint kbd { padding: 2px 8px; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.3); border-radius: 4px; color: #a78bfa; font-family: "SF Mono", Monaco, monospace; font-size: 11px; }
         .editor-loading { display: flex; align-items: center; justify-content: center; height: 100%; background: #09090b; }
         .loading-pulse { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #6366f1); animation: pulse 1.5s infinite; }
 
@@ -1143,6 +1159,7 @@ export default function BuilderPage() {
         .btn-send { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; }
         .btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
         .btn-send:disabled, .btn-mic:disabled, .btn-enhance:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-send .animate-spin { animation: spin 1s linear infinite; }
 
         /* Prompt Enhancer */
         .prompt-enhancer { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }

@@ -193,6 +193,17 @@ export const MonacoEditor = memo(function MonacoEditor({
       skipLibCheck: true,
     });
 
+    // Disable red squiggles - we don't have full React types loaded
+    // and the code is valid even if Monaco can't resolve all types
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false, // Keep syntax validation (actual errors)
+    });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false,
+    });
+
     // Add React types for IntelliSense
     monaco.languages.typescript.typescriptDefaults.addExtraLib(
       `

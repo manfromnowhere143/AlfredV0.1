@@ -128,10 +128,26 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
    * Initialize ESBuild WASM
    */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
-    if (this.initPromise) return this.initPromise;
+    console.log('[ESBuild] initialize() called, current state:', { initialized: this.initialized, hasPromise: !!this.initPromise });
 
-    this.initPromise = this.doInitialize();
+    if (this.initialized && this.esbuild) {
+      console.log('[ESBuild] Already initialized, skipping');
+      return;
+    }
+
+    if (this.initPromise) {
+      console.log('[ESBuild] Waiting for existing init promise');
+      return this.initPromise;
+    }
+
+    console.log('[ESBuild] Starting fresh initialization...');
+    this.initPromise = this.doInitialize().catch((err) => {
+      // Reset initPromise on failure so we can retry
+      console.error('[ESBuild] Init failed, resetting for retry:', err);
+      this.initPromise = null;
+      this.initialized = false;
+      throw err;
+    });
     await this.initPromise;
   }
 
@@ -142,6 +158,27 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       // Dynamic import to avoid SSR issues
       const esbuildModule = await import('esbuild-wasm');
       this.esbuild = esbuildModule;
+
+      // Check if ESBuild was already initialized in a previous session
+      // (this can happen with HMR or if the singleton persists)
+      try {
+        // Try a simple transform to see if already initialized (with 2 min timeout)
+        console.log('[ESBuild] Testing if already initialized...');
+        const testStart = performance.now();
+        const testResult = await Promise.race([
+          esbuildModule.transform('const x = 1', { loader: 'js' }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Test transform timeout')), 120000))
+        ]);
+        console.log('[ESBuild] Test transform completed in', Math.round(performance.now() - testStart), 'ms');
+        if (testResult) {
+          console.log('[ESBuild] ✅ Already initialized (transform test passed)');
+          this.initialized = true;
+          return;
+        }
+      } catch (testErr) {
+        // Not initialized yet, continue with normal init
+        console.log('[ESBuild] Not yet initialized, proceeding with WASM load...', testErr);
+      }
 
       console.log('[ESBuild] Module loaded, initializing WASM...');
 
@@ -156,9 +193,29 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
       for (const wasmURL of wasmSources) {
         try {
           console.log('[ESBuild] Trying WASM URL:', wasmURL);
-          await esbuildModule.initialize({ wasmURL });
+
+          // Add timeout for each initialization attempt (2 min max per URL)
+          console.log('[ESBuild] ⏳ Starting WASM initialization...');
+          const wasmStart = performance.now();
+          const initWithTimeout = Promise.race([
+            esbuildModule.initialize({ wasmURL }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout loading WASM from ${wasmURL}`)), 120000)
+            )
+          ]);
+
+          await initWithTimeout;
+          console.log('[ESBuild] ✅ WASM loaded from:', wasmURL, 'in', Math.round(performance.now() - wasmStart), 'ms');
+
+          // Do a warm-up transform to ensure WASM is fully ready
+          // The first transform after init is often slow
+          console.log('[ESBuild] 🔥 Running warm-up transform...');
+          const warmupStart = performance.now();
+          await esbuildModule.transform('const warmup = 1;', { loader: 'js' });
+          console.log('[ESBuild] ✅ Warm-up complete in', Math.round(performance.now() - warmupStart), 'ms');
+
           this.initialized = true;
-          console.log('[ESBuild] ✅ Initialized successfully from:', wasmURL);
+          console.log('[ESBuild] ✅ ESBuild fully initialized and ready!');
           return;
         } catch (err) {
           console.warn('[ESBuild] Failed to load from:', wasmURL, err);
@@ -250,9 +307,15 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
 
       console.log('[ESBuild] 🎯 Entry point:', entryPoint);
 
+      // Verify ESBuild is ready
+      if (!this.esbuild || !this.esbuild.transform) {
+        return this.createErrorResult('ESBuild not properly initialized. Please refresh the page.', startTime);
+      }
+
       // Use transform API instead of build - more reliable, no plugins needed
       // Transform each file individually, then combine
       console.log('[ESBuild] 🔄 Transforming files with ESBuild...');
+      console.log('[ESBuild] 🔧 ESBuild ready:', !!this.esbuild, '| Transform fn:', !!this.esbuild.transform);
 
       const transformedFiles: { path: string; code: string }[] = [];
       const transformErrors: FileError[] = [];
@@ -261,8 +324,11 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
         if (!file.path.match(/\.(tsx?|jsx?)$/)) continue;
 
         try {
-          console.log('[ESBuild] 📄 Transforming:', file.path);
-          const result = await this.esbuild.transform(file.content, {
+          const transformStart = performance.now();
+          console.log('[ESBuild] 📄 Transforming:', file.path, '| Size:', file.content.length, 'chars');
+
+          // Add 2 min timeout per file transform to allow for slow WASM execution
+          const transformPromise = this.esbuild.transform(file.content, {
             loader: file.path.endsWith('.tsx') ? 'tsx' :
                     file.path.endsWith('.ts') ? 'ts' :
                     file.path.endsWith('.jsx') ? 'jsx' : 'js',
@@ -271,6 +337,13 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
             target: 'es2020',
             format: 'esm',
           });
+
+          const result = await Promise.race([
+            transformPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`Transform timeout for ${file.path}`)), 120000)
+            )
+          ]);
 
           // Process imports and exports for browser execution
           let code = result.code;
@@ -334,7 +407,7 @@ export class EsbuildPreviewAdapter implements PreviewEngineAdapter {
           code = processedLines.join('\n');
 
           transformedFiles.push({ path: file.path, code });
-          console.log('[ESBuild] ✅ Transformed:', file.path, '| Size:', code.length);
+          console.log('[ESBuild] ✅ Transformed:', file.path, '| Output:', code.length, 'chars | Time:', Math.round(performance.now() - transformStart), 'ms');
         } catch (err) {
           console.error('[ESBuild] ❌ Transform error:', file.path, err);
           transformErrors.push({
