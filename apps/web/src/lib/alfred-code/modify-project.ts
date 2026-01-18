@@ -75,6 +75,12 @@ CRITICAL RULES:
 7. Be SURGICAL - if one line needs to change, only change that one line
 8. For CSS changes, include enough context to make the search unique
 9. Consider side effects - if changing a prop name, check for all usages
+10. For EMPTY files or files that need complete rewrite, use action: "create" with newContent
+
+ACTION TYPES:
+- "modify": Use for changing existing code. Requires "changes" array with search/replace pairs.
+- "create": Use for empty files OR when file needs complete replacement. Requires "newContent" with FULL file content.
+- "delete": Use to remove a file.
 
 OUTPUT FORMAT (JSON only, no markdown code blocks):
 {
@@ -90,9 +96,15 @@ OUTPUT FORMAT (JSON only, no markdown code blocks):
         }
       ],
       "reason": "Changing header background color to blue as requested"
+    },
+    {
+      "path": "/src/components/EmptyComponent.tsx",
+      "action": "create",
+      "newContent": "import React from 'react';\\n\\nexport default function EmptyComponent() {\\n  return <div>Content</div>;\\n}",
+      "reason": "Creating new component with full content since file was empty"
     }
   ],
-  "impact": ["Header.tsx"],
+  "impact": ["Header.tsx", "EmptyComponent.tsx"],
   "confidence": "high"
 }
 

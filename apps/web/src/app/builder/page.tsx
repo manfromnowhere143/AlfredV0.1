@@ -1634,7 +1634,7 @@ export default function BuilderPage() {
           </button>
 
           {!chatMinimized && (
-            <div className="chat-content">
+            <div className={`chat-content ${pendingChanges.length > 0 ? 'has-save-bar' : ''}`}>
               {/* Chat Header */}
               <div className="chat-header">
                 <div className="chat-header-left">
@@ -1983,7 +1983,8 @@ export default function BuilderPage() {
         .chat-toggle { position: absolute; left: -11px; top: 50%; transform: translateY(-50%); width: 22px; height: 44px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 0 0 6px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s; }
         .chat-toggle:hover { background: var(--surface-hover); color: var(--text); }
         .minimized-icon { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
-        .chat-content { display: flex; flex-direction: column; height: 100%; }
+        .chat-content { display: flex; flex-direction: column; height: 100%; transition: padding-bottom 0.3s ease; }
+        .chat-content.has-save-bar { padding-bottom: 100px; }
         .chat-header { padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
         .chat-header-left { display: flex; align-items: center; gap: 10px; }
         .alfred-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 10px; color: white; }

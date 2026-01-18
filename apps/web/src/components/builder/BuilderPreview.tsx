@@ -1068,29 +1068,6 @@ export function BuilderPreview({
               />
             </div>
 
-            {/* Build Metrics */}
-            {preview?.buildTime && isLoaded && !isBuilding && (
-              <div className="build-metrics">
-                <div className="metric">
-                  <span className="metric-icon">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                    </svg>
-                  </span>
-                  <span className="metric-value">{preview.buildTime.toFixed(0)}ms</span>
-                </div>
-                {typeof preview.metadata?.bundleSize === 'number' && (
-                  <div className="metric">
-                    <span className="metric-icon">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-                      </svg>
-                    </span>
-                    <span className="metric-value">{formatBytes(preview.metadata.bundleSize)}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         ) : (
           <ConsolePanel entries={consoleEntries} onClear={handleClearConsole} />
@@ -1323,33 +1300,6 @@ export function BuilderPreview({
           transform: translateY(0);
         }
 
-        .build-metrics {
-          display: flex;
-          gap: 16px;
-          margin-top: 12px;
-          padding: 8px 16px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .metric {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .metric-icon {
-          color: #8b5cf6;
-          display: flex;
-        }
-
-        .metric-value {
-          font-size: 12px;
-          font-family: 'Fira Code', monospace;
-          color: rgba(255, 255, 255, 0.6);
-        }
-
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -1366,18 +1316,6 @@ export function BuilderPreview({
       `}</style>
     </div>
   );
-}
-
-// ============================================================================
-// UTILITIES
-// ============================================================================
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 export default BuilderPreview;
