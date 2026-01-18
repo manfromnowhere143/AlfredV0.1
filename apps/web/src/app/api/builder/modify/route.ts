@@ -190,10 +190,16 @@ export async function POST(request: NextRequest) {
       a => a.category === 'image' && (a.base64 || a.url)
     );
 
+    // Process video attachments (URL reference only - can't analyze video content)
+    const videoAttachments = (attachments || []).filter(
+      a => a.category === 'video' && a.url
+    );
+
     console.log('[Alfred Code] Analyzing modification request:', {
       fileCount: files.length,
       attachmentCount: attachments?.length || 0,
       imageCount: imageAttachments.length,
+      videoCount: videoAttachments.length,
       request: userRequest.slice(0, 100),
     });
 
@@ -222,6 +228,7 @@ CRITICAL RULES:
 9. Consider side effects - if changing a prop name, check for all usages
 10. For EMPTY files or files that need complete rewrite, use action: "create" with newContent
 11. When user shares an image and asks to use it, add an img tag with the provided URL
+12. When user shares a VIDEO and asks to use it (hero, background, etc.), use INSTANT LOADING attributes
 
 ACTION TYPES:
 - "modify": Use for changing existing code. Requires "changes" array with search/replace pairs.
@@ -325,6 +332,47 @@ Example modification for using an uploaded image as logo:
 }`;
     }
 
+    // Add video context to the prompt if we have videos
+    if (videoAttachments.length > 0) {
+      const videoList = videoAttachments.map((vid, i) => {
+        return `- Video ${i + 1}: ${vid.name}\n   URL TO USE IN CODE: "${vid.url}"`;
+      }).join('\n');
+
+      enhancedPrompt += `\n\n🎬 USER ATTACHED ${videoAttachments.length} VIDEO(S):
+${videoList}
+
+⚡ CRITICAL INSTRUCTIONS FOR INSTANT VIDEO LOADING:
+When adding videos to the UI (hero, background, etc.), use these EXACT attributes for ZERO delay:
+
+<video
+  src="THE_VIDEO_URL_PROVIDED"
+  autoPlay
+  muted
+  loop
+  playsInline
+  preload="auto"
+  className="absolute inset-0 w-full h-full object-cover"
+  style={{ objectFit: 'cover' }}
+/>
+
+REQUIRED ATTRIBUTES FOR INSTANT DISPLAY:
+- preload="auto" - CRITICAL! Without this, video takes 3+ seconds to appear
+- autoPlay muted - Required for browser auto-play policy
+- playsInline - Required for mobile devices
+- loop - For background/hero videos that should repeat
+
+Example modification for using an uploaded video as hero background:
+{
+  "path": "/src/components/Hero.tsx",
+  "action": "modify",
+  "changes": [{
+    "search": "<div className=\\"hero-background\\">",
+    "replace": "<div className=\\"hero-background relative\\">\\n        <video src=\\"https://blob.vercel-storage.com/video.mp4\\" autoPlay muted loop playsInline preload=\\"auto\\" className=\\"absolute inset-0 w-full h-full object-cover\\" />"
+  }],
+  "reason": "Adding user's uploaded video as hero background with instant loading"
+}`;
+    }
+
     // Add text content
     userContent.push({ type: 'text', text: enhancedPrompt });
 
@@ -343,9 +391,13 @@ Example modification for using an uploaded image as logo:
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[Alfred Code] API attempt ${attempt + 1}/${maxRetries + 1}${imageAttachments.length > 0 ? ` (with ${imageAttachments.length} images)` : ''}`);
+        const mediaInfo = [
+          imageAttachments.length > 0 ? `${imageAttachments.length} images` : '',
+          videoAttachments.length > 0 ? `${videoAttachments.length} videos` : '',
+        ].filter(Boolean).join(', ');
+        console.log(`[Alfred Code] API attempt ${attempt + 1}/${maxRetries + 1}${mediaInfo ? ` (with ${mediaInfo})` : ''}`);
         response = await llm.complete({
-          system: 'You are a code modification expert. Output only valid JSON. Keep responses concise. When images are provided, describe what you see and use that information.',
+          system: 'You are a code modification expert. Output only valid JSON. Keep responses concise. When images are provided, describe what you see. When videos are provided, use the URLs with instant-loading attributes.',
           messages: [{ role: 'user', content: userContent }],
           maxTokens: 8000,
           temperature: 0.2,

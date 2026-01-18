@@ -1179,22 +1179,30 @@ To DISPLAY images in React preview:
 VIDEO FILES (use URL in code, you cannot preview these):
 ${vidList}
 
-To DISPLAY videos in React preview (hero video, background, etc.):
-<video 
-  src="${videoFiles[0]?.url?.startsWith('http') ? videoFiles[0].url : '/api/files/serve?id=' + videoFiles[0]?.id}" 
-  autoPlay 
-  muted 
-  loop 
+⚡ INSTANT VIDEO LOADING - Use these EXACT attributes for zero delay:
+<video
+  src="${videoFiles[0]?.url?.startsWith('http') ? videoFiles[0].url : '/api/files/serve?id=' + videoFiles[0]?.id}"
+  autoPlay
+  muted
+  loop
   playsInline
+  preload="auto"
   className="absolute inset-0 w-full h-full object-cover"
+  style={{ objectFit: 'cover' }}
 />
+
+CRITICAL VIDEO ATTRIBUTES FOR INSTANT DISPLAY:
+- preload="auto" - MUST HAVE for instant loading (no 3-second delay!)
+- autoPlay muted - Required for browser auto-play
+- playsInline - Required for mobile devices
+- loop - For background/hero videos
 
 For hero sections with video backgrounds:
 \`\`\`jsx
 <div className="relative h-screen overflow-hidden">
-  <video 
+  <video
     src="${videoFiles[0]?.url?.startsWith('http') ? videoFiles[0].url : '/api/files/serve?id=' + videoFiles[0]?.id}"
-    autoPlay muted loop playsInline
+    autoPlay muted loop playsInline preload="auto"
     className="absolute inset-0 w-full h-full object-cover"
   />
   <div className="absolute inset-0 bg-black/50" />
