@@ -1069,6 +1069,25 @@ export async function POST(request: NextRequest) {
                   .limit(1);
 
                 if (existingProjects.length > 0) {
+                  // Build enhanced files array for saving back to DB
+                  const enhancedFilesForDB = deployFiles
+                    .filter(f => !f.file.startsWith('node_modules/') &&
+                                 !f.file.endsWith('.lock') &&
+                                 f.file !== 'package-lock.json')
+                    .map(f => ({
+                      path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+                      name: f.file.split('/').pop() || f.file,
+                      content: f.data,
+                      language: f.file.endsWith('.tsx') ? 'tsx' :
+                               f.file.endsWith('.ts') ? 'typescript' :
+                               f.file.endsWith('.jsx') ? 'jsx' :
+                               f.file.endsWith('.js') ? 'javascript' :
+                               f.file.endsWith('.html') ? 'html' :
+                               f.file.endsWith('.css') ? 'css' :
+                               f.file.endsWith('.json') ? 'json' : 'text',
+                      isEntryPoint: f.file === 'index.html' || f.file === 'src/main.tsx',
+                    }));
+
                   await client.db
                     .update(projects)
                     .set({
@@ -1083,10 +1102,34 @@ export async function POST(request: NextRequest) {
                         ...((existingProjects[0].metadata as Record<string, unknown>) || {}),
                         artifactId: artifactId || undefined,
                         lastDeployedUrl: realUrl,
+                        // Save the SEO-enhanced files so SEO Dashboard shows accurate data
+                        files: enhancedFilesForDB,
+                        fileCount: enhancedFilesForDB.length,
+                        totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
+                        isBuilder: true,
                       },
                     })
                     .where(eq(projects.id, existingProjects[0].id));
                 } else {
+                  // Build enhanced files array for new project
+                  const enhancedFilesForDB = deployFiles
+                    .filter(f => !f.file.startsWith('node_modules/') &&
+                                 !f.file.endsWith('.lock') &&
+                                 f.file !== 'package-lock.json')
+                    .map(f => ({
+                      path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+                      name: f.file.split('/').pop() || f.file,
+                      content: f.data,
+                      language: f.file.endsWith('.tsx') ? 'tsx' :
+                               f.file.endsWith('.ts') ? 'typescript' :
+                               f.file.endsWith('.jsx') ? 'jsx' :
+                               f.file.endsWith('.js') ? 'javascript' :
+                               f.file.endsWith('.html') ? 'html' :
+                               f.file.endsWith('.css') ? 'css' :
+                               f.file.endsWith('.json') ? 'json' : 'text',
+                      isEntryPoint: f.file === 'index.html' || f.file === 'src/main.tsx',
+                    }));
+
                   await client.db.insert(projects).values({
                     userId,
                     name: artifactTitle || projectName,
@@ -1100,6 +1143,11 @@ export async function POST(request: NextRequest) {
                     metadata: {
                       artifactId: artifactId || undefined,
                       lastDeployedUrl: realUrl,
+                      // Save the SEO-enhanced files so SEO Dashboard shows accurate data
+                      files: enhancedFilesForDB,
+                      fileCount: enhancedFilesForDB.length,
+                      totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
+                      isBuilder: true,
                     },
                   });
                 }
