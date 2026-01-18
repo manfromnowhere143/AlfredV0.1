@@ -5,9 +5,18 @@
  * Converts single-file artifacts into deployable project structures.
  */
 
-import type { Artifact, GeneratedProject, ParsedArtifact } from '../types';
+import type { Artifact, GeneratedProject, ParsedArtifact, SEOConfig } from '../types';
 import { parseArtifact } from './parser';
 import { generateProject } from './project-generator';
+
+// ============================================================================
+// TRANSFORM OPTIONS
+// ============================================================================
+
+export interface TransformOptions {
+  seoConfig?: SEOConfig;
+  deployUrl?: string;
+}
 
 // ============================================================================
 // MAIN TRANSFORM FUNCTION
@@ -15,10 +24,11 @@ import { generateProject } from './project-generator';
 
 export function transformArtifact(
   artifact: Artifact,
-  projectName: string
+  projectName: string,
+  options?: TransformOptions
 ): GeneratedProject {
   const parsed = parseArtifact(artifact);
-  const project = generateProject(parsed, projectName);
+  const project = generateProject(parsed, projectName, options);
   return project;
 }
 
@@ -82,4 +92,4 @@ export function validateArtifact(artifact: Artifact): {
 
 export { parseArtifact } from './parser';
 export { generateProject, sanitizePackageName } from './project-generator';
-export type { ParsedArtifact, GeneratedProject, ProjectFile } from '../types';
+export type { ParsedArtifact, GeneratedProject, ProjectFile, SEOConfig } from '../types';

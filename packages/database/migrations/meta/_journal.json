@@ -43,6 +43,13 @@
       "when": 1768156800000,
       "tag": "0005_video_studio",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768738555798,
+      "tag": "0006_certain_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

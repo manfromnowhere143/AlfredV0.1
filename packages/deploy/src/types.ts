@@ -140,6 +140,7 @@ export interface DeploymentResult {
   createdAt: Date;
   updatedAt: Date;
   readyAt?: Date;
+  seoAnalysis?: SEOAnalysisResult;
 }
 
 export interface DeploymentProgressEvent {
@@ -243,6 +244,64 @@ export interface VercelDomainConfig {
   configuredBy?: 'CNAME' | 'A' | 'http';
   acceptedChallenges?: ('dns-01' | 'http-01')[];
   misconfigured: boolean;
+}
+
+// ============================================================================
+// SEO TYPES
+// ============================================================================
+
+export interface SEOConfig {
+  siteTitle?: string;
+  siteDescription?: string;
+  canonicalUrl?: string;
+  ogImage?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogType?: string;
+  ogSiteName?: string;
+  twitterCard?: string;
+  twitterSite?: string;
+  twitterCreator?: string;
+  schemaType?: string;
+  schemaData?: Record<string, unknown>;
+  language?: string;
+  locale?: string;
+  allowIndexing?: boolean;
+  allowFollowing?: boolean;
+  faviconUrl?: string;
+  focusKeywords?: string[];
+  includeSitemap?: boolean;
+  includeRobotsTxt?: boolean;
+}
+
+export interface SEOAnalysisResult {
+  score: number;
+  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+  passedChecks: number;
+  totalChecks: number;
+  criticalCount: number;
+  warningCount: number;
+  infoCount: number;
+  autoFixableCount: number;
+  categoryScores: {
+    technical: number;
+    content: number;
+    onPage: number;
+    ux: number;
+    schema: number;
+  };
+  issues: SEOIssue[];
+}
+
+export interface SEOIssue {
+  ruleId: string;
+  ruleName: string;
+  category: 'technical' | 'content' | 'on_page' | 'ux' | 'schema';
+  severity: 'critical' | 'warning' | 'info' | 'success';
+  message: string;
+  suggestion?: string;
+  isAutoFixable?: boolean;
+  scoreImpact?: number;
 }
 
 // ============================================================================

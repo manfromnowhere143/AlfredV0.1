@@ -20,6 +20,36 @@ interface ValidationAnalysis {
   usesHooks: boolean;
 }
 
+interface SEOAnalysisResult {
+  score: number;
+  grade: string;
+  passedChecks: number;
+  totalChecks: number;
+  criticalCount: number;
+  warningCount: number;
+  infoCount: number;
+  autoFixableCount: number;
+  categoryScores: {
+    technical: number;
+    content: number;
+    onPage: number;
+    ux: number;
+    schema: number;
+  };
+}
+
+function getGradeColor(grade: string): string {
+  switch (grade) {
+    case 'A+': return '#00ff00';
+    case 'A': return '#22c55e';
+    case 'B': return '#84cc16';
+    case 'C': return '#eab308';
+    case 'D': return '#f97316';
+    case 'F': return '#ef4444';
+    default: return '#888888';
+  }
+}
+
 type DeploymentPhase = 'idle' | 'validating' | 'deploying' | 'success' | 'error';
 
 export function DeploymentCard({
@@ -42,6 +72,7 @@ export function DeploymentCard({
   const [isDark, setIsDark] = useState(false);
   const [autoFixAttempt, setAutoFixAttempt] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [seoResult, setSeoResult] = useState<SEOAnalysisResult | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -136,8 +167,14 @@ export function DeploymentCard({
                 const match = event.message.match(/attempt (\d+)/);
                 if (match) setAutoFixAttempt(parseInt(match[1]));
               }
+            } else if (event.type === 'seo_analysis') {
+              setSeoResult(event.seoAnalysis);
             } else if (event.type === 'complete' && event.result?.url) {
               setDeployedUrl(event.result.url);
+              // Capture SEO from final result if not already set
+              if (event.result.seoAnalysis && !seoResult) {
+                setSeoResult(event.result.seoAnalysis);
+              }
               setPhase('success');
               setProgress(100);
               onDeployed?.(event.result.url);
@@ -221,6 +258,67 @@ export function DeploymentCard({
                   </svg>
                 </span>
               </a>
+
+              {/* SEO Score Card */}
+              {seoResult && (
+                <div className="seo-card">
+                  <div className="seo-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    <span>SEO Score</span>
+                  </div>
+                  <div className="seo-content">
+                    <div className="seo-score-circle">
+                      <svg viewBox="0 0 36 36">
+                        <path
+                          className="seo-circle-bg"
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                        <path
+                          className="seo-circle-progress"
+                          strokeDasharray={`${seoResult.score}, 100`}
+                          style={{ stroke: getGradeColor(seoResult.grade) }}
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                      </svg>
+                      <div className="seo-score-value">
+                        <span className="seo-score-number">{seoResult.score}</span>
+                        <span className="seo-grade" style={{ color: getGradeColor(seoResult.grade) }}>{seoResult.grade}</span>
+                      </div>
+                    </div>
+                    <div className="seo-details">
+                      <div className="seo-stat">
+                        <span className="seo-stat-label">Checks Passed</span>
+                        <span className="seo-stat-value">{seoResult.passedChecks}/{seoResult.totalChecks}</span>
+                      </div>
+                      <div className="seo-categories">
+                        {Object.entries(seoResult.categoryScores).map(([key, value]) => (
+                          <div key={key} className="seo-category">
+                            <span className="seo-cat-name">{key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</span>
+                            <div className="seo-cat-bar">
+                              <div className="seo-cat-fill" style={{ width: `${value}%`, background: getGradeColor(value >= 90 ? 'A' : value >= 75 ? 'B' : value >= 60 ? 'C' : 'F') }} />
+                            </div>
+                            <span className="seo-cat-value">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {(seoResult.warningCount > 0 || seoResult.infoCount > 0) && (
+                        <div className="seo-issues-summary">
+                          {seoResult.warningCount > 0 && (
+                            <span className="seo-issue-badge warning">{seoResult.warningCount} warnings</span>
+                          )}
+                          {seoResult.infoCount > 0 && (
+                            <span className="seo-issue-badge info">{seoResult.infoCount} suggestions</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="success-actions">
                 <button className="btn secondary" onClick={handleClose}>Done</button>
                 <button className="btn primary" onClick={() => window.open(deployedUrl, '_blank')}>Open Site</button>
@@ -259,6 +357,18 @@ export function DeploymentCard({
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
                   Alfred is auto-fixing (attempt {autoFixAttempt}/3)
+                </div>
+              )}
+              {seoResult && (
+                <div className="seo-mini-card">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  <span>SEO Score: </span>
+                  <span className="seo-mini-score" style={{ color: getGradeColor(seoResult.grade) }}>
+                    {seoResult.score}/100 ({seoResult.grade})
+                  </span>
                 </div>
               )}
             </div>
@@ -301,6 +411,19 @@ export function DeploymentCard({
                   <input id="projectName" type="text" value={projectName} onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="my-project" maxLength={50} />
                   <span className="input-suffix">.vercel.app</span>
                 </div>
+              </div>
+              <div className="seo-feature-badge">
+                <div className="seo-feature-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </div>
+                <div className="seo-feature-content">
+                  <span className="seo-feature-title">SEO Optimized</span>
+                  <span className="seo-feature-desc">Meta tags, Open Graph, Schema.org & sitemap included</span>
+                </div>
+                <span className="seo-feature-new">NEW</span>
               </div>
               <div className="info-section">
                 <div className="info-item">
@@ -424,6 +547,44 @@ export function DeploymentCard({
         .error-container h3 { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 8px; }
         .error-message { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; max-width: 320px; line-height: 1.5; }
         .error-actions { display: flex; gap: 12px; width: 100%; }
+
+        /* SEO Card Styles */
+        .seo-card { width: 100%; background: var(--badge-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+        .seo-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+        .seo-content { display: flex; gap: 20px; }
+        .seo-score-circle { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+        .seo-score-circle svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .seo-circle-bg { fill: none; stroke: var(--border); stroke-width: 2.5; }
+        .seo-circle-progress { fill: none; stroke-width: 2.5; stroke-linecap: round; transition: stroke-dasharray 0.5s ease; }
+        .seo-score-value { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .seo-score-number { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
+        .seo-grade { font-size: 12px; font-weight: 600; margin-top: 2px; }
+        .seo-details { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+        .seo-stat { display: flex; justify-content: space-between; align-items: center; }
+        .seo-stat-label { font-size: 12px; color: var(--text-secondary); }
+        .seo-stat-value { font-size: 12px; font-weight: 600; color: var(--text); font-family: 'SF Mono', Monaco, monospace; }
+        .seo-categories { display: flex; flex-direction: column; gap: 6px; }
+        .seo-category { display: flex; align-items: center; gap: 8px; }
+        .seo-cat-name { font-size: 10px; color: var(--text-secondary); width: 50px; text-transform: capitalize; }
+        .seo-cat-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+        .seo-cat-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+        .seo-cat-value { font-size: 10px; font-weight: 600; color: var(--text-secondary); width: 20px; text-align: right; font-family: 'SF Mono', Monaco, monospace; }
+        .seo-issues-summary { display: flex; gap: 8px; margin-top: 4px; }
+        .seo-issue-badge { font-size: 10px; padding: 3px 8px; border-radius: 10px; }
+        .seo-issue-badge.warning { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+        .seo-issue-badge.info { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+        .seo-mini-card { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--badge-bg); border-radius: 20px; font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+        .seo-mini-score { font-weight: 600; font-family: 'SF Mono', Monaco, monospace; }
+
+        /* SEO Feature Badge (idle state) */
+        .seo-feature-badge { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 12px; margin-bottom: 16px; position: relative; overflow: hidden; }
+        .seo-feature-badge::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); animation: seoShimmer 3s infinite; }
+        @keyframes seoShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .seo-feature-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%); display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
+        .seo-feature-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .seo-feature-title { font-size: 13px; font-weight: 600; color: var(--text); }
+        .seo-feature-desc { font-size: 11px; color: var(--text-secondary); }
+        .seo-feature-new { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 3px 6px; background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%); color: white; border-radius: 4px; }
       `}</style>
     </div>
   );

@@ -11,7 +11,9 @@ import type {
     ParsedArtifact,
     GeneratedProject,
     ProjectFile,
+    SEOConfig,
   } from '../types';
+  import type { TransformOptions } from './index';
   
   // ============================================================================
   // DEPENDENCY REGISTRY - Comprehensive version management
@@ -233,23 +235,32 @@ import type {
   
   export function generateProject(
     artifact: ParsedArtifact,
-    projectName: string
+    projectName: string,
+    options?: TransformOptions
   ): GeneratedProject {
     const files: ProjectFile[] = [];
-  
+
     // Prepare the component code FIRST to detect all dependencies
     const preparedCode = prepareComponentCode(artifact.code, artifact);
     const detectedDeps = detectAllDependencies(preparedCode, artifact);
-  
+
     // Create a modified artifact with prepared code
     const preparedArtifact = { ...artifact, code: preparedCode };
-  
+
     files.push(generatePackageJson(preparedArtifact, projectName, detectedDeps));
     files.push(generateViteConfig(preparedArtifact));
-    files.push(generateIndexHtml(projectName, preparedArtifact.usesTypeScript));
+    files.push(generateIndexHtml(projectName, preparedArtifact.usesTypeScript, options?.seoConfig, options?.deployUrl));
     files.push(generateMainEntry(preparedArtifact));
     files.push(generateComponentFile(preparedArtifact));
     files.push(generateAppWrapper(preparedArtifact));
+
+    // Generate SEO assets if enabled
+    if (options?.seoConfig?.includeSitemap) {
+      files.push(generateSitemap(options.deployUrl, projectName));
+    }
+    if (options?.seoConfig?.includeRobotsTxt) {
+      files.push(generateRobotsTxt(options.deployUrl, options.seoConfig));
+    }
   
     if (artifact.usesTailwind) {
       files.push(generateTailwindConfig());
@@ -789,16 +800,95 @@ import type {
     return { path: `vite.config.${ext}`, content };
   }
   
-  function generateIndexHtml(projectName: string, usesTypeScript: boolean = false): ProjectFile {
+  function generateIndexHtml(
+    projectName: string,
+    usesTypeScript: boolean = false,
+    seoConfig?: SEOConfig,
+    deployUrl?: string
+  ): ProjectFile {
     const ext = usesTypeScript ? 'tsx' : 'jsx';
+    const lang = seoConfig?.language || 'en';
+    const title = seoConfig?.siteTitle || projectName;
+    const description = seoConfig?.siteDescription || `${projectName} - Built with Alfred`;
+
+    // Build head content
+    const headParts: string[] = [
+      '<meta charset="UTF-8" />',
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+      `<title>${escapeHtml(title)}</title>`,
+      `<meta name="description" content="${escapeHtml(description)}" />`,
+    ];
+
+    // Robots meta
+    const robotsContent = [
+      seoConfig?.allowIndexing !== false ? 'index' : 'noindex',
+      seoConfig?.allowFollowing !== false ? 'follow' : 'nofollow',
+    ].join(', ');
+    headParts.push(`<meta name="robots" content="${robotsContent}" />`);
+
+    // Canonical URL
+    if (deployUrl || seoConfig?.canonicalUrl) {
+      headParts.push(`<link rel="canonical" href="${escapeHtml(seoConfig?.canonicalUrl || deployUrl || '')}" />`);
+    }
+
+    // Open Graph tags
+    headParts.push(`<meta property="og:type" content="${escapeHtml(seoConfig?.ogType || 'website')}" />`);
+    headParts.push(`<meta property="og:title" content="${escapeHtml(seoConfig?.ogTitle || title)}" />`);
+    headParts.push(`<meta property="og:description" content="${escapeHtml(seoConfig?.ogDescription || description)}" />`);
+    if (deployUrl) {
+      headParts.push(`<meta property="og:url" content="${escapeHtml(deployUrl)}" />`);
+    }
+    if (seoConfig?.ogImage) {
+      headParts.push(`<meta property="og:image" content="${escapeHtml(seoConfig.ogImage)}" />`);
+    }
+    if (seoConfig?.ogSiteName) {
+      headParts.push(`<meta property="og:site_name" content="${escapeHtml(seoConfig.ogSiteName)}" />`);
+    }
+    if (seoConfig?.locale) {
+      headParts.push(`<meta property="og:locale" content="${escapeHtml(seoConfig.locale)}" />`);
+    }
+
+    // Twitter Card tags
+    headParts.push(`<meta name="twitter:card" content="${escapeHtml(seoConfig?.twitterCard || 'summary_large_image')}" />`);
+    headParts.push(`<meta name="twitter:title" content="${escapeHtml(seoConfig?.ogTitle || title)}" />`);
+    headParts.push(`<meta name="twitter:description" content="${escapeHtml(seoConfig?.ogDescription || description)}" />`);
+    if (seoConfig?.twitterSite) {
+      headParts.push(`<meta name="twitter:site" content="${escapeHtml(seoConfig.twitterSite)}" />`);
+    }
+    if (seoConfig?.twitterCreator) {
+      headParts.push(`<meta name="twitter:creator" content="${escapeHtml(seoConfig.twitterCreator)}" />`);
+    }
+    if (seoConfig?.ogImage) {
+      headParts.push(`<meta name="twitter:image" content="${escapeHtml(seoConfig.ogImage)}" />`);
+    }
+
+    // Favicon
+    if (seoConfig?.faviconUrl) {
+      headParts.push(`<link rel="icon" href="${escapeHtml(seoConfig.faviconUrl)}" />`);
+    } else {
+      headParts.push('<link rel="icon" type="image/svg+xml" href="/vite.svg" />');
+    }
+
+    // Schema.org JSON-LD
+    let schemaScript = '';
+    if (seoConfig?.schemaData) {
+      schemaScript = `\n    <script type="application/ld+json">\n${JSON.stringify(seoConfig.schemaData, null, 2)}\n    </script>`;
+    } else {
+      // Default WebSite schema
+      const defaultSchema = {
+        '@context': 'https://schema.org',
+        '@type': seoConfig?.schemaType || 'WebSite',
+        name: title,
+        url: deployUrl || '',
+        description: description,
+      };
+      schemaScript = `\n    <script type="application/ld+json">\n${JSON.stringify(defaultSchema, null, 2)}\n    </script>`;
+    }
+
     const content = `<!DOCTYPE html>
-  <html lang="en">
+  <html lang="${lang}">
     <head>
-      <meta charset="UTF-8" />
-      <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta name="description" content="${escapeHtml(projectName)} - Built with Alfred" />
-      <title>${escapeHtml(projectName)}</title>
+      ${headParts.join('\n      ')}${schemaScript}
     </head>
     <body>
       <div id="root"></div>
@@ -806,7 +896,7 @@ import type {
     </body>
   </html>
   `;
-  
+
     return { path: 'index.html', content };
   }
   
@@ -1141,5 +1231,54 @@ import type {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
-  
+
+  // ============================================================================
+  // SEO ASSET GENERATORS
+  // ============================================================================
+
+  function generateSitemap(deployUrl?: string, projectName?: string): ProjectFile {
+    const baseUrl = deployUrl || `https://${sanitizePackageName(projectName || 'alfred-project')}.vercel.app`;
+    const lastmod = new Date().toISOString().split('T')[0];
+
+    const content = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${escapeHtml(baseUrl)}/</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+`;
+
+    return { path: 'public/sitemap.xml', content };
+  }
+
+  function generateRobotsTxt(deployUrl?: string, seoConfig?: SEOConfig): ProjectFile {
+    const baseUrl = deployUrl || '';
+    const allowIndexing = seoConfig?.allowIndexing !== false;
+
+    let content = '';
+
+    if (allowIndexing) {
+      content = `# Alfred SEO - robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap
+${baseUrl ? `Sitemap: ${baseUrl}/sitemap.xml` : '# Sitemap URL will be added after deployment'}
+
+# Crawl-delay (optional, respected by some bots)
+Crawl-delay: 1
+`;
+    } else {
+      content = `# Alfred SEO - robots.txt
+User-agent: *
+Disallow: /
+`;
+    }
+
+    return { path: 'public/robots.txt', content };
+  }
+
   export { generatePackageJson, generateViteConfig };

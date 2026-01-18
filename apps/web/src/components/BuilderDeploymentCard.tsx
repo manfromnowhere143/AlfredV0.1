@@ -27,6 +27,41 @@ interface BuilderDeploymentCardProps {
 
 type DeploymentPhase = 'idle' | 'deploying' | 'success' | 'error';
 
+interface SEOAnalysisResult {
+  score: number;
+  grade: string;
+  passedChecks: number;
+  totalChecks: number;
+  criticalCount: number;
+  warningCount: number;
+  infoCount: number;
+  autoFixableCount: number;
+  categoryScores: Record<string, number>;
+}
+
+function getGradeColor(grade: string): string {
+  switch (grade) {
+    case 'A+': return '#00ff00';
+    case 'A': return '#22c55e';
+    case 'B': return '#84cc16';
+    case 'C': return '#eab308';
+    case 'D': return '#f97316';
+    case 'F': return '#ef4444';
+    default: return '#888888';
+  }
+}
+
+function getCategoryName(key: string): string {
+  const names: Record<string, string> = {
+    technical: 'Technical',
+    content: 'Content',
+    on_page: 'On-Page',
+    ux: 'UX',
+    schema: 'Schema',
+  };
+  return names[key] || key;
+}
+
 export function BuilderDeploymentCard({
   files,
   projectName: initialProjectName,
@@ -47,6 +82,8 @@ export function BuilderDeploymentCard({
   const [mounted, setMounted] = useState(false);
   const [useCustomDomain, setUseCustomDomain] = useState(false);
   const [customDomain, setCustomDomain] = useState('');
+  const [seoResult, setSeoResult] = useState<SEOAnalysisResult | null>(null);
+  const [seoFixesApplied, setSeoFixesApplied] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -99,8 +136,40 @@ export function BuilderDeploymentCard({
             if (event.type === 'progress') {
               setProgress(event.progress || 0);
               setStatusMessage(event.message || '');
+              // Track SEO fixes applied
+              if (event.message?.includes('SEO fixes')) {
+                const match = event.message.match(/(\d+)\s+SEO\s+fix/i);
+                if (match) setSeoFixesApplied(parseInt(match[1], 10));
+              }
+            } else if (event.type === 'seo_analysis') {
+              // Capture SEO analysis results
+              setSeoResult({
+                score: event.score,
+                grade: event.grade,
+                passedChecks: event.passedChecks,
+                totalChecks: event.totalChecks,
+                criticalCount: event.criticalCount,
+                warningCount: event.warningCount,
+                infoCount: event.infoCount,
+                autoFixableCount: event.autoFixableCount,
+                categoryScores: event.categoryScores,
+              });
             } else if (event.type === 'complete' && event.result?.url) {
               setDeployedUrl(event.result.url);
+              // Capture final SEO score if provided
+              if (event.result.seo) {
+                setSeoResult(prev => prev ? { ...prev, ...event.result.seo } : {
+                  score: event.result.seo.score,
+                  grade: event.result.seo.grade,
+                  passedChecks: event.result.seo.passedChecks,
+                  totalChecks: event.result.seo.totalChecks,
+                  criticalCount: 0,
+                  warningCount: 0,
+                  infoCount: 0,
+                  autoFixableCount: 0,
+                  categoryScores: {},
+                });
+              }
               setPhase('success');
               setProgress(100);
               onDeployed?.(event.result.url);
@@ -165,16 +234,89 @@ export function BuilderDeploymentCard({
         <div className="content">
           {phase === 'success' ? (
             <div className="success-container">
-              <div className="success-animation">
-                <div className="success-ring" />
-                <div className="success-check">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+              <div className="success-header">
+                <div className="success-animation">
+                  <div className="success-ring" />
+                  <div className="success-check">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+                <div className="success-text">
+                  <h3>Deployed Successfully!</h3>
+                  <p>Your project is now live on the web</p>
                 </div>
               </div>
-              <h3>Deployed Successfully!</h3>
-              <p>Your project is now live on the web</p>
+
+              {/* SEO Score Card */}
+              {seoResult && (
+                <div className="seo-card">
+                  <div className="seo-header">
+                    <div className="seo-score-circle" style={{ '--grade-color': getGradeColor(seoResult.grade) } as React.CSSProperties}>
+                      <svg className="seo-score-ring" viewBox="0 0 100 100">
+                        <circle className="seo-ring-bg" cx="50" cy="50" r="42" />
+                        <circle
+                          className="seo-ring-fill"
+                          cx="50"
+                          cy="50"
+                          r="42"
+                          style={{
+                            strokeDasharray: `${(seoResult.score / 100) * 264} 264`,
+                            stroke: getGradeColor(seoResult.grade)
+                          }}
+                        />
+                      </svg>
+                      <div className="seo-score-content">
+                        <span className="seo-score-number" style={{ color: getGradeColor(seoResult.grade) }}>{seoResult.score}</span>
+                        <span className="seo-score-label">SEO</span>
+                      </div>
+                    </div>
+                    <div className="seo-info">
+                      <div className="seo-grade-row">
+                        <span className="seo-grade-badge" style={{ background: getGradeColor(seoResult.grade) }}>{seoResult.grade}</span>
+                        <span className="seo-grade-text">
+                          {seoResult.score >= 90 ? 'Excellent' : seoResult.score >= 75 ? 'Good' : seoResult.score >= 60 ? 'Fair' : 'Needs Work'}
+                        </span>
+                      </div>
+                      <div className="seo-stats">
+                        <span className="seo-stat">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          {seoResult.passedChecks}/{seoResult.totalChecks} passed
+                        </span>
+                        {seoFixesApplied > 0 && (
+                          <span className="seo-stat fixed">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            {seoFixesApplied} auto-fixed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category Scores */}
+                  {seoResult.categoryScores && Object.keys(seoResult.categoryScores).length > 0 && (
+                    <div className="seo-categories">
+                      {Object.entries(seoResult.categoryScores).map(([key, score]) => (
+                        <div key={key} className="seo-category">
+                          <div className="seo-category-bar">
+                            <div
+                              className="seo-category-fill"
+                              style={{
+                                width: `${score}%`,
+                                background: score >= 90 ? '#22c55e' : score >= 75 ? '#84cc16' : score >= 60 ? '#eab308' : '#ef4444'
+                              }}
+                            />
+                          </div>
+                          <span className="seo-category-name">{getCategoryName(key)}</span>
+                          <span className="seo-category-score">{score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="url-display">
                 <span className="url-icon">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -212,6 +354,26 @@ export function BuilderDeploymentCard({
                 <div className="pulse-ring r2" />
                 <div className="pulse-ring r3" />
               </div>
+
+              {/* SEO Analysis Mini Card - appears when analysis completes */}
+              {seoResult && (
+                <div className="seo-mini-card">
+                  <div className="seo-mini-score" style={{ color: getGradeColor(seoResult.grade) }}>
+                    {seoResult.score}
+                  </div>
+                  <div className="seo-mini-info">
+                    <span className="seo-mini-grade" style={{ background: getGradeColor(seoResult.grade) }}>{seoResult.grade}</span>
+                    <span className="seo-mini-label">SEO Score</span>
+                  </div>
+                  {seoResult.autoFixableCount > 0 && (
+                    <div className="seo-mini-fixes">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                      {seoFixesApplied > 0 ? `${seoFixesApplied} fixed` : `${seoResult.autoFixableCount} fixing...`}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="progress-section">
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -317,6 +479,19 @@ export function BuilderDeploymentCard({
                 )}
               </div>
 
+              <div className="seo-feature-badge">
+                <div className="seo-feature-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </div>
+                <div className="seo-feature-content">
+                  <span className="seo-feature-title">SEO Optimized</span>
+                  <span className="seo-feature-desc">Meta tags, Open Graph, Schema.org & sitemap included</span>
+                </div>
+                <span className="seo-feature-new">PRO</span>
+              </div>
               <div className="info-section">
                 <div className="info-item highlight">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -567,14 +742,53 @@ export function BuilderDeploymentCard({
         .progress-info { display: flex; justify-content: space-between; align-items: center; }
         .progress-text { font-size: 13px; color: var(--text-secondary); }
         .progress-percent { font-size: 13px; font-weight: 600; color: var(--text); font-family: 'SF Mono', Monaco, monospace; }
-        .success-container { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 280px; justify-content: center; }
-        .success-animation { position: relative; width: 80px; height: 80px; margin-bottom: 24px; }
+        .success-container { display: flex; flex-direction: column; align-items: stretch; min-height: 280px; }
+        .success-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+        .success-animation { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
         .success-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--success-color); animation: successRing 0.6s ease-out forwards; }
         @keyframes successRing { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
         .success-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--success-color); border-radius: 50%; color: white; animation: successPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; }
         @keyframes successPop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
-        .success-container h3 { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
-        .success-container > p { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; }
+        .success-text h3 { font-size: 17px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+        .success-text p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+        /* SEO Card Styles */
+        .seo-card { background: var(--badge-bg); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; animation: fadeSlideIn 0.4s ease-out; }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .seo-header { display: flex; align-items: center; gap: 16px; }
+        .seo-score-circle { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
+        .seo-score-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .seo-ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+        .seo-ring-fill { fill: none; stroke-width: 6; stroke-linecap: round; transition: stroke-dasharray 0.8s ease-out; }
+        .seo-score-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .seo-score-number { font-size: 22px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace; line-height: 1; }
+        .seo-score-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-top: 2px; }
+        .seo-info { flex: 1; min-width: 0; }
+        .seo-grade-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .seo-grade-badge { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; color: #000; letter-spacing: 0.02em; }
+        .seo-grade-text { font-size: 14px; font-weight: 500; color: var(--text); }
+        .seo-stats { display: flex; flex-wrap: wrap; gap: 12px; }
+        .seo-stat { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+        .seo-stat svg { opacity: 0.6; }
+        .seo-stat.fixed { color: var(--pro-color); }
+        .seo-stat.fixed svg { opacity: 1; }
+        .seo-categories { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+        .seo-category { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; }
+        .seo-category-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+        .seo-category-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease-out; }
+        .seo-category-name { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+        .seo-category-score { font-size: 12px; font-weight: 600; color: var(--text); font-family: 'SF Mono', Monaco, monospace; min-width: 24px; text-align: right; }
+
+        /* SEO Mini Card (During Deployment) */
+        .seo-mini-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--badge-bg); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; animation: seoMiniIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes seoMiniIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .seo-mini-score { font-size: 28px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace; }
+        .seo-mini-info { display: flex; flex-direction: column; gap: 2px; }
+        .seo-mini-grade { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px; color: #000; display: inline-block; width: fit-content; }
+        .seo-mini-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .seo-mini-fixes { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--pro-color); margin-left: auto; padding-left: 12px; border-left: 1px solid var(--border); }
+        .seo-mini-fixes svg { animation: starPulse 1.5s ease-in-out infinite; }
+        @keyframes starPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.8; } }
         .url-display { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--badge-bg); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--text); width: 100%; margin-bottom: 24px; transition: all 0.15s; }
         .url-display:hover { border-color: var(--pro-color); transform: translateY(-1px); }
         .url-icon { color: var(--text-secondary); }
@@ -587,6 +801,16 @@ export function BuilderDeploymentCard({
         .error-container h3 { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 8px; }
         .error-message { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; max-width: 320px; line-height: 1.5; }
         .error-actions { display: flex; gap: 12px; width: 100%; }
+
+        /* SEO Feature Badge (idle state) */
+        .seo-feature-badge { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(34, 197, 94, 0.08) 100%); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 12px; margin-bottom: 16px; position: relative; overflow: hidden; }
+        .seo-feature-badge::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.08), transparent); animation: seoShimmer 3s infinite; }
+        @keyframes seoShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .seo-feature-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--pro-color) 0%, #22c55e 100%); display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
+        .seo-feature-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .seo-feature-title { font-size: 13px; font-weight: 600; color: var(--text); }
+        .seo-feature-desc { font-size: 11px; color: var(--text-secondary); }
+        .seo-feature-new { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 3px 6px; background: linear-gradient(135deg, var(--pro-color) 0%, #22c55e 100%); color: white; border-radius: 4px; }
       `}</style>
     </div>
   );

@@ -98,11 +98,16 @@ export type {
     VercelDomainRequest,
     VercelDomainConfig,
     VercelFile,
+    // SEO types
+    SEOConfig,
+    SEOAnalysisResult,
+    SEOIssue,
     // Error types
     DeploymentErrorCode,
   } from './types';
-  
+
   export { DeploymentError } from './types';
-  
-  // Re-export DeploymentOptions from vercel module
+
+  // Re-export DeploymentOptions and TransformOptions
   export type { DeploymentOptions } from './vercel/deploy';
+  export type { TransformOptions } from './transformer';

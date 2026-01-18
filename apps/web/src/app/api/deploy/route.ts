@@ -23,6 +23,8 @@ import {
   type DeploymentRequest,
   type DomainConfig,
   type DeploymentProgressEvent,
+  type SEOConfig,
+  type SEOAnalysisResult,
   DeploymentError,
 } from '@alfred/deploy';
 import { withRateLimit } from '@/lib/rate-limiter';
@@ -380,12 +382,47 @@ export async function POST(request: NextRequest) {
           }
 
           try {
+            // Default SEO config for Chat deployments
+            const seoConfig: SEOConfig = {
+              siteTitle: artifactTitle || projectName,
+              siteDescription: `${artifactTitle || projectName} - Built with Alfred`,
+              language: 'en',
+              locale: 'en_US',
+              allowIndexing: true,
+              allowFollowing: true,
+              includeSitemap: true,
+              includeRobotsTxt: true,
+            };
+
+            let seoResult: SEOAnalysisResult | undefined;
+
             const result = await deployArtifact(artifact, deployRequest, {
               vercelToken,
               teamId: getVercelTeamId(),
               timeout: 300000,
-              onProgress: (event) => sendEvent({ type: 'progress', ...event }),
+              runSEOAnalysis: true,
+              seoConfig,
+              onProgress: (event) => {
+                // Capture SEO analysis from progress events
+                if (event.details?.type === 'seo_analysis') {
+                  seoResult = event.details.seoAnalysis as SEOAnalysisResult;
+                  sendEvent({
+                    type: 'seo_analysis',
+                    seoAnalysis: seoResult,
+                  });
+                }
+                sendEvent({ type: 'progress', ...event });
+              },
             });
+
+            // If SEO result wasn't captured from progress, use from final result
+            if (!seoResult && result.seoAnalysis) {
+              seoResult = result.seoAnalysis;
+              sendEvent({
+                type: 'seo_analysis',
+                seoAnalysis: seoResult,
+              });
+            }
 
             if (result.status === 'ready' && result.url) {
               // ✅ SUCCESS - Save to database, link artifact, and capture screenshot!
@@ -402,7 +439,13 @@ export async function POST(request: NextRequest) {
                 deployProjectName
               );
 
-              sendEvent({ type: 'complete', result });
+              sendEvent({
+                type: 'complete',
+                result: {
+                  ...result,
+                  seoAnalysis: seoResult || result.seoAnalysis,
+                },
+              });
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               return;

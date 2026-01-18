@@ -1928,6 +1928,281 @@ export const videoJobsRelations = relations(videoJobs, ({ one }) => ({
   user: one(users, { fields: [videoJobs.userId], references: [users.id] }),
 }));
 
+// ============================================================================
+// SEO AGENT - Enterprise-Level SEO System
+// ============================================================================
+
+export const seoScoreGradeEnum = pgEnum('seo_score_grade', ['A+', 'A', 'B', 'C', 'D', 'F']);
+export const seoIssueSeverityEnum = pgEnum('seo_issue_severity', ['critical', 'warning', 'info', 'success']);
+export const seoIssueCategoryEnum = pgEnum('seo_issue_category', ['technical', 'content', 'on_page', 'ux', 'schema']);
+export const seoAssetTypeEnum = pgEnum('seo_asset_type', ['sitemap', 'robots_txt', 'schema_json']);
+
+/**
+ * seoConfigs - Per-project SEO settings
+ *
+ * Stores all SEO configuration for a project:
+ * - Site metadata (title, description, canonical)
+ * - Open Graph & Twitter Card settings
+ * - Focus keywords for optimization
+ * - Auto-generation preferences
+ */
+export const seoConfigs = pgTable(
+  'seo_configs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    alfredProjectId: uuid('alfred_project_id').references(() => alfredProjects.id, { onDelete: 'cascade' }),
+
+    // Site Identity
+    siteTitle: varchar('site_title', { length: 70 }),
+    siteDescription: varchar('site_description', { length: 160 }),
+    canonicalUrl: varchar('canonical_url', { length: 500 }),
+
+    // Open Graph
+    ogImage: text('og_image'),
+    ogTitle: varchar('og_title', { length: 70 }),
+    ogDescription: varchar('og_description', { length: 200 }),
+    ogType: varchar('og_type', { length: 50 }).default('website'),
+    ogSiteName: varchar('og_site_name', { length: 100 }),
+
+    // Twitter Card
+    twitterCard: varchar('twitter_card', { length: 50 }).default('summary_large_image'),
+    twitterSite: varchar('twitter_site', { length: 50 }),
+    twitterCreator: varchar('twitter_creator', { length: 50 }),
+
+    // Keywords
+    focusKeywords: jsonb('focus_keywords').$type<string[]>().default([]),
+    secondaryKeywords: jsonb('secondary_keywords').$type<string[]>().default([]),
+
+    // Auto-generation Settings
+    autoGenerateMeta: boolean('auto_generate_meta').default(true),
+    autoGenerateAltText: boolean('auto_generate_alt_text').default(true),
+    autoGenerateSchema: boolean('auto_generate_schema').default(true),
+    autoFixIssues: boolean('auto_fix_issues').default(false),
+
+    // Assets
+    includeSitemap: boolean('include_sitemap').default(true),
+    includeRobotsTxt: boolean('include_robots_txt').default(true),
+    robotsTxtContent: text('robots_txt_content'),
+
+    // Schema.org
+    schemaType: varchar('schema_type', { length: 50 }).default('WebSite'),
+    schemaData: jsonb('schema_data').$type<Record<string, unknown>>(),
+
+    // Favicon
+    faviconUrl: text('favicon_url'),
+    appleTouchIconUrl: text('apple_touch_icon_url'),
+
+    // Language & Locale
+    language: varchar('language', { length: 10 }).default('en'),
+    locale: varchar('locale', { length: 10 }).default('en_US'),
+
+    // Indexing Control
+    allowIndexing: boolean('allow_indexing').default(true),
+    allowFollowing: boolean('allow_following').default(true),
+
+    // Last Analysis Results (cached for quick access)
+    lastScore: integer('last_score'),
+    lastGrade: seoScoreGradeEnum('last_grade'),
+    lastAnalyzedAt: timestamp('last_analyzed_at', { withTimezone: true }),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('seo_configs_project_id_idx').on(table.projectId),
+    index('seo_configs_alfred_project_id_idx').on(table.alfredProjectId),
+    uniqueIndex('seo_configs_project_unique_idx').on(table.projectId),
+  ]
+);
+
+/**
+ * seoReports - Analysis snapshots
+ *
+ * Stores point-in-time SEO analysis results:
+ * - Overall score and grade
+ * - Category breakdowns
+ * - Pass/fail counts
+ */
+export const seoReports = pgTable(
+  'seo_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    seoConfigId: uuid('seo_config_id').references(() => seoConfigs.id, { onDelete: 'set null' }),
+
+    // Scores (0-100)
+    overallScore: integer('overall_score').notNull(),
+    grade: seoScoreGradeEnum('grade').notNull(),
+
+    // Category Scores
+    technicalScore: integer('technical_score').notNull(),
+    contentScore: integer('content_score').notNull(),
+    onPageScore: integer('on_page_score').notNull(),
+    uxScore: integer('ux_score').notNull(),
+    schemaScore: integer('schema_score').notNull(),
+
+    // Issue Counts
+    totalIssues: integer('total_issues').notNull().default(0),
+    criticalCount: integer('critical_count').notNull().default(0),
+    warningCount: integer('warning_count').notNull().default(0),
+    infoCount: integer('info_count').notNull().default(0),
+    passedCount: integer('passed_count').notNull().default(0),
+
+    // Analysis Metadata
+    analyzedUrl: varchar('analyzed_url', { length: 500 }),
+    analyzedFiles: jsonb('analyzed_files').$type<string[]>(),
+    analysisVersion: varchar('analysis_version', { length: 20 }).default('1.0.0'),
+    analysisTime: integer('analysis_time'), // milliseconds
+
+    // Auto-fixes Applied
+    autoFixesApplied: integer('auto_fixes_applied').default(0),
+    autoFixesAvailable: integer('auto_fixes_available').default(0),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<{
+      userAgent?: string;
+      source?: 'pre_deploy' | 'manual' | 'scheduled';
+      previousScore?: number;
+      scoreDelta?: number;
+    }>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('seo_reports_project_id_idx').on(table.projectId),
+    index('seo_reports_created_at_idx').on(table.createdAt),
+    index('seo_reports_grade_idx').on(table.grade),
+    // Compound index for historical reports
+    index('seo_reports_project_created_idx').on(table.projectId, table.createdAt),
+  ]
+);
+
+/**
+ * seoIssues - Individual issues from reports
+ *
+ * Stores each SEO issue found during analysis:
+ * - Rule that triggered the issue
+ * - Severity and category
+ * - Actionable suggestion
+ * - Auto-fix availability
+ */
+export const seoIssues = pgTable(
+  'seo_issues',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id').notNull().references(() => seoReports.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+
+    // Issue Identity
+    ruleId: varchar('rule_id', { length: 100 }).notNull(),
+    ruleName: varchar('rule_name', { length: 255 }).notNull(),
+    category: seoIssueCategoryEnum('category').notNull(),
+    severity: seoIssueSeverityEnum('severity').notNull(),
+
+    // Issue Details
+    message: text('message').notNull(),
+    description: text('description'),
+    suggestion: text('suggestion'),
+
+    // Location
+    filePath: varchar('file_path', { length: 500 }),
+    lineNumber: integer('line_number'),
+    selector: varchar('selector', { length: 255 }),
+    element: text('element'),
+
+    // Current vs Expected
+    currentValue: text('current_value'),
+    expectedValue: text('expected_value'),
+
+    // Auto-fix
+    isAutoFixable: boolean('is_auto_fixable').default(false),
+    autoFixCode: text('auto_fix_code'),
+    wasAutoFixed: boolean('was_auto_fixed').default(false),
+
+    // Scoring Impact
+    scoreImpact: integer('score_impact').default(0),
+    weight: real('weight').default(1.0),
+
+    // Documentation
+    learnMoreUrl: varchar('learn_more_url', { length: 500 }),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('seo_issues_report_id_idx').on(table.reportId),
+    index('seo_issues_project_id_idx').on(table.projectId),
+    index('seo_issues_category_idx').on(table.category),
+    index('seo_issues_severity_idx').on(table.severity),
+    index('seo_issues_rule_id_idx').on(table.ruleId),
+    // Compound index for filtering issues
+    index('seo_issues_report_severity_idx').on(table.reportId, table.severity),
+  ]
+);
+
+/**
+ * seoAssets - Generated sitemap, robots.txt, schema
+ *
+ * Stores generated SEO assets:
+ * - XML sitemap
+ * - robots.txt
+ * - JSON-LD schema markup
+ */
+export const seoAssets = pgTable(
+  'seo_assets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    seoConfigId: uuid('seo_config_id').references(() => seoConfigs.id, { onDelete: 'set null' }),
+
+    // Asset Type
+    assetType: seoAssetTypeEnum('asset_type').notNull(),
+
+    // Content
+    content: text('content').notNull(),
+    contentHash: varchar('content_hash', { length: 64 }),
+
+    // File Info
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }),
+    fileSize: integer('file_size'),
+
+    // Status
+    isActive: boolean('is_active').default(true),
+    lastDeployedAt: timestamp('last_deployed_at', { withTimezone: true }),
+
+    // Generation Info
+    generatedBy: varchar('generated_by', { length: 50 }).default('system'), // 'system' | 'ai' | 'user'
+    generationPrompt: text('generation_prompt'),
+
+    // Metadata
+    metadata: jsonb('metadata').$type<{
+      urlCount?: number; // For sitemaps
+      rules?: string[]; // For robots.txt
+      schemaType?: string; // For JSON-LD
+    }>(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('seo_assets_project_id_idx').on(table.projectId),
+    index('seo_assets_type_idx').on(table.assetType),
+    // Unique constraint: one active asset per type per project
+    uniqueIndex('seo_assets_project_type_unique_idx').on(table.projectId, table.assetType),
+  ]
+);
+
 // Alfred Builder relations
 export const alfredProjectsRelations = relations(alfredProjects, ({ one, many }) => ({
   user: one(users, { fields: [alfredProjects.userId], references: [users.id] }),
@@ -1943,6 +2218,30 @@ export const alfredProjectFilesRelations = relations(alfredProjectFiles, ({ one 
 
 export const alfredProjectSnapshotsRelations = relations(alfredProjectSnapshots, ({ one }) => ({
   alfredProject: one(alfredProjects, { fields: [alfredProjectSnapshots.alfredProjectId], references: [alfredProjects.id] }),
+}));
+
+// SEO Agent relations
+export const seoConfigsRelations = relations(seoConfigs, ({ one, many }) => ({
+  project: one(projects, { fields: [seoConfigs.projectId], references: [projects.id] }),
+  alfredProject: one(alfredProjects, { fields: [seoConfigs.alfredProjectId], references: [alfredProjects.id] }),
+  reports: many(seoReports),
+  assets: many(seoAssets),
+}));
+
+export const seoReportsRelations = relations(seoReports, ({ one, many }) => ({
+  project: one(projects, { fields: [seoReports.projectId], references: [projects.id] }),
+  seoConfig: one(seoConfigs, { fields: [seoReports.seoConfigId], references: [seoConfigs.id] }),
+  issues: many(seoIssues),
+}));
+
+export const seoIssuesRelations = relations(seoIssues, ({ one }) => ({
+  report: one(seoReports, { fields: [seoIssues.reportId], references: [seoReports.id] }),
+  project: one(projects, { fields: [seoIssues.projectId], references: [projects.id] }),
+}));
+
+export const seoAssetsRelations = relations(seoAssets, ({ one }) => ({
+  project: one(projects, { fields: [seoAssets.projectId], references: [projects.id] }),
+  seoConfig: one(seoConfigs, { fields: [seoAssets.seoConfigId], references: [seoConfigs.id] }),
 }));
 
 // ============================================================================
@@ -2035,3 +2334,16 @@ export type NewAlfredProjectSnapshot = typeof alfredProjectSnapshots.$inferInser
 
 export type AlfredProjectTemplate = typeof alfredProjectTemplates.$inferSelect;
 export type NewAlfredProjectTemplate = typeof alfredProjectTemplates.$inferInsert;
+
+// SEO Agent types
+export type SEOConfig = typeof seoConfigs.$inferSelect;
+export type NewSEOConfig = typeof seoConfigs.$inferInsert;
+
+export type SEOReport = typeof seoReports.$inferSelect;
+export type NewSEOReport = typeof seoReports.$inferInsert;
+
+export type SEOIssue = typeof seoIssues.$inferSelect;
+export type NewSEOIssue = typeof seoIssues.$inferInsert;
+
+export type SEOAsset = typeof seoAssets.$inferSelect;
+export type NewSEOAsset = typeof seoAssets.$inferInsert;

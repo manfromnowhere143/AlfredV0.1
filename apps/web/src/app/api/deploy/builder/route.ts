@@ -15,6 +15,14 @@ import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { projects } from '@alfred/database';
 import { eq, and } from 'drizzle-orm';
+import {
+  analyzeSEO,
+  applyAutoFixes,
+  generateSitemapFromFiles,
+  generateRobotsTxt,
+  getAutoFixableIssues,
+} from '@/lib/seo';
+import type { SEOConfigInput, SEOAnalysisResult } from '@/lib/seo/types';
 
 // ============================================================================
 // TYPES
@@ -31,6 +39,9 @@ interface DeployRequestBody {
   artifactId?: string;
   artifactTitle?: string;
   customDomain?: string;
+  seoConfig?: SEOConfigInput;
+  runSeoAnalysis?: boolean;
+  autoFixSeo?: boolean;
 }
 
 interface VercelFile {
@@ -236,6 +247,102 @@ function generateTsConfigNode(): string {
   }, null, 2);
 }
 
+function generateMainEntry(hasTypeScript: boolean, hasCss: boolean, appPath: string): string {
+  const ext = hasTypeScript ? 'tsx' : 'jsx';
+  const cssImport = hasCss ? `import './index.css';\n` : '';
+
+  // Normalize app import path (remove extension, handle src/ prefix)
+  let appImport = appPath;
+  if (appImport.startsWith('src/')) {
+    appImport = './' + appImport.slice(4);
+  } else if (!appImport.startsWith('./') && !appImport.startsWith('/')) {
+    appImport = './' + appImport;
+  }
+  // Remove extension for import
+  appImport = appImport.replace(/\.(tsx?|jsx?)$/, '');
+
+  return `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from '${appImport}';
+${cssImport}
+const root = document.getElementById('root');
+
+if (root) {
+  ReactDOM.createRoot(root).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
+`;
+}
+
+function generateIndexCss(hasTailwind: boolean): string {
+  if (hasTailwind) {
+    return `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+`;
+  }
+
+  return `*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+`;
+}
+
 // ============================================================================
 // MAIN HANDLER
 // ============================================================================
@@ -254,7 +361,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request
     const body: DeployRequestBody = await request.json();
-    const { files, projectName, artifactId, artifactTitle, customDomain } = body;
+    const { files, projectName, artifactId, artifactTitle, customDomain, seoConfig, runSeoAnalysis = true, autoFixSeo = true } = body;
 
     if (!files || files.length === 0) {
       return new Response(JSON.stringify({ error: 'No files provided' }), {
@@ -283,7 +390,15 @@ export async function POST(request: NextRequest) {
     // Detect project characteristics
     const hasTypeScript = files.some(f => f.path.endsWith('.ts') || f.path.endsWith('.tsx'));
     const allCode = files.map(f => f.content).join('\n');
-    const hasTailwind = allCode.includes('tailwind') || allCode.includes('@tailwind');
+
+    // Improved Tailwind detection - check for:
+    // 1. Explicit tailwind mentions
+    // 2. Common Tailwind utility class patterns in className attributes
+    const hasTailwindExplicit = allCode.includes('tailwind') || allCode.includes('@tailwind');
+    const hasTailwindClasses = /className=["'][^"']*\b(flex|grid|hidden|block|inline|absolute|relative|fixed|sticky|top-|right-|bottom-|left-|z-|w-|h-|min-|max-|p-|px-|py-|pt-|pr-|pb-|pl-|m-|mx-|my-|mt-|mr-|mb-|ml-|gap-|space-|text-|font-|leading-|tracking-|bg-|border|rounded|shadow|opacity-|transition|duration-|ease-|animate-|hover:|focus:|active:|disabled:|sm:|md:|lg:|xl:|2xl:)\b/.test(allCode);
+    const hasTailwind = hasTailwindExplicit || hasTailwindClasses;
+
+    console.log('[Builder Deploy] Tailwind detection:', { hasTailwindExplicit, hasTailwindClasses, hasTailwind });
 
     // Prepare files for Vercel - start with user's files
     const vercelFiles: VercelFile[] = files.map(f => ({
@@ -354,7 +469,109 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log('[Builder Deploy] Deploying files:', vercelFiles.map(f => f.file));
+    // Check for main entry file and CSS
+    const hasMainEntry = files.some(f =>
+      f.path === 'src/main.tsx' || f.path === 'src/main.jsx' ||
+      f.path === '/src/main.tsx' || f.path === '/src/main.jsx'
+    );
+    const hasCssFile = files.some(f =>
+      f.path.includes('index.css') || f.path.includes('global.css') ||
+      f.path.includes('style.css') || f.path.includes('styles.css')
+    );
+    const hasAppFile = files.find(f =>
+      f.path.includes('App.tsx') || f.path.includes('App.jsx') ||
+      f.path.includes('app.tsx') || f.path.includes('app.jsx')
+    );
+
+    // Generate main entry file if missing
+    if (!hasMainEntry && hasAppFile) {
+      const ext = hasTypeScript ? 'tsx' : 'jsx';
+      const appPath = hasAppFile.path.startsWith('/') ? hasAppFile.path.slice(1) : hasAppFile.path;
+
+      vercelFiles.push({
+        file: `src/main.${ext}`,
+        data: generateMainEntry(hasTypeScript, true, appPath),
+        encoding: 'utf-8',
+      });
+      console.log('[Builder Deploy] Generated main entry file: src/main.' + ext);
+    }
+
+    // Generate index.css if missing (for proper styling)
+    if (!hasCssFile) {
+      vercelFiles.push({
+        file: 'src/index.css',
+        data: generateIndexCss(hasTailwind),
+        encoding: 'utf-8',
+      });
+      console.log('[Builder Deploy] Generated index.css with ' + (hasTailwind ? 'Tailwind' : 'basic') + ' styles');
+    }
+
+    // Ensure existing main entry file imports CSS
+    if (hasMainEntry) {
+      const mainEntryIndex = vercelFiles.findIndex(f =>
+        f.file === 'src/main.tsx' || f.file === 'src/main.jsx'
+      );
+      if (mainEntryIndex !== -1) {
+        const mainContent = vercelFiles[mainEntryIndex].data;
+        // Check if CSS import is missing
+        if (!mainContent.includes("import './index.css'") &&
+            !mainContent.includes('import "./index.css"') &&
+            !mainContent.includes("import './global.css'") &&
+            !mainContent.includes("import './styles.css'")) {
+          // Inject CSS import at the top after React imports
+          const lines = mainContent.split('\n');
+          let insertIndex = 0;
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes('import') && (lines[i].includes('react') || lines[i].includes('React'))) {
+              insertIndex = i + 1;
+            }
+          }
+          lines.splice(insertIndex, 0, "import './index.css';");
+          vercelFiles[mainEntryIndex] = {
+            ...vercelFiles[mainEntryIndex],
+            data: lines.join('\n'),
+          };
+          console.log('[Builder Deploy] Injected CSS import into existing main entry file');
+        }
+      }
+    }
+
+    // CRITICAL: If Tailwind classes are used but CSS doesn't have @tailwind directives, inject them
+    if (hasTailwind && !hasTailwindExplicit) {
+      const cssFileIndex = vercelFiles.findIndex(f =>
+        f.file === 'src/index.css' || f.file === 'src/global.css' ||
+        f.file === 'src/styles.css' || f.file === 'src/style.css'
+      );
+
+      if (cssFileIndex !== -1) {
+        const cssContent = vercelFiles[cssFileIndex].data;
+        // Check if @tailwind directives are missing
+        if (!cssContent.includes('@tailwind')) {
+          // Prepend Tailwind directives to existing CSS
+          const tailwindDirectives = `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+`;
+          vercelFiles[cssFileIndex] = {
+            ...vercelFiles[cssFileIndex],
+            data: tailwindDirectives + cssContent,
+          };
+          console.log('[Builder Deploy] Injected @tailwind directives into existing CSS file');
+        }
+      }
+    }
+
+    console.log('[Builder Deploy] Final file list:');
+    vercelFiles.forEach(f => {
+      const preview = f.data.slice(0, 100).replace(/\n/g, '\\n');
+      console.log(`  - ${f.file} (${f.data.length} bytes): ${preview}...`);
+    });
+
+    // Verify critical files exist
+    const criticalFiles = ['package.json', 'index.html', 'src/main.tsx', 'src/main.jsx', 'src/index.css'];
+    const presentCritical = criticalFiles.filter(cf => vercelFiles.some(vf => vf.file === cf || vf.file === cf.replace('.tsx', '.jsx')));
+    console.log('[Builder Deploy] Critical files present:', presentCritical);
 
     // SSE Stream for progress
     const encoder = new TextEncoder();
@@ -364,8 +581,206 @@ export async function POST(request: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         };
 
+        // Mutable copy of vercelFiles for SEO modifications
+        let deployFiles = [...vercelFiles];
+
         try {
-          sendEvent({ type: 'progress', status: 'uploading', message: 'Preparing deployment...', progress: 10 });
+          sendEvent({ type: 'progress', status: 'analyzing', message: 'Preparing deployment...', progress: 5 });
+
+          // ============================================================
+          // SEO ANALYSIS & OPTIMIZATION
+          // ============================================================
+          let seoAnalysis: SEOAnalysisResult | null = null;
+
+          if (runSeoAnalysis) {
+            sendEvent({ type: 'progress', status: 'analyzing', message: 'Running SEO analysis...', progress: 8 });
+
+            try {
+              // Convert vercel files to the format expected by analyzeSEO
+              const filesForAnalysis = deployFiles.map(f => ({
+                path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+                content: f.data,
+              }));
+
+              // Run SEO analysis
+              seoAnalysis = await analyzeSEO(filesForAnalysis, {
+                projectName: artifactTitle || projectName,
+                deployUrl: customDomain ? `https://${customDomain}` : undefined,
+                seoConfig,
+              });
+
+              // Send SEO analysis results
+              sendEvent({
+                type: 'seo_analysis',
+                score: seoAnalysis.score,
+                grade: seoAnalysis.grade,
+                passedChecks: seoAnalysis.passedChecks,
+                totalChecks: seoAnalysis.totalChecks,
+                criticalCount: seoAnalysis.criticalCount,
+                warningCount: seoAnalysis.warningCount,
+                infoCount: seoAnalysis.infoCount,
+                autoFixableCount: getAutoFixableIssues(seoAnalysis).length,
+                categoryScores: seoAnalysis.categoryScores,
+              });
+
+              console.log('[Builder Deploy] SEO Analysis complete:', {
+                score: seoAnalysis.score,
+                grade: seoAnalysis.grade,
+                issues: seoAnalysis.issues.length,
+              });
+
+              // Apply auto-fixes if enabled
+              if (autoFixSeo && seoAnalysis.issues.length > 0) {
+                const autoFixableIssues = getAutoFixableIssues(seoAnalysis);
+                if (autoFixableIssues.length > 0) {
+                  sendEvent({ type: 'progress', status: 'optimizing', message: `Applying ${autoFixableIssues.length} SEO fixes...`, progress: 12 });
+
+                  let totalApplied = 0;
+
+                  // Apply fixes to each HTML file
+                  for (let i = 0; i < deployFiles.length; i++) {
+                    const file = deployFiles[i];
+                    if (file.file.endsWith('.html') || file.file.endsWith('.htm')) {
+                      // Get fixes for this file
+                      const fileFixes = autoFixableIssues
+                        .filter(issue => {
+                          if (!issue.autoFix) return false;
+                          const fixPath = issue.autoFix.filePath.replace(/^\//, '');
+                          return fixPath === file.file || fixPath === `/${file.file}`;
+                        })
+                        .map(issue => issue.autoFix!)
+                        .filter(Boolean);
+
+                      if (fileFixes.length > 0) {
+                        const result = applyAutoFixes(file.data, fileFixes);
+                        deployFiles[i] = {
+                          ...file,
+                          data: result.html,
+                        };
+                        totalApplied += result.applied;
+                      }
+                    }
+                  }
+
+                  console.log('[Builder Deploy] Applied', totalApplied, 'SEO auto-fixes');
+                }
+              }
+            } catch (seoErr) {
+              console.error('[Builder Deploy] SEO analysis error:', seoErr);
+              // Continue with deployment even if SEO fails
+            }
+          }
+
+          // Generate sitemap if configured
+          if (seoConfig?.includeSitemap !== false) {
+            const hasSitemap = deployFiles.some(f => f.file === 'sitemap.xml' || f.file === 'public/sitemap.xml');
+            if (!hasSitemap) {
+              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating sitemap...', progress: 14 });
+
+              const sitemapFiles = deployFiles.map(f => ({
+                path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+              }));
+
+              const siteUrl = customDomain
+                ? `https://${customDomain}`
+                : `https://${cleanProjectName}.vercel.app`;
+
+              const sitemapResult = generateSitemapFromFiles(sitemapFiles, siteUrl);
+              deployFiles.push({
+                file: 'public/sitemap.xml',
+                data: sitemapResult.content,
+                encoding: 'utf-8',
+              });
+              console.log('[Builder Deploy] Generated sitemap.xml with', sitemapResult.urlCount, 'URLs');
+            }
+          }
+
+          // Generate robots.txt if configured
+          if (seoConfig?.includeRobotsTxt !== false) {
+            const hasRobots = deployFiles.some(f => f.file === 'robots.txt' || f.file === 'public/robots.txt');
+            if (!hasRobots) {
+              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating robots.txt...', progress: 15 });
+
+              const siteUrl = customDomain
+                ? `https://${customDomain}`
+                : `https://${cleanProjectName}.vercel.app`;
+
+              const robotsResult = generateRobotsTxt({
+                sitemapUrl: `${siteUrl}/sitemap.xml`,
+              });
+              deployFiles.push({
+                file: 'public/robots.txt',
+                data: robotsResult.content,
+                encoding: 'utf-8',
+              });
+              console.log('[Builder Deploy] Generated robots.txt');
+            }
+          }
+
+          // Enhance index.html with Foundation SEO if needed
+          const indexHtmlIndex = deployFiles.findIndex(f => f.file === 'index.html');
+          if (indexHtmlIndex !== -1 && seoConfig) {
+            const currentIndexHtml = deployFiles[indexHtmlIndex].data;
+
+            // Only enhance if missing basic SEO tags
+            if (!currentIndexHtml.includes('og:title') || !currentIndexHtml.includes('twitter:card')) {
+              sendEvent({ type: 'progress', status: 'optimizing', message: 'Enhancing SEO tags...', progress: 16 });
+
+              let enhancedHtml = currentIndexHtml;
+              const headEndIndex = enhancedHtml.indexOf('</head>');
+
+              if (headEndIndex !== -1) {
+                const seoTags: string[] = [];
+
+                // Open Graph tags
+                if (seoConfig.ogTitle || seoConfig.siteTitle) {
+                  seoTags.push(`    <meta property="og:title" content="${seoConfig.ogTitle || seoConfig.siteTitle}" />`);
+                }
+                if (seoConfig.ogDescription || seoConfig.siteDescription) {
+                  seoTags.push(`    <meta property="og:description" content="${seoConfig.ogDescription || seoConfig.siteDescription}" />`);
+                }
+                if (seoConfig.ogImage) {
+                  seoTags.push(`    <meta property="og:image" content="${seoConfig.ogImage}" />`);
+                }
+                if (!currentIndexHtml.includes('og:type')) {
+                  seoTags.push(`    <meta property="og:type" content="website" />`);
+                }
+
+                // Twitter Card tags
+                if (!currentIndexHtml.includes('twitter:card')) {
+                  seoTags.push(`    <meta name="twitter:card" content="${seoConfig.twitterCard || 'summary_large_image'}" />`);
+                }
+                if (seoConfig.twitterSite) {
+                  seoTags.push(`    <meta name="twitter:site" content="${seoConfig.twitterSite}" />`);
+                }
+
+                // Canonical URL
+                if (seoConfig.canonicalUrl && !currentIndexHtml.includes('canonical')) {
+                  seoTags.push(`    <link rel="canonical" href="${seoConfig.canonicalUrl}" />`);
+                }
+
+                if (seoTags.length > 0) {
+                  enhancedHtml = enhancedHtml.slice(0, headEndIndex) +
+                    '\n    <!-- SEO Tags -->\n' +
+                    seoTags.join('\n') +
+                    '\n  ' +
+                    enhancedHtml.slice(headEndIndex);
+
+                  deployFiles[indexHtmlIndex] = {
+                    ...deployFiles[indexHtmlIndex],
+                    data: enhancedHtml,
+                  };
+                  console.log('[Builder Deploy] Enhanced index.html with', seoTags.length, 'SEO tags');
+                }
+              }
+            }
+          }
+
+          // ============================================================
+          // END SEO PROCESSING
+          // ============================================================
+
+          sendEvent({ type: 'progress', status: 'uploading', message: 'Preparing deployment...', progress: 18 });
 
           // Create or get project
           let vercelProjectId: string;
@@ -408,11 +823,13 @@ export async function POST(request: NextRequest) {
           // Create deployment
           sendEvent({ type: 'progress', status: 'building', message: 'Uploading files...', progress: 30 });
 
+          console.log('[Builder Deploy] Final file count:', deployFiles.length, 'files');
+
           const deployRes = await vercelRequest('/v13/deployments', {
             method: 'POST',
             body: JSON.stringify({
               name: vercelProjectName,
-              files: vercelFiles,
+              files: deployFiles,
               projectSettings: {
                 framework: 'vite',
                 buildCommand: 'npm run build',
@@ -521,6 +938,12 @@ export async function POST(request: NextRequest) {
                   url,
                   vercelProjectId,
                   vercelDeploymentId: deploymentId,
+                  seo: seoAnalysis ? {
+                    score: seoAnalysis.score,
+                    grade: seoAnalysis.grade,
+                    passedChecks: seoAnalysis.passedChecks,
+                    totalChecks: seoAnalysis.totalChecks,
+                  } : undefined,
                 },
               });
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
