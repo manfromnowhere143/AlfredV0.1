@@ -181,24 +181,38 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           if (updatedFile) onUploadComplete?.({ ...updatedFile, ...data, status: 'ready' });
           
         } else {
-          // Fallback to base64
-          const base64 = await toBase64(file);
-          setFiles(prev => prev.map(f => 
-            f.id === id ? { ...f, base64, status: 'ready', progress: 100 } : f
-          ));
+          // Fallback to base64 (skip for videos - too large)
+          if (category === 'video') {
+            // Videos don't need base64, mark as ready without it
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, status: 'ready', progress: 100 } : f
+            ));
+          } else {
+            const base64 = await toBase64(file);
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, base64, status: 'ready', progress: 100 } : f
+            ));
+          }
         }
       } catch {
-        // Fallback to base64
-        try {
-          const base64 = await toBase64(file);
-          setFiles(prev => prev.map(f => 
-            f.id === id ? { ...f, base64, status: 'ready', progress: 100 } : f
+        // Fallback to base64 (skip for videos - too large and not needed for AI)
+        if (category === 'video') {
+          // Videos uploaded successfully are usable by URL reference
+          setFiles(prev => prev.map(f =>
+            f.id === id ? { ...f, status: 'ready', progress: 100 } : f
           ));
-        } catch {
-          setFiles(prev => prev.map(f => 
-            f.id === id ? { ...f, status: 'error', error: 'Upload failed' } : f
-          ));
-          onUploadError?.(entry, 'Upload failed');
+        } else {
+          try {
+            const base64 = await toBase64(file);
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, base64, status: 'ready', progress: 100 } : f
+            ));
+          } catch {
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, status: 'error', error: 'Upload failed' } : f
+            ));
+            onUploadError?.(entry, 'Upload failed');
+          }
         }
       }
     }

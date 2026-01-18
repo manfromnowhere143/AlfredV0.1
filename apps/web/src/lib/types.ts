@@ -183,4 +183,5 @@ export function isClaudeSupported(mimeType: string): boolean {
 // Max file sizes
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;  // 50MB general
 export const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB for images
+export const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB for videos
 export const MAX_FILES = 10;
