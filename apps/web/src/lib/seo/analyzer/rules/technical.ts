@@ -363,7 +363,8 @@ const robotsTxtRule: SEORule = {
     const robotsFile = context.files.find(f =>
       f.path === 'robots.txt' ||
       f.path === '/robots.txt' ||
-      f.path === 'public/robots.txt'
+      f.path === 'public/robots.txt' ||
+      f.path === '/public/robots.txt'
     );
 
     if (robotsFile) {
@@ -413,7 +414,8 @@ const sitemapRule: SEORule = {
     const sitemapFile = context.files.find(f =>
       f.path === 'sitemap.xml' ||
       f.path === '/sitemap.xml' ||
-      f.path === 'public/sitemap.xml'
+      f.path === 'public/sitemap.xml' ||
+      f.path === '/public/sitemap.xml'
     );
 
     if (sitemapFile) {

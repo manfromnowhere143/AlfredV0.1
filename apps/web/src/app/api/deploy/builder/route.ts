@@ -43,6 +43,8 @@ interface DeployRequestBody {
   seoConfig?: SEOConfigInput;
   runSeoAnalysis?: boolean;
   autoFixSeo?: boolean;
+  /** Project ID to update after deployment (for SEO Dashboard accuracy) */
+  projectId?: string;
 }
 
 interface VercelFile {
@@ -495,7 +497,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request
     const body: DeployRequestBody = await request.json();
-    const { files, projectName, artifactId, artifactTitle, customDomain, seoConfig, runSeoAnalysis = true, autoFixSeo = true } = body;
+    const { files, projectName, artifactId, artifactTitle, customDomain, seoConfig, runSeoAnalysis = true, autoFixSeo = true, projectId: savedProjectId } = body;
 
     if (!files || files.length === 0) {
       return new Response(JSON.stringify({ error: 'No files provided' }), {
@@ -1060,38 +1062,52 @@ export async function POST(request: NextRequest) {
 
               // Save to database
               const realUrl = `https://${vercelProjectName}.vercel.app`;
+              let dbProjectId: string | undefined = savedProjectId;
+
               try {
                 const client = await getDb();
-                const existingProjects = await client.db
-                  .select()
-                  .from(projects)
-                  .where(and(eq(projects.userId, userId), eq(projects.vercelProjectId, vercelProjectId)))
-                  .limit(1);
 
-                if (existingProjects.length > 0) {
-                  // Build enhanced files array for saving back to DB
-                  const enhancedFilesForDB = deployFiles
-                    .filter(f => !f.file.startsWith('node_modules/') &&
-                                 !f.file.endsWith('.lock') &&
-                                 f.file !== 'package-lock.json')
-                    .map(f => ({
-                      path: f.file.startsWith('/') ? f.file : `/${f.file}`,
-                      name: f.file.split('/').pop() || f.file,
-                      content: f.data,
-                      language: f.file.endsWith('.tsx') ? 'tsx' :
-                               f.file.endsWith('.ts') ? 'typescript' :
-                               f.file.endsWith('.jsx') ? 'jsx' :
-                               f.file.endsWith('.js') ? 'javascript' :
-                               f.file.endsWith('.html') ? 'html' :
-                               f.file.endsWith('.css') ? 'css' :
-                               f.file.endsWith('.json') ? 'json' : 'text',
-                      isEntryPoint: f.file === 'index.html' || f.file === 'src/main.tsx',
-                    }));
+                // Build enhanced files array for saving back to DB
+                const enhancedFilesForDB = deployFiles
+                  .filter(f => !f.file.startsWith('node_modules/') &&
+                               !f.file.endsWith('.lock') &&
+                               f.file !== 'package-lock.json')
+                  .map(f => ({
+                    path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+                    name: f.file.split('/').pop() || f.file,
+                    content: f.data,
+                    language: f.file.endsWith('.tsx') ? 'tsx' :
+                             f.file.endsWith('.ts') ? 'typescript' :
+                             f.file.endsWith('.jsx') ? 'jsx' :
+                             f.file.endsWith('.js') ? 'javascript' :
+                             f.file.endsWith('.html') ? 'html' :
+                             f.file.endsWith('.css') ? 'css' :
+                             f.file.endsWith('.json') ? 'json' : 'text',
+                    isEntryPoint: f.file === 'index.html' || f.file === 'src/main.tsx',
+                  }));
 
+                // Debug: Log what we're about to save
+                console.log('[Builder Deploy] Saving enhanced files to DB:', enhancedFilesForDB.length, 'files');
+                const indexHtmlForDB = enhancedFilesForDB.find(f => f.path.includes('index.html'));
+                if (indexHtmlForDB) {
+                  console.log('[Builder Deploy] index.html to save (first 500 chars):');
+                  console.log(indexHtmlForDB.content.slice(0, 500));
+                  console.log('[Builder Deploy] Has DOCTYPE:', indexHtmlForDB.content.includes('<!DOCTYPE'));
+                  console.log('[Builder Deploy] Has viewport:', indexHtmlForDB.content.includes('viewport'));
+                }
+                console.log('[Builder Deploy] savedProjectId:', savedProjectId);
+
+                // If we have a saved project ID from the builder, update that record directly
+                // NOTE: We don't update the 'name' field here because:
+                // 1. The name was already set when the user saved the project
+                // 2. Updating it could violate the unique (user_id, name) constraint
+                if (savedProjectId) {
+                  console.log('[Builder Deploy] Updating existing project by savedProjectId:', savedProjectId);
                   await client.db
                     .update(projects)
                     .set({
-                      name: artifactTitle || projectName,
+                      // Don't update name - it could conflict with existing project names
+                      vercelProjectId,
                       vercelProjectName,
                       primaryDomain: `${vercelProjectName}.vercel.app`,
                       lastDeploymentId: deploymentId,
@@ -1099,58 +1115,77 @@ export async function POST(request: NextRequest) {
                       lastDeployedAt: new Date(),
                       updatedAt: new Date(),
                       metadata: {
-                        ...((existingProjects[0].metadata as Record<string, unknown>) || {}),
                         artifactId: artifactId || undefined,
                         lastDeployedUrl: realUrl,
-                        // Save the SEO-enhanced files so SEO Dashboard shows accurate data
                         files: enhancedFilesForDB,
                         fileCount: enhancedFilesForDB.length,
                         totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
                         isBuilder: true,
                       },
                     })
-                    .where(eq(projects.id, existingProjects[0].id));
+                    .where(eq(projects.id, savedProjectId));
+                  dbProjectId = savedProjectId;
                 } else {
-                  // Build enhanced files array for new project
-                  const enhancedFilesForDB = deployFiles
-                    .filter(f => !f.file.startsWith('node_modules/') &&
-                                 !f.file.endsWith('.lock') &&
-                                 f.file !== 'package-lock.json')
-                    .map(f => ({
-                      path: f.file.startsWith('/') ? f.file : `/${f.file}`,
-                      name: f.file.split('/').pop() || f.file,
-                      content: f.data,
-                      language: f.file.endsWith('.tsx') ? 'tsx' :
-                               f.file.endsWith('.ts') ? 'typescript' :
-                               f.file.endsWith('.jsx') ? 'jsx' :
-                               f.file.endsWith('.js') ? 'javascript' :
-                               f.file.endsWith('.html') ? 'html' :
-                               f.file.endsWith('.css') ? 'css' :
-                               f.file.endsWith('.json') ? 'json' : 'text',
-                      isEntryPoint: f.file === 'index.html' || f.file === 'src/main.tsx',
-                    }));
+                  // Fall back to finding by vercelProjectId
+                  const existingProjects = await client.db
+                    .select()
+                    .from(projects)
+                    .where(and(eq(projects.userId, userId), eq(projects.vercelProjectId, vercelProjectId)))
+                    .limit(1);
 
-                  await client.db.insert(projects).values({
-                    userId,
-                    name: artifactTitle || projectName,
-                    type: 'web_app',
-                    vercelProjectId,
-                    vercelProjectName,
-                    primaryDomain: `${vercelProjectName}.vercel.app`,
-                    lastDeploymentId: deploymentId,
-                    lastDeploymentStatus: 'ready',
-                    lastDeployedAt: new Date(),
-                    metadata: {
-                      artifactId: artifactId || undefined,
-                      lastDeployedUrl: realUrl,
-                      // Save the SEO-enhanced files so SEO Dashboard shows accurate data
-                      files: enhancedFilesForDB,
-                      fileCount: enhancedFilesForDB.length,
-                      totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
-                      isBuilder: true,
-                    },
-                  });
+                  if (existingProjects.length > 0) {
+                    await client.db
+                      .update(projects)
+                      .set({
+                        name: artifactTitle || projectName,
+                        vercelProjectId,
+                        vercelProjectName,
+                        primaryDomain: `${vercelProjectName}.vercel.app`,
+                        lastDeploymentId: deploymentId,
+                        lastDeploymentStatus: 'ready',
+                        lastDeployedAt: new Date(),
+                        updatedAt: new Date(),
+                        metadata: {
+                          ...((existingProjects[0].metadata as Record<string, unknown>) || {}),
+                          artifactId: artifactId || undefined,
+                          lastDeployedUrl: realUrl,
+                          files: enhancedFilesForDB,
+                          fileCount: enhancedFilesForDB.length,
+                          totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
+                          isBuilder: true,
+                        },
+                      })
+                      .where(eq(projects.id, existingProjects[0].id));
+                    dbProjectId = existingProjects[0].id;
+                  } else {
+                    // Insert new project and get the ID
+                    const insertResult = await client.db.insert(projects).values({
+                      userId,
+                      name: artifactTitle || projectName,
+                      type: 'web_app',
+                      vercelProjectId,
+                      vercelProjectName,
+                      primaryDomain: `${vercelProjectName}.vercel.app`,
+                      lastDeploymentId: deploymentId,
+                      lastDeploymentStatus: 'ready',
+                      lastDeployedAt: new Date(),
+                      metadata: {
+                        artifactId: artifactId || undefined,
+                        lastDeployedUrl: realUrl,
+                        files: enhancedFilesForDB,
+                        fileCount: enhancedFilesForDB.length,
+                        totalSize: enhancedFilesForDB.reduce((sum, f) => sum + (f.content?.length || 0), 0),
+                        isBuilder: true,
+                      },
+                    }).returning({ id: projects.id });
+
+                    if (insertResult.length > 0) {
+                      dbProjectId = insertResult[0].id;
+                    }
+                  }
                 }
+
+                console.log('[Builder Deploy] Database project ID:', dbProjectId);
               } catch (dbErr) {
                 console.error('[Builder Deploy] DB error:', dbErr);
               }
@@ -1198,6 +1233,8 @@ export async function POST(request: NextRequest) {
                   url,
                   vercelProjectId,
                   vercelDeploymentId: deploymentId,
+                  // Return DB project ID so builder can update currentProjectId
+                  projectId: dbProjectId,
                   seo: seoAnalysis ? {
                     score: seoAnalysis.score,
                     grade: seoAnalysis.grade,

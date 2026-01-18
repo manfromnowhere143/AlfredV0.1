@@ -26,6 +26,10 @@ interface BuilderDeploymentCardProps {
   onDeployed?: (url: string) => void;
   /** Existing deployed URL - if provided, extracts project name to redeploy to same project */
   existingDeployedUrl?: string;
+  /** Project ID for updating the correct DB record after deploy */
+  projectId?: string;
+  /** Called when deploy completes with the database project ID (for syncing currentProjectId) */
+  onProjectIdReceived?: (projectId: string) => void;
 }
 
 type DeploymentPhase = 'idle' | 'deploying' | 'success' | 'error';
@@ -90,6 +94,8 @@ export function BuilderDeploymentCard({
   onClose,
   onDeployed,
   existingDeployedUrl,
+  projectId,
+  onProjectIdReceived,
 }: BuilderDeploymentCardProps) {
   // If we have an existing deployed URL, extract the project name from it
   const existingProjectName = existingDeployedUrl ? extractProjectNameFromUrl(existingDeployedUrl) : null;
@@ -196,6 +202,7 @@ export function BuilderDeploymentCard({
           artifactId,
           artifactTitle: artifactTitle || projectName,
           customDomain: useCustomDomain && customDomain ? customDomain.toLowerCase().trim() : undefined,
+          projectId,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -258,6 +265,10 @@ export function BuilderDeploymentCard({
                   categoryScores: {},
                 });
               }
+              // Sync database project ID to builder
+              if (event.result.projectId) {
+                onProjectIdReceived?.(event.result.projectId);
+              }
               setPhase('success');
               setProgress(100);
               onDeployed?.(event.result.url);
@@ -272,7 +283,7 @@ export function BuilderDeploymentCard({
       setError((err as Error).message);
       setPhase('error');
     }
-  }, [optimizedFiles, projectName, artifactId, artifactTitle, onDeployed, useCustomDomain, customDomain]);
+  }, [optimizedFiles, projectName, artifactId, artifactTitle, onDeployed, onProjectIdReceived, useCustomDomain, customDomain]);
 
   const handleClose = useCallback(() => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -484,7 +495,7 @@ export function BuilderDeploymentCard({
               <p className="error-message">{error}</p>
               <div className="error-actions">
                 <button className="btn secondary" onClick={handleClose}>Cancel</button>
-                <button className="btn primary" onClick={handleDeploy}>Try Again</button>
+                <button className="btn primary" onClick={() => handleDeploy()}>Try Again</button>
               </div>
             </div>
           ) : (

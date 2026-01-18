@@ -1450,6 +1450,8 @@ export default function BuilderPage() {
             onClose={() => setShowDeployModal(false)}
             onDeployed={handleDeployed}
             existingDeployedUrl={deployedUrl || undefined}
+            projectId={currentProjectId || undefined}
+            onProjectIdReceived={setCurrentProjectId}
           />
         )}
 
@@ -1925,6 +1927,8 @@ export default function BuilderPage() {
             onClose={() => setShowDeployModal(false)}
             onDeployed={handleDeployed}
             existingDeployedUrl={deployedUrl || undefined}
+            projectId={currentProjectId || undefined}
+            onProjectIdReceived={setCurrentProjectId}
           />
         )}
 

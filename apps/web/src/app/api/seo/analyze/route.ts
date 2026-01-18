@@ -37,10 +37,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // Fetch project
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-    });
+    const projectResults = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
 
+    const project = projectResults[0];
     if (!project) {
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
@@ -49,21 +52,37 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // First, check if this is an Alfred Pro Builder project (files in metadata)
     const metadata = project.metadata as any;
+    console.log('[SEO Analyze] Project metadata keys:', metadata ? Object.keys(metadata) : 'no metadata');
+    console.log('[SEO Analyze] metadata.files exists:', !!metadata?.files);
+    console.log('[SEO Analyze] metadata.files length:', metadata?.files?.length);
+
     if (metadata?.files && Array.isArray(metadata.files) && metadata.files.length > 0) {
       console.log('[SEO Analyze] Found files in project metadata:', metadata.files.length);
       files = metadata.files.map((f: any) => ({
         path: f.path?.startsWith('/') ? f.path : `/${f.path}`,
         content: f.content || '',
       }));
+
+      // Debug: Log first 500 chars of index.html to check if SEO enhanced
+      const indexHtml = files.find(f => f.path.includes('index.html'));
+      if (indexHtml) {
+        console.log('[SEO Analyze] index.html preview (first 500 chars):');
+        console.log(indexHtml.content.slice(0, 500));
+        console.log('[SEO Analyze] Has DOCTYPE:', indexHtml.content.includes('<!DOCTYPE'));
+        console.log('[SEO Analyze] Has viewport:', indexHtml.content.includes('viewport'));
+      }
     }
 
     // If no files in metadata, check artifacts table (for Alfred Regular)
     if (files.length === 0) {
-      const latestArtifact = await db.query.artifacts.findFirst({
-        where: eq(artifacts.projectId, projectId),
-        orderBy: [desc(artifacts.version)],
-      });
+      const artifactResults = await db
+        .select()
+        .from(artifacts)
+        .where(eq(artifacts.projectId, projectId))
+        .orderBy(desc(artifacts.version))
+        .limit(1);
 
+      const latestArtifact = artifactResults[0];
       if (latestArtifact?.code) {
         console.log('[SEO Analyze] Found artifact code');
         // Single artifact - treat as index.html

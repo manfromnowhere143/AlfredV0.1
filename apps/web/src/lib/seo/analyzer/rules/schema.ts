@@ -42,6 +42,7 @@ const SCHEMA_RECOMMENDED_PROPERTIES: Record<string, string[]> = {
 
 /**
  * Parse JSON-LD from HTML
+ * Handles both single schemas and @graph format
  */
 function parseJsonLd(html: string): Array<{ type: string; data: Record<string, unknown>; raw: string }> {
   const results: Array<{ type: string; data: Record<string, unknown>; raw: string }> = [];
@@ -51,8 +52,18 @@ function parseJsonLd(html: string): Array<{ type: string; data: Record<string, u
     const content = match[1].trim();
     try {
       const data = JSON.parse(content);
-      const type = data['@type'] || 'Unknown';
-      results.push({ type, data, raw: content });
+
+      // Handle @graph format (array of interconnected schemas)
+      if (data['@graph'] && Array.isArray(data['@graph'])) {
+        for (const item of data['@graph']) {
+          const type = item['@type'] || 'Unknown';
+          results.push({ type, data: item, raw: JSON.stringify(item) });
+        }
+      } else {
+        // Single schema
+        const type = data['@type'] || 'Unknown';
+        results.push({ type, data, raw: content });
+      }
     } catch {
       results.push({ type: 'Invalid', data: {}, raw: content });
     }
@@ -142,16 +153,26 @@ const jsonLdValidRule: SEORule = {
         // Check for @context
         if (!data['@context']) {
           errors.push('Missing @context property');
-        } else if (!data['@context'].includes('schema.org')) {
+        } else if (typeof data['@context'] === 'string' && !data['@context'].includes('schema.org')) {
           errors.push('Invalid @context - should reference schema.org');
         }
 
-        // Check for @type
-        if (!data['@type']) {
-          errors.push('Missing @type property');
+        // Handle @graph format (array of interconnected schemas)
+        if (data['@graph'] && Array.isArray(data['@graph'])) {
+          // For @graph format, check each item has @type
+          for (const item of data['@graph']) {
+            if (!item['@type']) {
+              errors.push('Missing @type property in @graph item');
+            }
+          }
+          validCount += data['@graph'].length;
+        } else {
+          // Single schema - check for @type
+          if (!data['@type']) {
+            errors.push('Missing @type property');
+          }
+          validCount++;
         }
-
-        validCount++;
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : 'Unknown error';
         errors.push(`JSON parse error: ${errorMsg.slice(0, 50)}`);
@@ -162,7 +183,7 @@ const jsonLdValidRule: SEORule = {
       return {
         passed: true,
         severity: 'success',
-        message: `All ${validCount} JSON-LD blocks are valid`,
+        message: `All ${validCount} JSON-LD schema(s) are valid`,
       };
     }
 

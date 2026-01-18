@@ -248,7 +248,7 @@ export default function SEODashboardPage() {
             </div>
             <div className="stat-item fixable">
               <Wand2 size={16} />
-              <span className="stat-value">{seoResult?.issues?.filter(i => i.autoFixable).length ?? 0}</span>
+              <span className="stat-value">{seoResult?.issues?.filter(i => i.isAutoFixable).length ?? 0}</span>
               <span className="stat-label">Auto-fix</span>
             </div>
           </div>
@@ -295,8 +295,8 @@ export default function SEODashboardPage() {
             {seoResult?.issues && seoResult.issues.length > 0 ? (
               seoResult.issues
                 .sort((a, b) => {
-                  const severityOrder = { critical: 0, warning: 1, info: 2 };
-                  return severityOrder[a.severity] - severityOrder[b.severity];
+                  const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2, success: 3 };
+                  return (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99);
                 })
                 .slice(0, 6)
                 .map((issue, i) => (
@@ -304,7 +304,7 @@ export default function SEODashboardPage() {
                     <div className="issue-dot" />
                     <span className="issue-msg">{issue.message}</span>
                     <span className="issue-cat">{categoryNames[issue.category]}</span>
-                    {issue.autoFixable && (
+                    {issue.isAutoFixable && (
                       <span className="issue-fix">
                         <Wand2 size={12} />
                       </span>
