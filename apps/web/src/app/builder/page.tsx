@@ -1447,6 +1447,7 @@ export default function BuilderPage() {
             artifactTitle={builder.projectName || 'Alfred Project'}
             onClose={() => setShowDeployModal(false)}
             onDeployed={handleDeployed}
+            existingDeployedUrl={deployedUrl || undefined}
           />
         )}
 
@@ -1897,6 +1898,7 @@ export default function BuilderPage() {
             artifactTitle={builder.projectName || 'Alfred Project'}
             onClose={() => setShowDeployModal(false)}
             onDeployed={handleDeployed}
+            existingDeployedUrl={deployedUrl || undefined}
           />
         )}
 

@@ -23,6 +23,8 @@ interface BuilderDeploymentCardProps {
   artifactTitle?: string;
   onClose: () => void;
   onDeployed?: (url: string) => void;
+  /** Existing deployed URL - if provided, extracts project name to redeploy to same project */
+  existingDeployedUrl?: string;
 }
 
 type DeploymentPhase = 'idle' | 'deploying' | 'success' | 'error';
@@ -62,6 +64,23 @@ function getCategoryName(key: string): string {
   return names[key] || key;
 }
 
+/**
+ * Extract project name from Vercel URL
+ * e.g., "https://my-project-abc123.vercel.app" -> "my-project-abc123"
+ */
+function extractProjectNameFromUrl(url: string): string | null {
+  if (!url) return null;
+  try {
+    const hostname = url.replace('https://', '').replace('http://', '').split('/')[0];
+    if (hostname.endsWith('.vercel.app')) {
+      return hostname.replace('.vercel.app', '');
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return null;
+}
+
 export function BuilderDeploymentCard({
   files,
   projectName: initialProjectName,
@@ -69,10 +88,18 @@ export function BuilderDeploymentCard({
   artifactTitle,
   onClose,
   onDeployed,
+  existingDeployedUrl,
 }: BuilderDeploymentCardProps) {
-  const [projectName, setProjectName] = useState(() =>
-    initialProjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'alfred-project'
-  );
+  // If we have an existing deployed URL, extract the project name from it
+  const existingProjectName = existingDeployedUrl ? extractProjectNameFromUrl(existingDeployedUrl) : null;
+
+  const [projectName, setProjectName] = useState(() => {
+    // Priority: existing deployed URL > initial project name > default
+    if (existingProjectName) {
+      return existingProjectName;
+    }
+    return initialProjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'alfred-project';
+  });
   const [phase, setPhase] = useState<DeploymentPhase>('idle');
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
@@ -97,8 +124,21 @@ export function BuilderDeploymentCard({
     return () => setMounted(false);
   }, []);
 
-  // Check for previous deployment when artifactId is provided
+  // If we have an existing deployed URL from props, use it directly (no API call needed)
   useEffect(() => {
+    if (existingDeployedUrl && existingProjectName) {
+      setPreviousDeployment({
+        projectName: existingProjectName,
+        deployedUrl: existingDeployedUrl,
+        lastDeployedAt: '', // Not needed when we have the URL
+      });
+    }
+  }, [existingDeployedUrl, existingProjectName]);
+
+  // Check for previous deployment when artifactId is provided (only if no existing URL)
+  useEffect(() => {
+    // Skip API call if we already have the deployed URL from props
+    if (existingDeployedUrl) return;
     if (!artifactId) return;
 
     const checkProject = async () => {
@@ -125,7 +165,7 @@ export function BuilderDeploymentCard({
     };
 
     checkProject();
-  }, [artifactId]);
+  }, [artifactId, existingDeployedUrl]);
 
   const handleDeploy = useCallback(async () => {
     setPhase('deploying');
