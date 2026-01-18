@@ -8,17 +8,15 @@ import path from 'path';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECURITY: Allowed external hosts for redirects
+// SECURITY: Allowed external host patterns for redirects
+// Vercel Blob URLs have random subdomains: xyz123.blob.vercel-storage.com
 // ═══════════════════════════════════════════════════════════════════════════════
-const ALLOWED_EXTERNAL_HOSTS = [
-  'blob.vercel-storage.com',
-  'public.blob.vercel-storage.com',
-];
-
 function isExternalUrlAllowed(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    return ALLOWED_EXTERNAL_HOSTS.includes(url.hostname.toLowerCase());
+    const hostname = url.hostname.toLowerCase();
+    // Allow any subdomain of vercel-storage.com
+    return hostname.endsWith('.vercel-storage.com') || hostname === 'vercel-storage.com';
   } catch {
     return false;
   }

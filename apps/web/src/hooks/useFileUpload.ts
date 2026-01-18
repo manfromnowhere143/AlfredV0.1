@@ -4,7 +4,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useCallback } from 'react';
+import { upload } from '@vercel/blob/client';
 import { FileAttachment, getFileCategory, getFileExtension, MAX_FILE_SIZE } from '@/lib/types';
+
+// Files over 4MB use direct Vercel Blob upload (bypasses API body limit)
+const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -151,35 +155,93 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       setFiles(prev => [...prev, entry]);
 
       // Start upload
-      setFiles(prev => prev.map(f => 
+      setFiles(prev => prev.map(f =>
         f.id === id ? { ...f, status: 'uploading', progress: 30 } : f
       ));
 
       try {
-        // Upload to server
-        const form = new FormData();
-        form.append('file', file);
-        if (conversationId) form.append('conversationId', conversationId);
+        const IS_LARGE_FILE = file.size > LARGE_FILE_THRESHOLD;
+        let uploadResult: { id: string; url: string; base64?: string; width?: number; height?: number } | null = null;
 
-        const res = await fetch('/api/files/upload', { method: 'POST', body: form });
+        if (IS_LARGE_FILE) {
+          // ═══════════════════════════════════════════════════════════════════════
+          // Large files: Direct upload to Vercel Blob (bypasses API body limit)
+          // ═══════════════════════════════════════════════════════════════════════
+          try {
+            // Add timestamp to prevent duplicate filename errors
+            const uniqueName = Date.now() + '-' + file.name;
+            const blob = await upload(uniqueName, file, {
+              access: 'public',
+              handleUploadUrl: '/api/files/token',
+            });
 
-        if (res.ok) {
-          const data = await res.json();
-          setFiles(prev => prev.map(f => 
-            f.id === id ? { 
-              ...f, 
-              id: data.id, // Update with server ID
-              url: data.url,
-              status: 'ready', 
+            console.log('[useFileUpload] Blob success:', blob.url);
+
+            // Update progress
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, progress: 70 } : f
+            ));
+
+            // Register file in database
+            const registerRes = await fetch('/api/files/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: blob.url,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                conversationId,
+              }),
+            });
+
+            console.log('[useFileUpload] Register response:', registerRes.status);
+            if (registerRes.ok) {
+              uploadResult = await registerRes.json();
+              console.log('[useFileUpload] Register success:', uploadResult);
+            } else {
+              console.error('[useFileUpload] Register failed:', await registerRes.text());
+            }
+          } catch (blobErr) {
+            console.error('[useFileUpload] Blob upload failed:', blobErr);
+            // Mark as error for large files that fail
+            setFiles(prev => prev.map(f =>
+              f.id === id ? { ...f, status: 'error', error: 'Upload failed', progress: 0 } : f
+            ));
+            onUploadError?.(entry, 'Upload failed');
+            continue; // Skip to next file
+          }
+        } else {
+          // ═══════════════════════════════════════════════════════════════════════
+          // Small files: Upload through API (faster, includes optimization)
+          // ═══════════════════════════════════════════════════════════════════════
+          const form = new FormData();
+          form.append('file', file);
+          if (conversationId) form.append('conversationId', conversationId);
+
+          const res = await fetch('/api/files/upload', { method: 'POST', body: form });
+
+          if (res.ok) {
+            uploadResult = await res.json();
+          }
+        }
+
+        if (uploadResult) {
+          setFiles(prev => prev.map(f =>
+            f.id === id ? {
+              ...f,
+              id: uploadResult!.id, // Update with server ID
+              url: uploadResult!.url,
+              status: 'ready',
               progress: 100,
-              width: data.width,
-              height: data.height,
+              width: uploadResult!.width,
+              height: uploadResult!.height,
             } : f
           ));
-          
+
           const updatedFile = files.find(f => f.id === id);
-          if (updatedFile) onUploadComplete?.({ ...updatedFile, ...data, status: 'ready' });
-          
+          if (updatedFile) onUploadComplete?.({ ...updatedFile, ...uploadResult, status: 'ready' });
+
         } else {
           // Fallback to base64 (skip for videos - too large)
           if (category === 'video') {
@@ -194,13 +256,15 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
             ));
           }
         }
-      } catch {
+      } catch (err) {
+        console.error('[useFileUpload] Upload error:', err);
         // Fallback to base64 (skip for videos - too large and not needed for AI)
         if (category === 'video') {
-          // Videos uploaded successfully are usable by URL reference
+          // Mark video as error since we can't use it without URL
           setFiles(prev => prev.map(f =>
-            f.id === id ? { ...f, status: 'ready', progress: 100 } : f
+            f.id === id ? { ...f, status: 'error', error: 'Video upload failed', progress: 0 } : f
           ));
+          onUploadError?.(entry, 'Video upload failed');
         } else {
           try {
             const base64 = await toBase64(file);

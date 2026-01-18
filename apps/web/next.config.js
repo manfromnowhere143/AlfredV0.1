@@ -85,7 +85,7 @@ const nextConfig = {
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com data:",
               // Connect: API calls, WebSocket, Sentry, and CDNs for ESBuild WASM
-              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://*.vercel-storage.com wss://*.vercel.app https://*.sentry.io https://*.ingest.sentry.io https://unpkg.com https://cdn.jsdelivr.net https://esm.sh",
+              "connect-src 'self' https://*.anthropic.com https://*.openai.com https://api.elevenlabs.io https://*.supabase.com https://vercel.com https://*.vercel-storage.com wss://*.vercel.app https://*.sentry.io https://*.ingest.sentry.io https://unpkg.com https://cdn.jsdelivr.net https://esm.sh",
               // Media: self + blob + Vercel Blob storage
               "media-src 'self' blob: https://*.vercel-storage.com https://*.blob.vercel-storage.com",
               // Frame: allow iframes for preview

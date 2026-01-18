@@ -945,39 +945,62 @@ export default function ChatInput({
             } : a)
           );
         } else {
-          // Fallback to base64
-          const base64 = await fileToBase64(file);
-          setAttachments(prev =>
-            prev.map(a => a.id === id ? {
-              ...a,
-              base64,
-              status: 'ready',
-              progress: 100,
-            } : a)
-          );
+          // Videos can't use base64 fallback (too large) - mark as error
+          if (type === 'video') {
+            console.error('[Upload] Video upload failed - no fallback available');
+            setAttachments(prev =>
+              prev.map(a => a.id === id ? {
+                ...a,
+                status: 'error',
+                error: 'Video upload failed',
+              } : a)
+            );
+          } else {
+            // Fallback to base64 for images/docs
+            const base64 = await fileToBase64(file);
+            setAttachments(prev =>
+              prev.map(a => a.id === id ? {
+                ...a,
+                base64,
+                status: 'ready',
+                progress: 100,
+              } : a)
+            );
+          }
         }
       } catch (error) {
         console.error('Upload failed:', error);
-        
-        // Try base64 fallback
-        try {
-          const base64 = await fileToBase64(file);
-          setAttachments(prev =>
-            prev.map(a => a.id === id ? {
-              ...a,
-              base64,
-              status: 'ready',
-              progress: 100,
-            } : a)
-          );
-        } catch {
+
+        // Videos can't use base64 fallback - mark as error
+        if (type === 'video') {
           setAttachments(prev =>
             prev.map(a => a.id === id ? {
               ...a,
               status: 'error',
-              error: 'Upload failed',
+              error: 'Video upload failed',
             } : a)
           );
+        } else {
+          // Try base64 fallback for images/docs
+          try {
+            const base64 = await fileToBase64(file);
+            setAttachments(prev =>
+              prev.map(a => a.id === id ? {
+                ...a,
+                base64,
+                status: 'ready',
+                progress: 100,
+              } : a)
+            );
+          } catch {
+            setAttachments(prev =>
+              prev.map(a => a.id === id ? {
+                ...a,
+                status: 'error',
+                error: 'Upload failed',
+              } : a)
+            );
+          }
         }
       }
     }
