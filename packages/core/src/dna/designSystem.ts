@@ -487,12 +487,308 @@ export const COLORS = {
       },
     },
   } as const;
-  
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // INTERACTION STATES - Apple-Level Micro-Interactions
+  // Every element must respond instantly and delightfully
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const INTERACTION_STATES = {
+    hover: {
+      transform: 'scale(1.02) translateY(-1px)',
+      opacity: 0.95,
+      transition: 'all 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+      cursor: 'pointer',
+    },
+    active: {
+      transform: 'scale(0.97)',
+      opacity: 0.85,
+      transition: 'all 50ms cubic-bezier(0.16, 1, 0.3, 1)',
+    },
+    disabled: {
+      opacity: 0.4,
+      cursor: 'not-allowed',
+      pointerEvents: 'none',
+      filter: 'grayscale(20%)',
+    },
+    loading: {
+      opacity: 0.7,
+      cursor: 'wait',
+      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+    },
+    focus: {
+      outline: 'none',
+      ring: '2px',
+      ringColor: 'rgba(59, 130, 246, 0.5)',
+      ringOffset: '2px',
+    },
+    error: {
+      borderColor: 'rgba(239, 68, 68, 0.5)',
+      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    },
+    success: {
+      borderColor: 'rgba(34, 197, 94, 0.5)',
+      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+    },
+    tailwind: {
+      hover: 'hover:scale-[1.02] hover:opacity-95 hover:-translate-y-0.5 transition-all duration-150 ease-out cursor-pointer',
+      active: 'active:scale-[0.97] active:opacity-85 transition-all duration-50',
+      disabled: 'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+      loading: 'opacity-70 cursor-wait animate-pulse',
+      focus: 'focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2',
+      focusVisible: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2',
+      error: 'border-red-500/50 bg-red-500/5',
+      success: 'border-green-500/50 bg-green-500/5',
+      interactive: 'hover:scale-[1.02] hover:opacity-95 hover:-translate-y-0.5 active:scale-[0.97] active:opacity-85 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 transition-all duration-150 ease-out cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+      button: 'inline-flex items-center justify-center font-medium hover:scale-[1.02] active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-offset-2 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed',
+      card: 'hover:shadow-lg hover:-translate-y-1 hover:border-white/20 active:translate-y-0 transition-all duration-200 ease-out',
+      link: 'hover:opacity-80 underline-offset-4 hover:underline transition-all duration-150',
+    },
+  } as const;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RESPONSIVE SYSTEM - Mobile-First, Fluid, Perfect on Every Device
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const RESPONSIVE = {
+    breakpoints: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+    },
+    containers: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1400px',
+      full: '100%',
+      prose: '65ch',
+    },
+    fluidTypography: {
+      hero: 'clamp(2.5rem, 8vw, 6rem)',
+      display: 'clamp(2rem, 6vw, 4.5rem)',
+      title: 'clamp(1.75rem, 4vw, 3rem)',
+      heading: 'clamp(1.5rem, 3vw, 2.25rem)',
+      subheading: 'clamp(1.25rem, 2vw, 1.5rem)',
+      body: 'clamp(1rem, 1.5vw, 1.125rem)',
+      small: 'clamp(0.875rem, 1vw, 1rem)',
+      tiny: 'clamp(0.75rem, 0.8vw, 0.875rem)',
+    },
+    fluidSpacing: {
+      section: 'clamp(3rem, 10vw, 8rem)',
+      block: 'clamp(2rem, 6vw, 4rem)',
+      element: 'clamp(1rem, 3vw, 2rem)',
+      inline: 'clamp(0.5rem, 1.5vw, 1rem)',
+    },
+    patterns: {
+      mobile: {
+        layout: 'flex-col',
+        padding: 'px-4 py-6',
+        touchTarget: 'min-h-[44px] min-w-[44px]',
+        fontSize: '16px',
+        gap: 'gap-4',
+      },
+      tablet: {
+        layout: 'md:flex-row md:flex-wrap',
+        padding: 'md:px-6 md:py-8',
+        columns: 'md:grid-cols-2',
+        gap: 'md:gap-6',
+      },
+      desktop: {
+        layout: 'lg:flex-row',
+        padding: 'lg:px-8 lg:py-12',
+        columns: 'lg:grid-cols-3 xl:grid-cols-4',
+        gap: 'lg:gap-8',
+        maxWidth: 'max-w-7xl mx-auto',
+      },
+    },
+    components: {
+      hero: {
+        mobile: 'py-12 px-4 text-center',
+        tablet: 'md:py-20 md:px-8',
+        desktop: 'lg:py-32 lg:px-12 lg:text-left',
+      },
+      nav: {
+        mobile: 'fixed bottom-0 inset-x-0 h-16 border-t bg-black/80 backdrop-blur-lg',
+        desktop: 'lg:static lg:h-auto lg:border-0 lg:bg-transparent',
+      },
+      cardGrid: {
+        base: 'grid gap-4',
+        mobile: 'grid-cols-1',
+        tablet: 'md:grid-cols-2 md:gap-6',
+        desktop: 'lg:grid-cols-3 lg:gap-8',
+      },
+    },
+  } as const;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ACCESSIBILITY - WCAG 2.1 AAA Compliance
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const ACCESSIBILITY = {
+    contrast: {
+      dark: {
+        '#ffffff': { ratio: '21:1', level: 'AAA', use: 'Headings, body text' },
+        '#e5e5e5': { ratio: '17.5:1', level: 'AAA', use: 'Body text' },
+        '#a3a3a3': { ratio: '9.5:1', level: 'AAA', use: 'Secondary text' },
+        '#737373': { ratio: '5.5:1', level: 'AA', use: 'Tertiary, large only' },
+        '#525252': { ratio: '3.7:1', level: 'AA-large', use: 'Large text, icons' },
+        '#404040': { ratio: '2.6:1', level: 'FAIL', use: 'Decorative only' },
+      },
+      light: {
+        '#0a0a0a': { ratio: '21:1', level: 'AAA', use: 'Headings, body text' },
+        '#171717': { ratio: '19:1', level: 'AAA', use: 'Body text' },
+        '#525252': { ratio: '7:1', level: 'AAA', use: 'Secondary text' },
+        '#737373': { ratio: '4.5:1', level: 'AA', use: 'Tertiary text' },
+      },
+    },
+    focus: {
+      ring: 'ring-2 ring-offset-2 ring-blue-500 outline-none',
+      ringDark: 'ring-2 ring-offset-2 ring-offset-black ring-blue-400 outline-none',
+      skipLink: 'sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded',
+    },
+    keyboard: {
+      tab: 'All interactive elements reachable via Tab',
+      enter: 'Buttons/links activate on Enter',
+      space: 'Buttons activate on Space, checkboxes toggle',
+      escape: 'Modals/dropdowns close on Escape',
+      arrows: 'Navigate within menus, tabs, sliders',
+    },
+    aria: {
+      labels: 'All form inputs need aria-label or label',
+      buttons: 'Icon-only buttons need aria-label',
+      live: 'Dynamic content needs aria-live regions',
+      expanded: 'Expandable elements need aria-expanded',
+    },
+    motion: {
+      reduce: '@media (prefers-reduced-motion: reduce)',
+      respectPreference: 'motion-reduce:transition-none motion-reduce:animate-none',
+    },
+    screenReader: {
+      only: 'sr-only',
+      notOnly: 'not-sr-only',
+      focusable: 'sr-only focus:not-sr-only',
+    },
+  } as const;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LAYOUT SYSTEM - Perfect Grid & Composition
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const LAYOUT = {
+    grid: {
+      base: 8,
+      columns: {
+        1: 'grid-cols-1',
+        2: 'grid-cols-2',
+        3: 'grid-cols-3',
+        4: 'grid-cols-4',
+        6: 'grid-cols-6',
+        12: 'grid-cols-12',
+        auto: 'grid-cols-[repeat(auto-fit,minmax(280px,1fr))]',
+      },
+      gap: {
+        0: 'gap-0', 1: 'gap-1', 2: 'gap-2', 3: 'gap-3', 4: 'gap-4',
+        6: 'gap-6', 8: 'gap-8', 12: 'gap-12', 16: 'gap-16',
+      },
+    },
+    spacing: {
+      0: '0', px: '1px', 0.5: '2px', 1: '4px', 2: '8px', 3: '12px',
+      4: '16px', 5: '20px', 6: '24px', 8: '32px', 10: '40px',
+      12: '48px', 16: '64px', 20: '80px', 24: '96px',
+    },
+    patterns: {
+      container: 'mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl',
+      containerNarrow: 'mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl',
+      containerWide: 'mx-auto px-8 max-w-[1600px]',
+      flexCenter: 'flex items-center justify-center',
+      flexBetween: 'flex items-center justify-between',
+      flexCol: 'flex flex-col',
+      flexColCenter: 'flex flex-col items-center justify-center',
+      stack: 'flex flex-col gap-4',
+      stackTight: 'flex flex-col gap-2',
+      stackLoose: 'flex flex-col gap-8',
+      row: 'flex items-center gap-4',
+      rowTight: 'flex items-center gap-2',
+      rowLoose: 'flex items-center gap-8',
+      absoluteFill: 'absolute inset-0',
+      absoluteCenter: 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
+    },
+    sections: {
+      hero: 'py-16 sm:py-24 lg:py-32',
+      section: 'py-12 sm:py-16 lg:py-24',
+      sectionSm: 'py-8 sm:py-12 lg:py-16',
+      sectionLg: 'py-20 sm:py-28 lg:py-40',
+    },
+    zIndex: {
+      hide: -1, base: 0, raised: 1, dropdown: 10, sticky: 20,
+      overlay: 30, modal: 40, popover: 50, tooltip: 60, toast: 70, max: 9999,
+    },
+  } as const;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // MOTION SYSTEM - Smooth, Purposeful Animation
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  export const MOTION = {
+    easing: {
+      linear: 'linear',
+      ease: 'ease',
+      easeIn: 'ease-in',
+      easeOut: 'ease-out',
+      easeInOut: 'ease-in-out',
+      spring: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      springBouncy: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      springStiff: 'cubic-bezier(0.25, 0.8, 0.25, 1)',
+      smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      enterFast: 'cubic-bezier(0, 0, 0.2, 1)',
+      exitFast: 'cubic-bezier(0.4, 0, 1, 1)',
+    },
+    duration: {
+      instant: '0ms', fastest: '50ms', faster: '100ms', fast: '150ms',
+      normal: '200ms', slow: '300ms', slower: '400ms', slowest: '500ms',
+      hover: '150ms', active: '50ms', enter: '200ms', exit: '150ms',
+    },
+    stagger: {
+      fast: '30ms', normal: '50ms', slow: '80ms', verySlow: '120ms',
+    },
+    presets: {
+      fadeIn: 'animate-in fade-in-0 duration-200',
+      fadeOut: 'animate-out fade-out-0 duration-150',
+      slideInFromTop: 'animate-in slide-in-from-top-4 fade-in-0 duration-300',
+      slideInFromBottom: 'animate-in slide-in-from-bottom-4 fade-in-0 duration-300',
+      scaleIn: 'animate-in zoom-in-95 fade-in-0 duration-200',
+      scaleOut: 'animate-out zoom-out-95 fade-out-0 duration-150',
+      popIn: 'animate-in zoom-in-90 fade-in-0 duration-200 ease-out',
+    },
+    micro: {
+      buttonPress: 'active:scale-[0.97] transition-transform duration-50',
+      cardHover: 'hover:-translate-y-1 hover:shadow-xl transition-all duration-300',
+      iconSpin: 'hover:rotate-12 transition-transform duration-200',
+      glow: 'hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-shadow duration-300',
+      pulse: 'animate-pulse',
+      bounce: 'animate-bounce',
+    },
+    reducedMotion: {
+      mediaQuery: '@media (prefers-reduced-motion: reduce)',
+      class: 'motion-reduce:transition-none motion-reduce:animate-none',
+    },
+    keyframes: {
+      shake: '@keyframes shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); } 20%, 40%, 60%, 80% { transform: translateX(4px); } }',
+      shimmer: '@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }',
+      slideUp: '@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }',
+      spin: '@keyframes spin { to { transform: rotate(360deg); } }',
+    },
+  } as const;
+
   // ═══════════════════════════════════════════════════════════════════════════════
   // ANTI-PATTERNS
   // What Alfred must NEVER do
   // ═══════════════════════════════════════════════════════════════════════════════
-  
+
   export const ANTI_PATTERNS = {
     /**
      * Colors Alfred must never use
@@ -555,50 +851,63 @@ export const COLORS = {
   // ═══════════════════════════════════════════════════════════════════════════════
   
   export function compileDesignSystem(): string {
-    return `## Design System
-  
-  ### Color Rules
-  
-  **Background**: Pure black (#000000) or near-black (#0a0a0a)
-  **Text**: White → #888888 → #666666 → #333333 (strict hierarchy)
-  **Semantic only**: Green=positive, Red=negative, Orange=warning
-  **Accent**: Gold (#C9B99A) used sparingly for emphasis
-  
-  ### Typography Rules
-  
-  **Fonts**: Inter for UI, JetBrains Mono for data/numbers
-  **Weights**: Light (300) for display, Heavy (700-900) for labels
-  **Labels**: ALWAYS uppercase, letter-spacing 0.1em, 8-11px
-  **Data**: Monospace font, aligned grids
-  
-  ### Component Rules
-  
-  **Cards**: Dark surface, subtle border, hover elevation
-  **Buttons**: Transparent + white border → invert on hover
-  **Badges**: Uppercase, tight, semantic colors only
-  **Borders**: 3px left-border for status indication
-  
-  ### Spacing Rules
-  
-  **Base unit**: 4px
-  **Cards**: Generous padding (14-24px)
-  **Grids**: Consistent gaps (10-16px)
-  **Elements must breathe**: When in doubt, add space
-  
-  ### Animation Rules
-  
-  **Easing**: cubic-bezier(0.4, 0, 0.2, 1) for smooth, spring for interactive
-  **Duration**: 150-200ms for micro-interactions
-  **Hover**: translateY(-2px) + subtle shadow increase
-  **Never**: Bouncy, slow, or gratuitous animation
-  
-  ### What Alfred NEVER Does
-  
-  - Uses random grays or bright colors
-  - Cramped spacing
-  - Lowercase labels
-  - Default browser styles
-  - Decoration without purpose`;
+    return `## Design System — Apple/Linear/Stripe Quality Standards
+
+### Color Rules
+- Background: Pure black (#000000) or near-black (#0a0a0a)
+- Text hierarchy: White → #888888 → #666666 → #333333
+- Semantic only: Green=positive, Red=negative, Orange=warning
+- Accent: Gold (#C9B99A) sparingly for emphasis
+
+### Typography Rules
+- Fonts: Inter for UI, JetBrains Mono for data/numbers
+- Fluid sizing: clamp() for responsive scaling
+- Labels: ALWAYS uppercase, letter-spacing 0.1em, 8-11px
+- Line height: 1.5-1.7 for body text
+
+### Interaction States (MANDATORY)
+- Hover: scale(1.02), translateY(-1px), opacity 0.95, 150ms transition
+- Active: scale(0.97), opacity 0.85, 50ms transition
+- Focus: ring-2 ring-blue-500/50 ring-offset-2 outline-none
+- Disabled: opacity 0.4, cursor not-allowed, pointer-events none
+- Loading: opacity 0.7, animate-pulse
+- Error: border-red-500/50, bg-red-500/5
+- Success: border-green-500/50, bg-green-500/5
+
+### Responsive Design (Mobile-First)
+- Breakpoints: sm(640px), md(768px), lg(1024px), xl(1280px)
+- Touch targets: min 44px × 44px (Apple HIG)
+- Fluid typography: clamp(min, preferred, max)
+- Container: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
+
+### Accessibility (WCAG AAA)
+- Contrast: 4.5:1 minimum for text, 3:1 for large text
+- Focus visible: Always show keyboard focus rings
+- ARIA: Labels on all inputs, aria-label on icon buttons
+- Motion: Respect prefers-reduced-motion
+
+### Animation Rules
+- Easing: cubic-bezier(0.16, 1, 0.3, 1) for spring, (0.4, 0, 0.2, 1) for smooth
+- Duration: 50ms active, 150ms hover, 200ms enter, 150ms exit
+- Stagger: 50ms between list items
+- ALWAYS use motion-reduce:animate-none
+
+### Layout Patterns
+- Container: mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl
+- Stack: flex flex-col gap-4
+- Row: flex items-center gap-4
+- Grid: grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3
+
+### Z-Index Scale
+- dropdown: 10, sticky: 20, overlay: 30, modal: 40, tooltip: 60, toast: 70
+
+### What Alfred NEVER Does
+- Missing hover/active/focus states
+- Inaccessible color contrast
+- Fixed pixel widths without responsive
+- Animations that ignore reduced-motion
+- Missing ARIA labels
+- Cramped spacing or decoration without purpose`;
   }
   
   export type DesignSystem = {
@@ -610,4 +919,9 @@ export const COLORS = {
     animations: typeof ANIMATIONS;
     components: typeof COMPONENTS;
     antiPatterns: typeof ANTI_PATTERNS;
+    interactionStates: typeof INTERACTION_STATES;
+    responsive: typeof RESPONSIVE;
+    accessibility: typeof ACCESSIBILITY;
+    layout: typeof LAYOUT;
+    motion: typeof MOTION;
   };

@@ -120,6 +120,11 @@ export {
     ANIMATIONS,
     COMPONENTS,
     ANTI_PATTERNS,
+    INTERACTION_STATES,
+    RESPONSIVE,
+    ACCESSIBILITY,
+    LAYOUT,
+    MOTION,
     compileDesignSystem,
     type DesignSystem,
   } from './designSystem';
