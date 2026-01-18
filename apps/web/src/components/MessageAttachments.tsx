@@ -118,7 +118,7 @@ function Lightbox({ attachment, onClose, onPrev, onNext, hasPrev, hasNext }: {
         <div className="lightbox-media">
           {!isLoaded && !isVideo && <div className="lightbox-loader"><div className="lightbox-spinner" /></div>}
           {isVideo ? (
-            <video src={mediaUrl} controls autoPlay playsInline onLoadedData={() => setIsLoaded(true)} className={'lightbox-video ' + (isLoaded ? 'loaded' : '')} />
+            <video src={mediaUrl} controls autoPlay playsInline preload="auto" onLoadedData={() => setIsLoaded(true)} className={'lightbox-video ' + (isLoaded ? 'loaded' : '')} />
           ) : (
             <img src={mediaUrl} alt={attachment.name} onLoad={() => setIsLoaded(true)} className={'lightbox-image ' + (isLoaded ? 'loaded' : '')} draggable={false} />
           )}
@@ -223,7 +223,7 @@ function AttachmentThumbnail({ attachment, onClick, index }: { attachment: Attac
         ) : isVideo ? (
           <>
             <div className="thumb-video-bg" />
-            <video src={mediaUrl} onLoadedData={() => setIsLoaded(true)} onError={() => setHasError(true)} muted playsInline className={'thumb-video ' + (isLoaded ? 'loaded' : '')} />
+            <video src={mediaUrl} onLoadedData={() => setIsLoaded(true)} onError={() => setHasError(true)} muted playsInline preload="metadata" className={'thumb-video ' + (isLoaded ? 'loaded' : '')} />
             <div className="thumb-play"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg></div>
             {attachment.duration && <span className="thumb-duration">{formatDuration(attachment.duration)}</span>}
           </>

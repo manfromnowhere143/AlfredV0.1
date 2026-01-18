@@ -149,6 +149,11 @@ function StreamingSteps({ steps, isActive }: { steps: StreamingStep[]; isActive:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function ChatMessage({ message, streamingSteps }: { message: ChatMessage; streamingSteps?: StreamingStep[] }) {
+  // Debug: Log files being passed
+  if (message.files && message.files.length > 0) {
+    console.log('[ChatMessage] Rendering with files:', message.files.map(f => ({ id: f.id, name: f.name, category: f.category, url: f.url, preview: !!f.preview })));
+  }
+
   return (
     <div className={`chat-message ${message.role}`}>
       <div className="message-avatar">
@@ -169,6 +174,7 @@ function ChatMessage({ message, streamingSteps }: { message: ChatMessage; stream
               size: file.size,
               url: file.url,
               preview: file.preview,
+              duration: file.duration,
             }))}
             isUser={message.role === 'user'}
           />
@@ -1128,6 +1134,7 @@ export default function BuilderPage() {
     // Get ready files from upload hook and clear them
     const readyFiles = fileUpload.getReadyFiles();
     const currentFiles = [...readyFiles];
+    console.log('[Builder] Ready files for message:', currentFiles.map(f => ({ id: f.id, name: f.name, category: f.category, status: f.status, url: f.url, preview: !!f.preview })));
     fileUpload.clearFiles();
 
     const userMessage: ChatMessage = {
@@ -1137,6 +1144,7 @@ export default function BuilderPage() {
       timestamp: new Date(),
       files: currentFiles.length > 0 ? currentFiles : undefined,
     };
+    console.log('[Builder] User message files:', userMessage.files?.length || 0);
     const streamingMessage: ChatMessage = { id: `a-${Date.now()}`, role: 'alfred', content: '', timestamp: new Date(), isStreaming: true };
     setMessages(prev => [...prev, userMessage, streamingMessage]);
     setIsStreaming(true);

@@ -24,6 +24,7 @@ import type { VirtualFile, VirtualDirectory, PreviewResult } from '@alfred/core'
 import type { ModificationPlan } from '@/lib/alfred-code/modify-project';
 import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
 import { ModificationPreview, ForensicInvestigation, ModificationProgress } from '@/components/alfred-code';
+import MessageAttachments from '@/components/MessageAttachments';
 import type { FileAttachment } from '@/lib/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,6 +66,15 @@ interface MobileBuilderLayoutProps {
     content: string;
     timestamp: Date;
     isStreaming?: boolean;
+    files?: Array<{
+      id: string;
+      name: string;
+      category: string;
+      size: number;
+      url?: string;
+      preview?: string;
+      duration?: number;
+    }>;
   }>;
   // Theme System
   themes?: Theme[];
@@ -2587,6 +2597,21 @@ function MobileChat({
                     <span className="message-sender">{msg.role === 'user' ? 'You' : 'Alfred'}</span>
                     <span className="message-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
+                  {/* Show file attachments */}
+                  {msg.files && msg.files.length > 0 && (
+                    <MessageAttachments
+                      attachments={msg.files.map(file => ({
+                        id: file.id,
+                        type: file.category as 'image' | 'video' | 'document' | 'code',
+                        name: file.name,
+                        size: file.size,
+                        url: file.url,
+                        preview: file.preview,
+                        duration: file.duration,
+                      }))}
+                      isUser={msg.role === 'user'}
+                    />
+                  )}
                   {msg.isStreaming ? (
                     <div className="streaming-indicator">
                       {streamingSteps.map((step) => (
