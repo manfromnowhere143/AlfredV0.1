@@ -44,8 +44,8 @@ const SCHEMA_RECOMMENDED_PROPERTIES: Record<string, string[]> = {
  * Parse JSON-LD from HTML
  * Handles both single schemas and @graph format
  */
-function parseJsonLd(html: string): Array<{ type: string; data: Record<string, unknown>; raw: string }> {
-  const results: Array<{ type: string; data: Record<string, unknown>; raw: string }> = [];
+function parseJsonLd(html: string): Array<{ type: string; data: Record<string, unknown>; raw: string; isFromGraph: boolean }> {
+  const results: Array<{ type: string; data: Record<string, unknown>; raw: string; isFromGraph: boolean }> = [];
   const matches = html.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
 
   for (const match of matches) {
@@ -57,15 +57,16 @@ function parseJsonLd(html: string): Array<{ type: string; data: Record<string, u
       if (data['@graph'] && Array.isArray(data['@graph'])) {
         for (const item of data['@graph']) {
           const type = item['@type'] || 'Unknown';
-          results.push({ type, data: item, raw: JSON.stringify(item) });
+          // Mark as from @graph - these don't need individual @context
+          results.push({ type, data: item, raw: JSON.stringify(item), isFromGraph: true });
         }
       } else {
         // Single schema
         const type = data['@type'] || 'Unknown';
-        results.push({ type, data, raw: content });
+        results.push({ type, data, raw: content, isFromGraph: false });
       }
     } catch {
-      results.push({ type: 'Invalid', data: {}, raw: content });
+      results.push({ type: 'Invalid', data: {}, raw: content, isFromGraph: false });
     }
   }
 
@@ -406,7 +407,7 @@ const schemaNoWarningsRule: SEORule = {
     const warnings: string[] = [];
 
     for (const schema of schemas) {
-      const { type, data } = schema;
+      const { type, data, isFromGraph } = schema;
 
       // Check for empty string values
       for (const [key, value] of Object.entries(data)) {
@@ -433,8 +434,9 @@ const schemaNoWarningsRule: SEORule = {
         warnings.push(`${type}.image appears to be a placeholder`);
       }
 
-      // Check for missing @context
-      if (!data['@context']) {
+      // Check for missing @context (only for standalone schemas, not @graph items)
+      // In @graph format, @context is at the root level, not on each item
+      if (!isFromGraph && !data['@context']) {
         warnings.push(`${type} missing @context`);
       }
 
