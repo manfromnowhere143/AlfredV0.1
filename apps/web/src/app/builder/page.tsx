@@ -14,7 +14,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import nextDynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
@@ -24,6 +24,7 @@ import { useFileUpload } from '@/hooks/useFileUpload';
 import { FileExplorer, BuilderPreview, StreamingCodeDisplay, ProjectsSidebar } from '@/components/builder';
 import LimitReached from '@/components/LimitReached';
 import { BuilderDeploymentCard } from '@/components/BuilderDeploymentCard';
+import { SEOPreDeployModal } from '@/components/seo/SEOPreDeployModal';
 import MessageAttachments from '@/components/MessageAttachments';
 import { ModificationPreview, ForensicInvestigation, SaveBar, ExportToClaudeCode, createForensicReport, WelcomePanel, ModificationProgress, ProgressSteps, createProgressStep, markStepDone } from '@/components/alfred-code';
 import type { ForensicReport, ProgressStep } from '@/components/alfred-code';
@@ -278,6 +279,10 @@ export default function BuilderPage() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
+  // SEO modal state (mobile)
+  const [showSEOModal, setShowSEOModal] = useState(false);
+  const [seoScore, setSeoScore] = useState<number | null>(null);
+
   // Theme System - State of the Art
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('light');
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -398,6 +403,14 @@ export default function BuilderPage() {
     projectName: 'New Project',
     onStreamEvent: handleStreamEvent,
   });
+
+  // Memoize files for SEO modal to prevent infinite re-renders
+  // Only recalculate when file paths/content actually changes
+  const seoModalFiles = useMemo(() => {
+    const syncedFiles = builder.syncFiles?.() || builder.files;
+    return syncedFiles.map(f => ({ path: f.path, content: f.content }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [builder.files.length, builder.files.map(f => `${f.path}:${f.content.length}`).join(',')]);
 
   // DEBUG: Log state changes
   useEffect(() => {
@@ -1438,7 +1451,29 @@ export default function BuilderPage() {
           isUploading={fileUpload.isUploading}
           onAddFiles={fileUpload.addFiles}
           onRemoveFile={fileUpload.removeFile}
+          // SEO
+          onOpenSEO={() => setShowSEOModal(true)}
+          seoScore={seoScore}
         />
+
+        {/* SEO Modal for Mobile */}
+        {showSEOModal && (
+          <SEOPreDeployModal
+            isOpen={showSEOModal}
+            onClose={() => setShowSEOModal(false)}
+            onDeploy={(files) => {
+              // Store the files to deploy and update score, then close and deploy
+              const seoFiles = files;
+              setShowSEOModal(false);
+              // Trigger deploy with SEO-enhanced files
+              setFilesToDeploy(seoFiles);
+              setShowDeployModal(true);
+            }}
+            files={seoModalFiles}
+            projectName={builder.projectName || 'Alfred Project'}
+            deployUrl={deployedUrl || undefined}
+          />
+        )}
 
         {/* Deploy Modal for Mobile */}
         {showDeployModal && (

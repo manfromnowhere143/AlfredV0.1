@@ -95,6 +95,9 @@ interface MobileBuilderLayoutProps {
   // Load project
   onLoadProject?: (projectId: string) => void;
   loadingProjectId?: string | null;
+  // SEO
+  onOpenSEO?: () => void;
+  seoScore?: number | null;
   // Alfred Code - Modification Mode
   modificationPlan?: ModificationPlan | null;
   forensicReport?: ForensicReport | null;
@@ -329,6 +332,14 @@ const Icons = {
       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
       <polyline points="17 8 12 3 7 8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
       <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  seo: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M3 3v18h18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M7 16l4-4 4 4 5-6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="20" cy="10" r="2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M20 8V5M20 5h-3M20 5l-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.6"/>
     </svg>
   ),
   projects: (
@@ -2263,6 +2274,9 @@ function MobileChat({
   themes,
   currentTheme,
   onThemeChange,
+  // SEO
+  onOpenSEO,
+  seoScore,
   // Modification Mode
   modificationPlan,
   forensicReport,
@@ -2294,6 +2308,9 @@ function MobileChat({
   themes?: Theme[];
   currentTheme?: Theme;
   onThemeChange?: (theme: Theme) => void;
+  // SEO
+  onOpenSEO?: () => void;
+  seoScore?: number | null;
   // Modification Mode
   modificationPlan?: ModificationPlan | null;
   forensicReport?: ForensicReport | null;
@@ -2486,6 +2503,19 @@ function MobileChat({
                 <button className="action-item primary" onClick={() => { onDeploy(); setShowActions(false); }} disabled={isDeploying || !hasFiles}>
                   {isDeploying ? <div className="mini-spinner" /> : Icons.deploy}
                   <span>Deploy</span>
+                </button>
+              )}
+              {onOpenSEO && hasFiles && (
+                <button className="action-item seo" onClick={() => { onOpenSEO(); setShowActions(false); }}>
+                  <div className="seo-icon-wrapper">
+                    {Icons.seo}
+                    {seoScore !== null && seoScore !== undefined && (
+                      <span className={`seo-score-badge ${seoScore >= 90 ? 'excellent' : seoScore >= 75 ? 'good' : seoScore >= 60 ? 'fair' : 'poor'}`}>
+                        {seoScore}
+                      </span>
+                    )}
+                  </div>
+                  <span>SEO</span>
                 </button>
               )}
               {onExport && hasFiles && (
@@ -2698,7 +2728,7 @@ function MobileChat({
                   report={forensicReport}
                   onApply={onApplyModification}
                   onCancel={onCancelModification}
-                  isApplying={isApplyingModification}
+                  isApplying={isApplyingModification ?? false}
                 />
               </div>
             )}
@@ -2801,7 +2831,7 @@ function MobileChat({
                       onClick={() => onRemoveFile?.(file.id)}
                       aria-label="Remove file"
                     >
-                      {Icons.x}
+                      {Icons.close}
                     </button>
                   </div>
                 ))}
@@ -2965,6 +2995,34 @@ function MobileChat({
           border-color: rgba(139, 92, 246, 0.3);
           color: #a78bfa;
         }
+        .action-item.seo {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.1));
+          border-color: rgba(34, 197, 94, 0.25);
+          color: #4ade80;
+        }
+        .seo-icon-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .seo-score-badge {
+          position: absolute;
+          top: -8px;
+          right: -12px;
+          font-size: 9px;
+          font-weight: 700;
+          padding: 2px 5px;
+          border-radius: 6px;
+          background: #22c55e;
+          color: #000;
+          font-family: 'SF Mono', Monaco, monospace;
+          line-height: 1;
+        }
+        .seo-score-badge.excellent { background: #22c55e; }
+        .seo-score-badge.good { background: #84cc16; }
+        .seo-score-badge.fair { background: #f59e0b; }
+        .seo-score-badge.poor { background: #ef4444; color: #fff; }
         .mini-spinner {
           width: 18px; height: 18px;
           border: 2px solid var(--border, rgba(255,255,255,0.2));
@@ -3700,6 +3758,9 @@ export default function MobileBuilderLayout({
   deployedUrl,
   onExport,
   onLoadProject,
+  // SEO
+  onOpenSEO,
+  seoScore,
   // Modification Mode
   modificationPlan,
   forensicReport,
@@ -3830,6 +3891,9 @@ export default function MobileBuilderLayout({
             themes={themes}
             currentTheme={currentTheme}
             onThemeChange={onThemeChange}
+            // SEO
+            onOpenSEO={onOpenSEO}
+            seoScore={seoScore}
             // Modification Mode
             modificationPlan={modificationPlan}
             forensicReport={forensicReport}

@@ -7,7 +7,7 @@
  * Uses styled-jsx to match the rest of the app.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   analyzeSEO,
@@ -56,6 +56,14 @@ export function SEOPreDeployModal({
   const [isClosing, setIsClosing] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Track previous files signature to prevent unnecessary resets
+  const prevFilesSignatureRef = useRef<string>('');
+
+  // Create a stable signature for files to detect actual changes
+  const getFilesSignature = useCallback((fileList: typeof files) => {
+    return fileList.map(f => `${f.path}:${f.content.length}`).sort().join('|');
+  }, []);
+
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
@@ -68,12 +76,16 @@ export function SEOPreDeployModal({
     }
   }, [isOpen]);
 
-  // Reset when files change
+  // Reset only when files actually change (by content, not reference)
   useEffect(() => {
-    setModifiedFiles(files);
-    setResult(null);
-    setAppliedFixes(new Set());
-  }, [files]);
+    const newSignature = getFilesSignature(files);
+    if (prevFilesSignatureRef.current !== newSignature) {
+      prevFilesSignatureRef.current = newSignature;
+      setModifiedFiles(files);
+      setResult(null);
+      setAppliedFixes(new Set());
+    }
+  }, [files, getFilesSignature]);
 
   const runAnalysis = async () => {
     setAnalyzing(true);
@@ -351,7 +363,7 @@ export function SEOPreDeployModal({
                       <div className="issue-severity" />
                       <div className="issue-content">
                         <p className="issue-title">{issue.message}</p>
-                        {issue.details && <p className="issue-details">{issue.details}</p>}
+                        {issue.description && <p className="issue-details">{issue.description}</p>}
                       </div>
                     </div>
                   ))}
@@ -419,6 +431,7 @@ export function SEOPreDeployModal({
         @keyframes modalOut { from { opacity: 1; } to { opacity: 0; transform: scale(0.95); } }
 
         .modal-header {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -451,7 +464,9 @@ export function SEOPreDeployModal({
 
         .modal-content {
           flex: 1;
+          min-height: 0;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           padding: 20px;
         }
 
@@ -653,6 +668,94 @@ export function SEOPreDeployModal({
         .btn.secondary:hover { background: rgba(255, 255, 255, 0.12); }
         .btn.primary { background: #22c55e; color: white; }
         .btn.primary:hover { background: #16a34a; }
+
+        /* Mobile-first optimizations */
+        @media (max-width: 480px) {
+          .seo-modal-overlay {
+            padding: 0;
+            align-items: flex-end;
+            overflow: hidden;
+          }
+          .seo-modal {
+            max-height: 92vh;
+            min-height: 60vh;
+            border-radius: 20px 20px 0 0;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+          }
+          @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+          .closing .seo-modal { animation: slideDown 0.2s ease forwards; }
+          @keyframes slideDown { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(100%); } }
+
+          .modal-header {
+            padding: 24px 16px 16px;
+            flex-shrink: 0;
+          }
+          .modal-header::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 3px;
+          }
+
+          .modal-content {
+            flex: 1;
+            min-height: 0;
+            padding: 16px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+          }
+
+          .result-content {
+            padding-bottom: 20px;
+          }
+
+          .score-section { flex-direction: column; gap: 16px; }
+          .score-circle { width: 90px; height: 90px; align-self: center; }
+          .score-number { font-size: 24px; }
+          .score-info { align-items: center; text-align: center; }
+
+          .category-scores { justify-content: center; gap: 6px; flex-wrap: wrap; }
+          .category-item { min-width: 50px; }
+          .category-score { width: 32px; height: 32px; font-size: 11px; }
+          .category-name { font-size: 8px; }
+
+          .stats-row { justify-content: center; flex-wrap: wrap; }
+          .autofix-banner { flex-direction: column; gap: 12px; text-align: center; }
+          .autofix-info { flex-direction: column; gap: 6px; }
+          .fix-btn { width: 100%; justify-content: center; padding: 12px; }
+
+          .issues-list {
+            max-height: none;
+            overflow: visible;
+          }
+
+          .modal-footer {
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            flex-shrink: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: #0f0f10;
+          }
+          .footer-hint { text-align: center; }
+          .footer-actions { width: 100%; display: flex; gap: 10px; }
+          .btn { flex: 1; justify-content: center; padding: 14px 16px; font-size: 14px; }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 360px) {
+          .score-circle { width: 80px; height: 80px; }
+          .score-number { font-size: 20px; }
+          .category-score { width: 28px; height: 28px; font-size: 10px; }
+        }
       `}</style>
     </div>
   );
