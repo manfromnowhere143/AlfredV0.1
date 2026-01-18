@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { withRateLimit } from '@/lib/rate-limiter';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PROMPT OPTIMIZER API
 // ═══════════════════════════════════════════════════════════════════════════════
-// 
+//
 // State-of-the-art prompt engineering preprocessor.
 // Takes raw user input and transforms it into an optimized prompt
 // that will get significantly better results from Claude.
@@ -14,6 +17,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require authentication to prevent cost exploitation
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limit check
+    const userId = (session.user as { id?: string })?.id || 'anonymous';
+    const rateLimitResponse = await withRateLimit(userId, 'api', 'pro');
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const { text, mode = 'enhance' } = await request.json();
 
     if (!text || text.trim().length === 0) {

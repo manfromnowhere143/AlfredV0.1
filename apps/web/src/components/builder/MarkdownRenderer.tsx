@@ -12,6 +12,7 @@
 
 import React, { memo, useMemo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import DOMPurify from 'dompurify';
 
 // Lazy load MermaidRenderer for code splitting
 const MermaidRenderer = dynamic(
@@ -239,7 +240,13 @@ function renderInline(text: string): React.ReactNode {
   // Links
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
-  return <span dangerouslySetInnerHTML={{ __html: result }} />;
+  // SECURITY: Sanitize HTML to prevent XSS attacks
+  const sanitized = DOMPurify.sanitize(result, {
+    ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 'a', 'span'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+  });
+
+  return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
 }
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({

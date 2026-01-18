@@ -11,7 +11,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions, checkCodeCompleteness } from '@alfred/llm';
-import { db, conversations, messages, files, users, eq, asc, desc, sql } from '@alfred/database';
+import { db, conversations, messages, files, users, eq, asc, desc, sql, inArray } from '@alfred/database';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -25,6 +25,8 @@ import {
   type OrchestratorMetadata,
 } from '@/lib/chat-orchestrator';
 import { generateRequestId, addBreadcrumb, captureError } from '@/lib/observability';
+import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limiter';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -623,7 +625,7 @@ async function trackUsage(userId: string, usage: UsageData): Promise<void> {
         updated_at = NOW()
     `);
 
-    console.log(`[Alfred] 📊 Tracked usage: ${usage.outputTokens} output, ${usage.inputTokens} input tokens`);
+    logger.debug('[Alfred]', `Tracked usage: ${usage.outputTokens} output, ${usage.inputTokens} input tokens`);
   } catch (error) {
     // Don't fail the request if usage tracking fails
     console.error('[Alfred] Failed to track usage:', error);
@@ -657,6 +659,39 @@ function normalizeMimeType(type: string, filename: string): string {
     'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime',
   };
   return mimeMap[ext || ''] || type;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECURITY: Sanitize filenames to prevent prompt injection attacks
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function sanitizeFilename(filename: string): string {
+  if (!filename) return 'unnamed_file';
+
+  // Remove any potential prompt injection patterns
+  let sanitized = filename
+    // Remove newlines and carriage returns (injection delimiters)
+    .replace(/[\r\n]/g, '')
+    // Remove backticks (code block injection)
+    .replace(/`/g, "'")
+    // Remove angle brackets (HTML/XML injection)
+    .replace(/[<>]/g, '')
+    // Remove common injection patterns
+    .replace(/\b(ignore|forget|disregard|override|system|assistant|user|human)\b/gi, '')
+    // Remove excessive whitespace
+    .replace(/\s+/g, ' ')
+    // Remove control characters
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .trim();
+
+  // Limit length to prevent context overflow
+  if (sanitized.length > 100) {
+    const ext = sanitized.split('.').pop() || '';
+    const baseName = sanitized.slice(0, 90);
+    sanitized = ext ? `${baseName}...${ext}` : `${baseName}...`;
+  }
+
+  return sanitized || 'unnamed_file';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -715,7 +750,7 @@ async function readFileFromUrl(url: string): Promise<string | null> {
         return null;
       }
 
-      console.log('[Chat] Fetching remote file:', url);
+      logger.debug('[Chat]', 'Fetching remote file:', { url });
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
@@ -755,7 +790,7 @@ async function readFileFromUrl(url: string): Promise<string | null> {
     }
 
     if (!existsSync(filepath)) {
-      console.log(`[Chat] File not found on disk: ${filepath}`);
+      logger.debug('[Chat]', `File not found on disk: ${filepath}`);
       return null;
     }
     const buffer = await readFile(filepath);
@@ -783,25 +818,25 @@ async function buildMessageContent(
     const mimeType = normalizeMimeType(file.type, file.name);
     
     if (isVideo(mimeType)) {
-      console.log(`[Chat] ⏭️ Skipping video (not supported): ${file.name}`);
+      logger.debug('[Chat]', `Skipping video (not supported): ${file.name}`);
       skippedFiles++;
       continue;
     }
 
     if (file.size > MAX_IMAGE_SIZE) {
-      console.log(`[Chat] ⏭️ Skipping large file (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
+      logger.debug('[Chat]', `Skipping large file (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
       skippedFiles++;
       continue;
     }
 
     if (processedFiles >= MAX_IMAGES_PER_REQUEST) {
-      console.log(`[Chat] ⏭️ Max images reached, skipping: ${file.name}`);
+      logger.debug('[Chat]', `Max images reached, skipping: ${file.name}`);
       skippedFiles++;
       continue;
     }
 
     if (!isImage(mimeType) && !isPDF(mimeType)) {
-      console.log(`[Chat] ⏭️ Unsupported type: ${file.name} (${mimeType})`);
+      logger.debug('[Chat]', `Unsupported type: ${file.name} (${mimeType})`);
       continue;
     }
 
@@ -814,7 +849,7 @@ async function buildMessageContent(
     }
 
     if (!base64Data) {
-      console.log(`[Chat] ⚠️ No data for file: ${file.name}`);
+      logger.debug('[Chat]', `No data for file: ${file.name}`);
       continue;
     }
 
@@ -828,14 +863,14 @@ async function buildMessageContent(
         },
       });
       processedFiles++;
-      console.log(`[Chat] ✅ Added image: ${file.name}`);
+      logger.debug('[Chat]', `Added image: ${file.name}`);
     } else if (isPDF(mimeType)) {
       content.push({
         type: 'document',
         source: { type: 'base64', mediaType: 'application/pdf', data: base64Data },
       });
       processedFiles++;
-      console.log(`[Chat] ✅ Added PDF: ${file.name}`);
+      logger.debug('[Chat]', `Added PDF: ${file.name}`);
     }
   }
 
@@ -858,8 +893,9 @@ async function buildMessageContent(
 
 async function loadConversationHistory(conversationId: string): Promise<LLMMessage[]> {
   const llmMessages: LLMMessage[] = [];
-  
+
   try {
+    // Fetch messages
     const dbMessages = await db
       .select()
       .from(messages)
@@ -867,19 +903,39 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
       .orderBy(asc(messages.createdAt))
       .limit(MAX_HISTORY_MESSAGES);
 
+    // PERFORMANCE FIX: Batch fetch all files for user messages in a single query
+    // This eliminates the N+1 query problem
+    const userMessageIds = dbMessages
+      .filter(msg => msg.role === 'user')
+      .map(msg => msg.id);
+
+    // Fetch all files for user messages in one query
+    const allFiles = userMessageIds.length > 0
+      ? await db
+          .select()
+          .from(files)
+          .where(inArray(files.messageId, userMessageIds))
+      : [];
+
+    // Group files by messageId for O(1) lookup
+    const filesByMessageId = new Map<string, typeof allFiles>();
+    for (const file of allFiles) {
+      if (!file.messageId) continue;
+      const existing = filesByMessageId.get(file.messageId) || [];
+      existing.push(file);
+      filesByMessageId.set(file.messageId, existing);
+    }
+
     let imagesInHistory = 0;
 
     for (const msg of dbMessages) {
       const role: 'user' | 'assistant' = msg.role === 'user' ? 'user' : 'assistant';
-      
-      if (role === 'user') {
-        const msgFiles = await db
-          .select()
-          .from(files)
-          .where(eq(files.messageId, msg.id));
 
+      if (role === 'user') {
+        // Use pre-fetched files from the Map
+        const msgFiles = filesByMessageId.get(msg.id) || [];
         const imageFiles = msgFiles.filter(f => isImage(f.mimeType) && !isVideo(f.mimeType));
-        
+
         if (imageFiles.length > 0 && imagesInHistory < MAX_IMAGES_PER_REQUEST) {
           const attachments: FileAttachment[] = imageFiles
             .slice(0, MAX_IMAGES_PER_REQUEST - imagesInHistory)
@@ -890,7 +946,7 @@ async function loadConversationHistory(conversationId: string): Promise<LLMMessa
               size: f.size,
               url: f.url,
             }));
-          
+
           const content = await buildMessageContent(msg.content, attachments);
           llmMessages.push({ role, content });
           imagesInHistory += attachments.length;
@@ -933,7 +989,16 @@ export async function POST(request: NextRequest) {
     
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
-    
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCALABILITY: Distributed Rate Limiting (Redis-backed for horizontal scaling)
+    // ─────────────────────────────────────────────────────────────────────────
+    const rateLimitKey = userId || request.headers.get('x-forwarded-for') || 'anonymous';
+    const rateLimitResponse = await withRateLimit(rateLimitKey, 'chat', userId ? 'pro' : 'free');
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await request.json();
     const {
       message = '',
@@ -969,7 +1034,7 @@ export async function POST(request: NextRequest) {
       const usageCheck = await checkUsageLimits(userId);
       
       if (usageCheck.exceeded) {
-        console.log(`[Alfred] ⚠️ Usage limit exceeded for user ${userId} (${usageCheck.tier})`);
+        logger.debug('[Alfred]', `Usage limit exceeded for user ${userId} (${usageCheck.tier})`);
         return new Response(
           JSON.stringify({ 
             error: 'limit_exceeded',
@@ -984,8 +1049,8 @@ export async function POST(request: NextRequest) {
 
     // Log artifact edit mode
     if (isArtifactEdit) {
-      console.log(`[Alfred] 🎨 ARTIFACT EDIT MODE: ${artifactTitle || 'Component'}`);
-      console.log(`[Alfred] 📝 Modification request: "${message?.slice(0, 50)}..."`);
+      logger.debug('[Alfred]', `ARTIFACT EDIT MODE: ${artifactTitle || 'Component'}`);
+      logger.debug('[Alfred]', `Modification request: "${message?.slice(0, 50)}..."`);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1007,8 +1072,8 @@ export async function POST(request: NextRequest) {
       orchestratorMetadata = orchestratorResult.metadata;
       orchestratorPromptAdditions = orchestratorResult.systemPromptAdditions;
 
-      console.log(`[Alfred] 🧠 Orchestrator: ${orchestratorMetadata.stateTransition.from} → ${orchestratorMetadata.stateTransition.to}`);
-      console.log(`[Alfred] 📊 Task: ${orchestratorMetadata.taskAnalysis.complexity} | Confidence: ${(orchestratorMetadata.taskAnalysis.confidence * 100).toFixed(0)}%`);
+      logger.debug('[Alfred]', `Orchestrator: ${orchestratorMetadata.stateTransition.from} -> ${orchestratorMetadata.stateTransition.to}`);
+      logger.debug('[Alfred]', `Task: ${orchestratorMetadata.taskAnalysis.complexity} | Confidence: ${(orchestratorMetadata.taskAnalysis.confidence * 100).toFixed(0)}%`);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1039,7 +1104,7 @@ export async function POST(request: NextRequest) {
     // BUILDER MODE: Multi-file project generation
     // ═══════════════════════════════════════════════════════════════════════════
     if (isBuilderMode) {
-      console.log('[Alfred] 🏗️ BUILDER MODE: Multi-file project generation');
+      logger.debug('[Alfred]', 'BUILDER MODE: Multi-file project generation');
       systemPrompt = BUILDER_MODE_PROMPT + '\n\n' + baseSystemPrompt;
     }
 
@@ -1063,7 +1128,7 @@ export async function POST(request: NextRequest) {
           }));
         
         if (historyFiles.length > 0) {
-          console.log(`[Alfred] Found ${historyFiles.length} files from conversation history`);
+          logger.debug('[Alfred]', `Found ${historyFiles.length} files from conversation history`);
         }
       } catch (e) {
         console.error('[Alfred] Error loading history files:', e);
@@ -1074,38 +1139,39 @@ export async function POST(request: NextRequest) {
     
     // Add file context to prompt (skip for artifact edits to keep prompt focused)
     if ((hasFiles || historyFiles.length > 0) && !isArtifactEdit) {
-      const fileList = allFiles.map((f: FileAttachment) => `- ${f.name} (ID: ${f.id})`).join('\n');
-      
+      // SECURITY: Sanitize filenames to prevent prompt injection
+      const fileList = allFiles.map((f: FileAttachment) => `- ${sanitizeFilename(f.name)} (ID: ${f.id})`).join('\n');
+
       const imageFiles = allFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isImage(mime);
       });
-      
+
       const videoFiles = allFiles.filter((f: FileAttachment) => {
         const mime = normalizeMimeType(f.type, f.name);
         return isVideo(mime);
       });
-      
+
       let mediaContext = '';
-      
+
       if (imageFiles.length > 0) {
-        const imgList = imageFiles.map((f: FileAttachment) => 
-          `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
+        const imgList = imageFiles.map((f: FileAttachment) =>
+          `  - ${sanitizeFilename(f.name)}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
         ).join('\n');
-        
+
         mediaContext += `
 
 IMAGE FILES (you can SEE these):
 ${imgList}
 
 To DISPLAY images in React preview:
-<img src="${imageFiles[0]?.url?.startsWith('http') ? imageFiles[0].url : '/api/files/serve?id=' + imageFiles[0]?.id}" alt="${imageFiles[0]?.name}" className="w-full h-auto object-cover" />
+<img src="${imageFiles[0]?.url?.startsWith('http') ? imageFiles[0].url : '/api/files/serve?id=' + imageFiles[0]?.id}" alt="${sanitizeFilename(imageFiles[0]?.name || '')}" className="w-full h-auto object-cover" />
 `;
       }
-      
+
       if (videoFiles.length > 0) {
-        const vidList = videoFiles.map((f: FileAttachment) => 
-          `  - ${f.name}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
+        const vidList = videoFiles.map((f: FileAttachment) =>
+          `  - ${sanitizeFilename(f.name)}: ${f.url?.startsWith('http') ? f.url : '/api/files/serve?id=' + f.id}`
         ).join('\n');
         
         mediaContext += `
@@ -1154,7 +1220,7 @@ RULES:
       }
     }
 
-    console.log(`[Alfred] Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | Artifact: ${isArtifactEdit} | User: ${userId || 'anon'}`);
+    logger.debug('[Alfred]', `Facet: ${detectedFacet} | Skill: ${skillLevel} | Files: ${incomingFiles.length} | Artifact: ${isArtifactEdit} | User: ${userId || 'anon'}`);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Database: Create/Get Conversation (skip for artifact edits from preview)
@@ -1172,7 +1238,7 @@ RULES:
         
         if (newConv) {
           convId = newConv.id;
-          console.log(`[Alfred] ✅ Created conversation: ${convId}`);
+          logger.debug('[Alfred]', `Created conversation: ${convId}`);
         }
       } catch (dbError) {
         console.error('[Alfred] ❌ DB error creating conversation:', dbError);
@@ -1194,7 +1260,7 @@ RULES:
         }).returning();
 
         userMessageId = savedMessage?.id;
-        console.log(`[Alfred] ✅ Saved user message: ${userMessageId}`);
+        logger.debug('[Alfred]', `Saved user message: ${userMessageId}`);
 
         if (userMessageId && incomingFiles.length > 0) {
           for (const file of incomingFiles) {
@@ -1204,7 +1270,7 @@ RULES:
                 .where(eq(files.id, file.id));
             }
           }
-          console.log(`[Alfred] ✅ Linked ${incomingFiles.length} file(s) to message`);
+          logger.debug('[Alfred]', `Linked ${incomingFiles.length} file(s) to message`);
         }
       } catch (dbError) {
         console.error('[Alfred] ❌ DB error saving message:', dbError);
@@ -1218,9 +1284,9 @@ RULES:
 
     // For artifact edits, don't load conversation history (keep it focused)
     if (convId && existingConvId && !isArtifactEdit) {
-      console.log(`[Alfred] Loading history for conversation: ${convId}`);
+      logger.debug('[Alfred]', `Loading history for conversation: ${convId}`);
       llmMessages = await loadConversationHistory(convId);
-      console.log(`[Alfred] Loaded ${llmMessages.length} messages from history`);
+      logger.debug('[Alfred]', `Loaded ${llmMessages.length} messages from history`);
     }
 
     // Build current message
@@ -1238,7 +1304,7 @@ RULES:
       llmMessages.push({ role: 'user', content: currentContent });
     }
 
-    console.log(`[Alfred] Sending ${llmMessages.length} messages to Claude`);
+    logger.debug('[Alfred]', `Sending ${llmMessages.length} messages to Claude`);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Stream Response with Usage Tracking
@@ -1256,7 +1322,7 @@ RULES:
 
               // Debug: Log when we see markers (only in builder mode)
               if (isBuilderMode && (token.includes('<<<') || token.includes('>>>'))) {
-                console.log('[Chat] 🔍 Marker in token:', JSON.stringify(token.slice(0, 80)));
+                logger.debug('[Chat]', 'Marker in token:', { token: token.slice(0, 80) });
               }
 
               const payload = JSON.stringify({
@@ -1298,12 +1364,12 @@ RULES:
             if (detectedFacet !== 'code') break;
             
             const completeness = checkCodeCompleteness(fullResponse);
-            console.log('[Alfred] Completeness:', completeness.reason, Math.round(completeness.confidence * 100) + '%');
+            logger.debug('[Alfred]', `Completeness: ${completeness.reason} ${Math.round(completeness.confidence * 100)}%`);
 
             if (completeness.complete || continuationCount >= MAX_CONTINUATIONS) break;
 
             continuationCount++;
-            console.log('[Alfred] Auto-continuing... attempt', continuationCount);
+            logger.debug('[Alfred]', `Auto-continuing... attempt ${continuationCount}`);
             
             controller.enqueue(encoder.encode('data: ' + JSON.stringify({ continuation: true, attempt: continuationCount }) + '\n\n'));
 
@@ -1331,7 +1397,7 @@ RULES:
                 .set({ updatedAt: new Date(), messageCount: llmMessages.length + 1 })
                 .where(eq(conversations.id, convId));
               
-              console.log(`[Alfred] ✅ Saved assistant response`);
+              logger.debug('[Alfred]', 'Saved assistant response');
             } catch (dbError) {
               console.error('[Alfred] ❌ Failed to save response:', dbError);
             }
@@ -1348,13 +1414,13 @@ RULES:
             const projectEnds = (fullResponse.match(/<<<PROJECT_END>>>/g) || []).length;
             const fileStarts = (fullResponse.match(/<<<FILE:/g) || []).length;
             const fileEnds = (fullResponse.match(/<<<END_FILE>>>/gi) || []).length;
-            console.log(`[Chat] 📊 Builder markers: PROJECT_START=${projectStarts}, PROJECT_END=${projectEnds}, FILE_START=${fileStarts}, FILE_END=${fileEnds}`);
+            logger.debug('[Chat]', `Builder markers: PROJECT_START=${projectStarts}, PROJECT_END=${projectEnds}, FILE_START=${fileStarts}, FILE_END=${fileEnds}`);
 
             if (fileStarts !== fileEnds) {
-              console.log('[Chat] ⚠️ Mismatch! FILES vs END_FILE count. Looking for END patterns...');
+              logger.debug('[Chat]', 'Mismatch! FILES vs END_FILE count. Looking for END patterns...');
               // Look for what Claude is actually outputting
               const endPatterns = fullResponse.match(/<<<[^>]*END[^>]*>>>/gi);
-              console.log('[Chat] 🔍 END patterns found:', endPatterns?.slice(0, 5));
+              logger.debug('[Chat]', 'END patterns found:', { patterns: endPatterns?.slice(0, 5) });
             }
           }
 
@@ -1368,7 +1434,7 @@ RULES:
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
 
-          console.log(`[Alfred] ✅ Completed in ${Date.now() - startTime}ms ${isArtifactEdit ? '(artifact edit)' : ''}`);
+          logger.debug('[Alfred]', `Completed in ${Date.now() - startTime}ms ${isArtifactEdit ? '(artifact edit)' : ''}`);
 
         } catch (error) {
           console.error('[Alfred] Stream failed:', error);

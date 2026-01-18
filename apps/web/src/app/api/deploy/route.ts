@@ -25,6 +25,7 @@ import {
   type DeploymentProgressEvent,
   DeploymentError,
 } from '@alfred/deploy';
+import { withRateLimit } from '@/lib/rate-limiter';
 
 // ============================================================================
 // TYPES
@@ -265,6 +266,12 @@ export async function POST(request: NextRequest) {
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Rate limit check (deploy has stricter limits)
+    const rateLimitResponse = await withRateLimit(userId, 'deploy', 'pro');
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
     // Parse request

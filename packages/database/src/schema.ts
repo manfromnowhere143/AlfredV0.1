@@ -346,6 +346,8 @@ export const conversations = pgTable(
     index('conversations_project_id_idx').on(table.projectId),
     index('conversations_started_at_idx').on(table.startedAt),
     index('conversations_last_message_at_idx').on(table.lastMessageAt),
+    // SCALABILITY: Compound index for listing user conversations sorted by recency
+    index('conversations_user_updated_idx').on(table.userId, table.updatedAt),
   ],
 );
 
@@ -406,6 +408,8 @@ export const messages = pgTable(
     index('messages_conversation_id_idx').on(table.conversationId),
     index('messages_role_idx').on(table.role),
     index('messages_created_at_idx').on(table.createdAt),
+    // SCALABILITY: Compound index for loading chat history (most frequent query)
+    index('messages_conversation_created_idx').on(table.conversationId, table.createdAt),
   ],
 );
 
@@ -506,6 +510,8 @@ export const artifacts = pgTable(
     index('artifacts_project_id_idx').on(table.projectId),
     index('artifacts_conversation_id_idx').on(table.conversationId),
     index('artifacts_created_at_idx').on(table.createdAt),
+    // SCALABILITY: Compound index for loading artifacts by conversation
+    index('artifacts_conversation_created_idx').on(table.conversationId, table.createdAt),
   ],
 );
 
@@ -861,6 +867,8 @@ export const files = pgTable(
     index('files_status_idx').on(table.status),
     index('files_category_idx').on(table.category),
     index('files_created_at_idx').on(table.createdAt),
+    // SCALABILITY: Compound index for listing user files sorted by recency
+    index('files_user_created_idx').on(table.userId, table.createdAt),
   ],
 );
 
@@ -1777,6 +1785,8 @@ export const videoJobs = pgTable(
     index('video_jobs_user_id_idx').on(table.userId),
     index('video_jobs_status_idx').on(table.status),
     index('video_jobs_created_at_idx').on(table.createdAt),
+    // SCALABILITY: Compound index for listing persona video jobs by status
+    index('video_jobs_persona_status_idx').on(table.personaId, table.status, table.createdAt),
   ]
 );
 

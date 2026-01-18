@@ -39,7 +39,9 @@ export interface HealthCheckResult {
 // ============================================================================
 
 const DEFAULT_CONFIG: Partial<DatabaseConfig> = {
-  maxConnections: 50, // Increased from 10 to handle concurrent video checks
+  // SCALABILITY: Increased from 50 to 200 to handle 10K+ concurrent users
+  // Consider using PgBouncer for connection pooling in production
+  maxConnections: 200,
   idleTimeout: 20,
   connectTimeout: 10,
   ssl: 'prefer',

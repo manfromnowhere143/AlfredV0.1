@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VOICE TRANSCRIPTION API
@@ -7,6 +9,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require authentication to prevent cost exploitation
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Get audio from FormData
     const formData = await request.formData();
     const audioFile = formData.get('audio') as File;

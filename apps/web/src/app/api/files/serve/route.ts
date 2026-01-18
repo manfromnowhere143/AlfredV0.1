@@ -76,11 +76,27 @@ export async function GET(request: NextRequest) {
 
     const buffer = await readFile(filepath);
 
-    // SECURITY: Restrict CORS to same origin in production
+    // SECURITY: Strict CORS origin validation in production
+    // Using exact hostname comparison instead of .includes() to prevent bypass
     const origin = request.headers.get('origin');
-    const allowedOrigin = process.env.NODE_ENV === 'production'
-      ? (origin && origin.includes(process.env.NEXTAUTH_URL || '') ? origin : 'null')
-      : '*';
+    let allowedOrigin = '*';
+
+    if (process.env.NODE_ENV === 'production') {
+      allowedOrigin = 'null'; // Default to blocking cross-origin requests
+
+      if (origin && process.env.NEXTAUTH_URL) {
+        try {
+          const originUrl = new URL(origin);
+          const appUrl = new URL(process.env.NEXTAUTH_URL);
+          // Strict hostname comparison - must match exactly
+          if (originUrl.hostname === appUrl.hostname) {
+            allowedOrigin = origin;
+          }
+        } catch {
+          // Invalid URLs - keep allowedOrigin as 'null'
+        }
+      }
+    }
 
     return new NextResponse(buffer, {
       headers: {
