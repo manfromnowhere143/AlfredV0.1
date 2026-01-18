@@ -708,6 +708,8 @@ export function BuilderPreview({
   });
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previousHtmlRef = useRef<string | null>(null);
+  const hmrReadyRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<DeviceType>('desktop');
@@ -717,6 +719,80 @@ export function BuilderPreview({
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const bgColor = externalBgColor || '#0a0a0c';
+
+  // HMR Script - injected into preview HTML to enable hot updates
+  const HMR_SCRIPT = `
+<script data-hmr="true">
+(function() {
+  // Signal that HMR is ready
+  window.parent.postMessage({ type: 'hmr-ready' }, '*');
+
+  // Listen for HMR updates
+  window.addEventListener('message', function(event) {
+    if (event.data?.type === 'hmr-update') {
+      var payload = event.data.payload;
+
+      // Update CSS
+      if (payload.css) {
+        var existingStyles = document.querySelectorAll('style:not([data-hmr])');
+        existingStyles.forEach(function(style) { style.remove(); });
+
+        var styleEl = document.createElement('style');
+        styleEl.textContent = payload.css;
+        document.head.appendChild(styleEl);
+        console.log('[HMR] CSS updated');
+      }
+
+      // Update body HTML (for structure changes)
+      if (payload.bodyHtml !== undefined) {
+        var parser = new DOMParser();
+        var newDoc = parser.parseFromString('<body>' + payload.bodyHtml + '</body>', 'text/html');
+        var newBody = newDoc.body;
+
+        // Preserve scripts that shouldn't be re-executed
+        var existingScripts = document.body.querySelectorAll('script');
+        var newContent = newBody.innerHTML;
+
+        document.body.innerHTML = newContent;
+        console.log('[HMR] Body updated');
+      }
+
+      window.parent.postMessage({ type: 'hmr-applied' }, '*');
+    }
+  });
+})();
+</script>`;
+
+  // Extract CSS from HTML
+  const extractCSS = useCallback((html: string): string => {
+    const styleMatches = html.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+    if (!styleMatches) return '';
+    return styleMatches.map(m => {
+      const content = m.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      return content ? content[1] : '';
+    }).join('\n');
+  }, []);
+
+  // Extract body content from HTML
+  const extractBody = useCallback((html: string): string => {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    return bodyMatch ? bodyMatch[1] : '';
+  }, []);
+
+
+  // Inject HMR script into HTML
+  const injectHMR = useCallback((html: string): string => {
+    // Don't double-inject
+    if (html.includes('data-hmr="true"')) return html;
+
+    // Inject before </head> or at start of <body>
+    if (html.includes('</head>')) {
+      return html.replace('</head>', HMR_SCRIPT + '</head>');
+    } else if (html.includes('<body')) {
+      return html.replace(/<body([^>]*)>/, '<body$1>' + HMR_SCRIPT);
+    }
+    return HMR_SCRIPT + html;
+  }, [HMR_SCRIPT]);
 
   // Auto-retry on build failure
   useEffect(() => {
@@ -749,7 +825,7 @@ export function BuilderPreview({
     }
   }, [isBuilding]);
 
-  // Handle messages from iframe
+  // Handle messages from iframe (console + HMR)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'console') {
@@ -761,6 +837,12 @@ export function BuilderPreview({
         };
         setConsoleEntries((prev) => [...prev.slice(-99), entry]);
         onConsole?.(entry);
+      } else if (event.data?.type === 'hmr-ready') {
+        console.log('[BuilderPreview] 🔥 HMR ready');
+        hmrReadyRef.current = true;
+      } else if (event.data?.type === 'hmr-applied') {
+        console.log('[BuilderPreview] ✨ HMR update applied');
+        setIsLoaded(true);
       }
     };
 
@@ -768,23 +850,63 @@ export function BuilderPreview({
     return () => window.removeEventListener('message', handleMessage);
   }, [onConsole]);
 
-  // Update iframe when preview changes
+  // Update iframe when preview changes - with HMR support
   useEffect(() => {
     if (!preview?.html || !iframeRef.current) return;
-    setIsLoaded(false);
-    setError(null);
 
-    console.log('[BuilderPreview] 📥 Setting iframe srcdoc, length:', preview.html.length);
-    iframeRef.current.srcdoc = preview.html;
+    const newHtml = preview.html;
+    const prevHtml = previousHtmlRef.current;
 
-    // Fallback: Force isLoaded after 3 seconds if onLoad doesn't fire
+    // Check if we can use HMR (iframe ready + similar structure + CSS-only change)
+    // Be VERY conservative - only use HMR for minor CSS tweaks
+    const cssOnlyChange = prevHtml &&
+      extractBody(prevHtml) === extractBody(newHtml) &&
+      extractCSS(prevHtml) !== extractCSS(newHtml);
+
+    const useHMR = hmrReadyRef.current && prevHtml && cssOnlyChange;
+
+    if (useHMR) {
+      // HMR Path: CSS-only update via postMessage
+      console.log('[BuilderPreview] 🔥 Using HMR for CSS update');
+
+      const newCSS = extractCSS(newHtml);
+
+      iframeRef.current.contentWindow?.postMessage({
+        type: 'hmr-update',
+        payload: { css: newCSS },
+      }, '*');
+
+      // Immediately mark as loaded since this is a minor CSS update
+      // The iframe is already showing content, we're just updating styles
+      setIsLoaded(true);
+      previousHtmlRef.current = newHtml;
+    } else {
+      // Full Reload Path: Replace entire srcdoc for any structural change
+      console.log('[BuilderPreview] 📥 Full reload', {
+        hmrReady: hmrReadyRef.current,
+        hasPrevHtml: !!prevHtml,
+        cssOnlyChange,
+      });
+
+      setIsLoaded(false);
+      setError(null);
+      hmrReadyRef.current = false; // Reset HMR state for new iframe
+
+      // Inject HMR script for future CSS-only updates
+      const htmlWithHMR = injectHMR(newHtml);
+      iframeRef.current.srcdoc = htmlWithHMR;
+      previousHtmlRef.current = newHtml;
+    }
+
+    // Fallback: Force isLoaded after 2 seconds if onLoad doesn't fire
+    // Reduced from 3s to 2s for better UX
     const fallbackTimer = setTimeout(() => {
       console.log('[BuilderPreview] ⏰ Fallback timer triggered - forcing isLoaded=true');
       setIsLoaded(true);
-    }, 3000);
+    }, 2000);
 
     return () => clearTimeout(fallbackTimer);
-  }, [preview?.html, refreshKey]);
+  }, [preview?.html, refreshKey, extractCSS, extractBody, injectHMR]);
 
   const handleLoad = useCallback(() => {
     console.log('[BuilderPreview] ✅ Iframe onLoad fired');

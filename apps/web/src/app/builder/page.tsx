@@ -817,7 +817,7 @@ export default function BuilderPage() {
   // ALFRED CODE - SMART MODIFICATION HANDLERS (Steve Jobs Approach)
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  const analyzeModification = useCallback(async (userRequest: string) => {
+  const analyzeModification = useCallback(async (userRequest: string, attachments: FileAttachment[] = []) => {
     // CRITICAL: Use manager.getFiles() instead of builder.files (React state can be stale!)
     const currentFiles = builder.manager?.getFiles?.() || builder.files;
     if (currentFiles.length === 0) {
@@ -845,7 +845,18 @@ export default function BuilderPage() {
       const scanStep = ProgressSteps.scanningProject(currentFiles.length);
       setModificationSteps(prev => [...prev.map(s => markStepDone(s)), scanStep]);
 
-      console.log('[Alfred Code] Analyzing modification:', userRequest.slice(0, 100));
+      console.log('[Alfred Code] Analyzing modification:', userRequest.slice(0, 100),
+        attachments.length > 0 ? `with ${attachments.length} attachment(s)` : '');
+
+      // Prepare attachments for API (extract base64/url data)
+      const attachmentData = attachments.map(file => ({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        category: file.category,
+        base64: file.base64,
+        url: file.url,
+      }));
 
       const response = await fetch('/api/builder/modify', {
         method: 'POST',
@@ -853,6 +864,7 @@ export default function BuilderPage() {
         body: JSON.stringify({
           files: projectFiles,
           userRequest,
+          attachments: attachmentData.length > 0 ? attachmentData : undefined,
         }),
       });
 
@@ -1034,15 +1046,21 @@ export default function BuilderPage() {
     if (effectiveFileCount > 0 && isModificationRequest(content, effectiveFileCount)) {
       console.log('[Alfred Code] Detected modification request, analyzing surgically...');
 
+      // CRITICAL: Get files BEFORE clearing - must be done at start of modification path
+      const modificationFiles = fileUpload.getReadyFiles();
+      const attachedFiles = [...modificationFiles];
+      fileUpload.clearFiles(); // Clear after copying
+
       setInputValue('');
       if (chatMinimized) setChatMinimized(false);
 
-      // Add user message to chat
+      // Add user message to chat WITH attached files
       const userMessage: ChatMessage = {
         id: `u-${Date.now()}`,
         role: 'user',
         content,
         timestamp: new Date(),
+        files: attachedFiles.length > 0 ? attachedFiles : undefined,
       };
       setMessages(prev => [...prev, userMessage]);
 
@@ -1050,14 +1068,16 @@ export default function BuilderPage() {
       const analyzingMessage: ChatMessage = {
         id: `a-analyzing-${Date.now()}`,
         role: 'alfred',
-        content: 'Analyzing your request...',
+        content: attachedFiles.length > 0
+          ? `Analyzing your request with ${attachedFiles.length} attached file(s)...`
+          : 'Analyzing your request...',
         timestamp: new Date(),
         isStreaming: true,
       };
       setMessages(prev => [...prev, analyzingMessage]);
 
-      // Analyze the modification
-      const plan = await analyzeModification(content);
+      // Analyze the modification WITH attached files
+      const plan = await analyzeModification(content, attachedFiles);
 
       // Remove the analyzing message
       setMessages(prev => prev.filter(m => !m.isStreaming));

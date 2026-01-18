@@ -23,6 +23,15 @@ interface ProjectFile {
   language?: string;
 }
 
+interface AttachmentData {
+  id: string;
+  name: string;
+  type: string;
+  category: string;
+  base64?: string;
+  url?: string;
+}
+
 interface FileChange {
   search: string;
   replace: string;
@@ -162,9 +171,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { files, userRequest } = body as {
+    const { files, userRequest, attachments } = body as {
       files: ProjectFile[];
       userRequest: string;
+      attachments?: AttachmentData[];
     };
 
     if (!files || files.length === 0) {
@@ -175,8 +185,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No modification request provided' }, { status: 400 });
     }
 
+    // Process image attachments for Claude vision
+    const imageAttachments = (attachments || []).filter(
+      a => a.category === 'image' && (a.base64 || a.url)
+    );
+
     console.log('[Alfred Code] Analyzing modification request:', {
       fileCount: files.length,
+      attachmentCount: attachments?.length || 0,
+      imageCount: imageAttachments.length,
       request: userRequest.slice(0, 100),
     });
 
@@ -231,6 +248,73 @@ CONFIDENCE LEVELS:
 
 IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
 
+    // Build user message content with optional images
+    type ContentBlock = { type: 'text'; text: string } | {
+      type: 'image';
+      source: {
+        type: 'base64' | 'url';
+        mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+        data: string;
+      };
+    };
+
+    const userContent: ContentBlock[] = [];
+
+    // Add images FIRST (Claude processes images before text for better context)
+    for (const img of imageAttachments) {
+      if (img.base64) {
+        // Determine media type from file type
+        let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/png';
+        if (img.type.includes('jpeg') || img.type.includes('jpg')) mediaType = 'image/jpeg';
+        else if (img.type.includes('gif')) mediaType = 'image/gif';
+        else if (img.type.includes('webp')) mediaType = 'image/webp';
+
+        userContent.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            mediaType,
+            data: img.base64,
+          },
+        });
+        console.log(`[Alfred Code] Added image: ${img.name} (${mediaType})`);
+      }
+    }
+
+    // Add image context to the prompt if we have images
+    let enhancedPrompt = systemPrompt;
+    if (imageAttachments.length > 0) {
+      // Build list of images with their URLs for Claude to use in code
+      const imageList = imageAttachments.map((img, i) => {
+        const urlInfo = img.url ? `\n   URL TO USE IN CODE: "${img.url}"` : '';
+        return `- Image ${i + 1}: ${img.name}${urlInfo}`;
+      }).join('\n');
+
+      enhancedPrompt += `\n\n📎 USER ATTACHED ${imageAttachments.length} IMAGE(S):
+${imageList}
+
+CRITICAL INSTRUCTIONS FOR IMAGES:
+1. I can SEE the images above - describe what you see in each one
+2. When the user wants to USE an image (as logo, background, etc.), use the URL provided above
+3. For logos/icons: Update the relevant component to use <img src="THE_URL_PROVIDED" ... />
+4. For backgrounds: Use the URL in CSS background-image or inline styles
+5. ALWAYS use the exact URL provided - do not make up paths like "/logo.png"
+
+Example modification for using an uploaded image as logo:
+{
+  "path": "/src/components/Navigation.tsx",
+  "action": "modify",
+  "changes": [{
+    "search": "<img src=\\"/logo.png\\"",
+    "replace": "<img src=\\"https://actual-uploaded-url.blob.vercel-storage.com/image.png\\""
+  }],
+  "reason": "Replacing logo with user's uploaded image"
+}`;
+    }
+
+    // Add text content
+    userContent.push({ type: 'text', text: enhancedPrompt });
+
     // Create LLM client with higher max tokens and timeout
     const llm = createLLMClient({
       apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -246,10 +330,10 @@ IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[Alfred Code] API attempt ${attempt + 1}/${maxRetries + 1}`);
+        console.log(`[Alfred Code] API attempt ${attempt + 1}/${maxRetries + 1}${imageAttachments.length > 0 ? ` (with ${imageAttachments.length} images)` : ''}`);
         response = await llm.complete({
-          system: 'You are a code modification expert. Output only valid JSON. Keep responses concise.',
-          messages: [{ role: 'user', content: systemPrompt }],
+          system: 'You are a code modification expert. Output only valid JSON. Keep responses concise. When images are provided, describe what you see and use that information.',
+          messages: [{ role: 'user', content: userContent }],
           maxTokens: 8000,
           temperature: 0.2,
         });
