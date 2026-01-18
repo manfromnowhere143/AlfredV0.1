@@ -2,13 +2,23 @@
  * SEO Generator - Meta Tags
  *
  * AI-powered meta tag generation using Claude.
+ * NOTE: This module is SERVER-ONLY. Do not import directly in client components.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import type { GeneratedMeta } from '../types';
 import { THRESHOLDS } from '../constants';
 
-const anthropic = new Anthropic();
+// Lazy initialization to avoid bundling issues with client-side code
+let anthropicClient: any = null;
+
+function getAnthropicClient() {
+  if (!anthropicClient) {
+    // Dynamic import to prevent bundling in client-side code
+    const Anthropic = require('@anthropic-ai/sdk').default;
+    anthropicClient = new Anthropic();
+  }
+  return anthropicClient;
+}
 
 interface GenerateMetaOptions {
   content: string;
@@ -65,6 +75,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
 {"title":"...","description":"...","ogTitle":"...","ogDescription":"...","keywords":["..."],"confidence":0.95}`;
 
   try {
+    const anthropic = getAnthropicClient();
     const response = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
       max_tokens: 500,

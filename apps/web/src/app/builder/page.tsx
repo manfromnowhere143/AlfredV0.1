@@ -16,6 +16,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import nextDynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { useBuilder } from '@/hooks/useBuilder';
 import { useDeviceType } from '@/hooks/useDeviceType';
@@ -238,6 +239,7 @@ function ViewToggle({ mode, onModeChange }: { mode: ViewMode; onModeChange: (m: 
 
 export default function BuilderPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const { isMobile } = useDeviceType();
 
   // State
@@ -1504,7 +1506,31 @@ export default function BuilderPage() {
             )}
           </div>
         </div>
-        <div className="header-center"><ViewToggle mode={viewMode} onModeChange={setViewMode} /></div>
+        <div className="header-center">
+          <button
+            className="action-btn seo"
+            onClick={() => {
+              if (currentProjectId) {
+                // Pass current theme to SEO dashboard
+                const currentTheme = themeMode || 'light';
+                localStorage.setItem('alfred-theme', currentTheme);
+                router.push(`/projects/${currentProjectId}/seo?theme=${currentTheme}`);
+              } else {
+                // If no project yet, prompt to save first
+                alert('Please save your project first to access the SEO Dashboard.');
+              }
+            }}
+            disabled={builder.files.length === 0}
+            title={currentProjectId ? "Open SEO Dashboard" : "Save project to enable SEO Dashboard"}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>SEO</span>
+          </button>
+          <ViewToggle mode={viewMode} onModeChange={setViewMode} />
+        </div>
         <div className="header-right">
           <button
             className="header-btn"
@@ -1941,7 +1967,13 @@ export default function BuilderPage() {
         .project-info { display: flex; flex-direction: column; gap: 1px; }
         .project-name { font-size: 13px; font-weight: 600; color: var(--text); }
         .project-label { font-size: 9px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .header-center { position: absolute; left: 50%; transform: translateX(-50%); }
+        .action-btn { display: flex; align-items: center; gap: 5px; padding: 6px 10px; background: transparent; border: 1px solid var(--border); border-radius: 7px; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .action-btn:hover { background: var(--surface-hover); border-color: rgba(139,92,246,0.4); color: var(--text); }
+        .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .action-btn.seo { background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(34,197,94,0.04)); border-color: rgba(34,197,94,0.3); color: #22c55e; }
+        .action-btn.seo:hover:not(:disabled) { background: linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.1)); border-color: rgba(34,197,94,0.5); box-shadow: 0 2px 8px rgba(34,197,94,0.2); }
+        .action-btn svg { flex-shrink: 0; }
+        .header-center { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; }
         .header-right { display: flex; align-items: center; gap: 8px; }
         .header-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease; }
         .header-btn:hover { background: var(--surface-hover); border-color: rgba(139,92,246,0.4); color: var(--text); }

@@ -13,7 +13,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ExternalLink, Edit3, Play, Image as ImageIcon, RefreshCw, Loader2 } from "lucide-react";
+import { ExternalLink, Edit3, Play, Image as ImageIcon, RefreshCw, Loader2, Search } from "lucide-react";
 
 interface ProjectCardProps {
   project: {
@@ -24,6 +24,8 @@ interface ProjectCardProps {
     primaryDomain?: string | null;
     last_deployment_status?: string | null;
     lastDeploymentStatus?: string | null;
+    seoScore?: number | null;
+    seoGrade?: string | null;
     metadata?: {
       heroVideo?: {
         url: string;
@@ -40,9 +42,20 @@ interface ProjectCardProps {
     version: number;
   } | null;
   onScreenshotCaptured?: (url: string) => void;
+  showSeoScore?: boolean;
 }
 
-export function ProjectCard({ project, latestArtifact, onScreenshotCaptured }: ProjectCardProps) {
+// SEO score badge helper function
+function getSeoGradeColor(grade?: string | null): string {
+  if (!grade) return '#6b7280';
+  if (grade.startsWith('A')) return '#22c55e';
+  if (grade === 'B') return '#84cc16';
+  if (grade === 'C') return '#eab308';
+  if (grade === 'D') return '#f97316';
+  return '#ef4444';
+}
+
+export function ProjectCard({ project, latestArtifact, onScreenshotCaptured, showSeoScore = true }: ProjectCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
@@ -343,9 +356,31 @@ export function ProjectCard({ project, latestArtifact, onScreenshotCaptured }: P
             </p>
           </div>
 
-          <span className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${statusClass}`}>
-            {status}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* SEO Score Badge */}
+            {showSeoScore && project.seoScore !== undefined && project.seoScore !== null && (
+              <Link
+                href={`/projects/${project.id}/seo`}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition hover:opacity-80"
+                style={{
+                  backgroundColor: `${getSeoGradeColor(project.seoGrade)}20`,
+                  color: getSeoGradeColor(project.seoGrade),
+                }}
+                onClick={(e) => e.stopPropagation()}
+                title="View SEO Dashboard"
+              >
+                <Search className="w-3 h-3" />
+                <span>{project.seoScore}</span>
+                {project.seoGrade && (
+                  <span className="opacity-70">({project.seoGrade})</span>
+                )}
+              </Link>
+            )}
+
+            <span className={`px-2 py-1 rounded-lg text-xs font-medium ${statusClass}`}>
+              {status}
+            </span>
+          </div>
         </div>
 
         {project.description && (

@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { DomainSearch } from './DomainSearch';
+import { SEOPreDeployModal } from './seo/SEOPreDeployModal';
 
 interface BuilderFile {
   path: string;
@@ -111,6 +112,8 @@ export function BuilderDeploymentCard({
   const [customDomain, setCustomDomain] = useState('');
   const [seoResult, setSeoResult] = useState<SEOAnalysisResult | null>(null);
   const [seoFixesApplied, setSeoFixesApplied] = useState(0);
+  const [showSeoModal, setShowSeoModal] = useState(false);
+  const [optimizedFiles, setOptimizedFiles] = useState<BuilderFile[]>(files);
   const [previousDeployment, setPreviousDeployment] = useState<{
     projectName: string;
     deployedUrl: string;
@@ -167,7 +170,16 @@ export function BuilderDeploymentCard({
     checkProject();
   }, [artifactId, existingDeployedUrl]);
 
-  const handleDeploy = useCallback(async () => {
+  // Handle deploy from SEO modal with optimized files
+  const handleDeployWithSeoOptimization = useCallback((optimizedFilesList: Array<{ path: string; content: string }>) => {
+    setOptimizedFiles(optimizedFilesList);
+    setShowSeoModal(false);
+    // Trigger deploy with optimized files
+    setTimeout(() => handleDeploy(optimizedFilesList), 100);
+  }, []);
+
+  const handleDeploy = useCallback(async (filesToDeploy?: BuilderFile[]) => {
+    const deployFiles = filesToDeploy || optimizedFiles;
     setPhase('deploying');
     setProgress(0);
     setError('');
@@ -179,7 +191,7 @@ export function BuilderDeploymentCard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files,
+          files: deployFiles,
           projectName: projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
           artifactId,
           artifactTitle: artifactTitle || projectName,
@@ -260,7 +272,7 @@ export function BuilderDeploymentCard({
       setError((err as Error).message);
       setPhase('error');
     }
-  }, [files, projectName, artifactId, artifactTitle, onDeployed]);
+  }, [optimizedFiles, projectName, artifactId, artifactTitle, onDeployed, useCustomDomain, customDomain]);
 
   const handleClose = useCallback(() => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -609,7 +621,14 @@ export function BuilderDeploymentCard({
               </div>
               <div className="actions">
                 <button className="btn secondary" onClick={handleClose}>Cancel</button>
-                <button className="btn primary" onClick={handleDeploy} disabled={!projectName.trim() || projectName.length < 3}>
+                <button className="btn seo-check" onClick={() => setShowSeoModal(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  SEO Check
+                </button>
+                <button className="btn primary" onClick={() => handleDeploy()} disabled={!projectName.trim() || projectName.length < 3}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5z" />
                     <path d="M2 17l10 5 10-5" />
@@ -618,6 +637,17 @@ export function BuilderDeploymentCard({
                   Deploy Now
                 </button>
               </div>
+
+              {/* SEO Pre-Deploy Modal */}
+              {showSeoModal && (
+                <SEOPreDeployModal
+                  isOpen={showSeoModal}
+                  onClose={() => setShowSeoModal(false)}
+                  onDeploy={handleDeployWithSeoOptimization}
+                  files={optimizedFiles}
+                  projectName={projectName}
+                />
+              )}
             </>
           )}
         </div>
@@ -812,18 +842,24 @@ export function BuilderDeploymentCard({
         .info-item svg { opacity: 0.5; }
         .info-item.highlight { color: var(--pro-color); }
         .info-item.highlight svg { opacity: 1; color: var(--pro-color); }
-        .actions { display: flex; gap: 12px; }
-        .btn { flex: 1; padding: 14px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s; }
+        .actions { display: flex; gap: 10px; align-items: stretch; }
+        .btn { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s; white-space: nowrap; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn.secondary { background: var(--btn-secondary-bg); color: var(--text); }
+        .btn.secondary { flex: 0 0 auto; background: var(--btn-secondary-bg); color: var(--text); }
         .btn.secondary:hover:not(:disabled) { background: var(--btn-secondary-hover); }
-        .btn.primary { background: linear-gradient(135deg, var(--pro-color), #6366f1); color: white; }
+        .btn.seo-check { flex: 0 0 auto; background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.06)); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+        .btn.seo-check:hover:not(:disabled) { background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.1)); border-color: rgba(34, 197, 94, 0.5); transform: translateY(-1px); }
+        .btn.seo-check svg { flex-shrink: 0; }
+        .btn.primary { flex: 1; background: linear-gradient(135deg, var(--pro-color), #6366f1); color: white; }
         .btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
         .btn.primary:active:not(:disabled) { transform: scale(0.98); }
 
         @media (max-width: 640px) {
-          .actions { padding-top: 8px; }
-          .btn { padding: 16px 20px; border-radius: 14px; font-size: 15px; }
+          .actions { padding-top: 8px; flex-wrap: wrap; }
+          .btn { padding: 14px 16px; border-radius: 12px; font-size: 14px; }
+          .btn.secondary { flex: 0 0 auto; }
+          .btn.seo-check { flex: 1; min-width: 0; }
+          .btn.primary { flex: 1; min-width: 0; }
         }
         .deploying-container { display: flex; flex-direction: column; align-items: center; padding: 20px 0; min-height: 280px; justify-content: center; }
         .deploy-animation { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; margin-bottom: 32px; }

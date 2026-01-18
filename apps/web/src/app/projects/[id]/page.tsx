@@ -348,6 +348,16 @@ export default function ProjectDetailPage() {
               </a>
             )}
             <button
+              className="btn btn-seo"
+              onClick={() => router.push(`/projects/${params.id}/seo`)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+              SEO Dashboard
+            </button>
+            <button
               className="btn btn-primary"
               onClick={() => artifact && router.push(`/edit/${artifact.id}`)}
               disabled={!artifact}
@@ -908,6 +918,21 @@ export default function ProjectDetailPage() {
           background: rgba(0, 0, 0, 0.03);
           border-color: rgba(0, 0, 0, 0.1);
           color: #0a0a0a;
+        }
+
+        .btn-seo {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05));
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          color: #22c55e;
+        }
+        .btn-seo:hover {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.1));
+          border-color: rgba(34, 197, 94, 0.5);
+          transform: translateY(-2px);
+        }
+        :global([data-theme="light"]) .btn-seo {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.03));
+          border-color: rgba(34, 197, 94, 0.3);
         }
 
         .btn-primary {

@@ -47,7 +47,7 @@ export interface BuilderLayoutProps {
 }
 
 type MobilePanel = 'files' | 'editor' | 'preview';
-type DesktopPanel = 'files' | 'search' | 'ai' | 'settings';
+type DesktopPanel = 'files' | 'search' | 'ai' | 'seo' | 'settings';
 
 // ============================================================================
 // HOOKS
@@ -610,6 +610,7 @@ interface HeaderBarProps {
   isBuilding: boolean;
   isStreaming: boolean;
   onDeploy?: () => void;
+  onSEO?: () => void;
 }
 
 const HeaderBar = memo(function HeaderBar({
@@ -617,6 +618,7 @@ const HeaderBar = memo(function HeaderBar({
   isBuilding,
   isStreaming,
   onDeploy,
+  onSEO,
 }: HeaderBarProps) {
   return (
     <header className="header-bar">
@@ -661,6 +663,14 @@ const HeaderBar = memo(function HeaderBar({
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
           </svg>
           <span>New File</span>
+        </button>
+
+        <button className="header-btn seo" onClick={onSEO}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>SEO</span>
         </button>
 
         <button className="header-btn primary" onClick={onDeploy}>
@@ -839,6 +849,18 @@ const HeaderBar = memo(function HeaderBar({
           transform: translateY(-1px);
         }
 
+        .header-btn.seo {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.08) 100%);
+          color: #22c55e;
+          border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .header-btn.seo:hover {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(34, 197, 94, 0.15) 100%);
+          border-color: rgba(34, 197, 94, 0.5);
+          transform: translateY(-1px);
+        }
+
         .header-btn.primary {
           background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
           color: white;
@@ -877,6 +899,7 @@ const ActivityBar = memo(function ActivityBar({ activePanel, onPanelChange }: Ac
     { id: 'files' as const, icon: 'files', label: 'Explorer' },
     { id: 'search' as const, icon: 'search', label: 'Search' },
     { id: 'ai' as const, icon: 'ai', label: 'AI Assistant' },
+    { id: 'seo' as const, icon: 'seo', label: 'SEO Dashboard' },
     { id: 'settings' as const, icon: 'settings', label: 'Settings' },
   ];
 
@@ -964,6 +987,12 @@ function ActivityIcon({ type }: { type: string }) {
         <path d="M12 2L2 7l10 5 10-5-10-5z" />
         <path d="M2 17l10 5 10-5" />
         <path d="M2 12l10 5 10-5" />
+      </svg>
+    ),
+    seo: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
     settings: (
@@ -1551,6 +1580,7 @@ export function BuilderLayout({
           isBuilding={isBuilding}
           isStreaming={isStreaming}
           onDeploy={onDeploy}
+          onSEO={() => setActivePanel('seo')}
         />
 
         {/* Main Content */}
@@ -1673,6 +1703,7 @@ export function BuilderLayout({
         isBuilding={isBuilding}
         isStreaming={isStreaming}
         onDeploy={onDeploy}
+        onSEO={() => setActivePanel('seo')}
       />
 
       {/* Main Content */}
@@ -1700,6 +1731,57 @@ export function BuilderLayout({
                 </div>
                 <div className="ai-content">
                   <p>Ask Alfred to generate code, fix bugs, or explain concepts.</p>
+                </div>
+              </div>
+            )}
+            {activePanel === 'seo' && (
+              <div className="seo-panel">
+                <div className="seo-header">
+                  <span className="seo-title">SEO Dashboard</span>
+                  <div className="seo-badge">PRO</div>
+                </div>
+                <div className="seo-content">
+                  <div className="seo-score-placeholder">
+                    <div className="score-ring">
+                      <svg width="100" height="100" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#22c55e" strokeWidth="8" strokeDasharray="264" strokeDashoffset="66" strokeLinecap="round" transform="rotate(-90 50 50)" />
+                      </svg>
+                      <div className="score-text">
+                        <span className="score-value">--</span>
+                        <span className="score-label">Deploy to analyze</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="seo-description">
+                    Deploy your project to run SEO analysis. We'll check 54+ rules including meta tags, schema.org, accessibility, and more.
+                  </p>
+                  <div className="seo-features">
+                    <div className="feature-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Auto-generate meta tags</span>
+                    </div>
+                    <div className="feature-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Schema.org markup</span>
+                    </div>
+                    <div className="feature-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>One-click auto-fix</span>
+                    </div>
+                    <div className="feature-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Sitemap & robots.txt</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1784,6 +1866,100 @@ export function BuilderLayout({
           font-size: 13px;
           color: rgba(255, 255, 255, 0.5);
           line-height: 1.6;
+        }
+
+        .seo-panel {
+          padding: 16px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .seo-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+
+        .seo-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.9);
+          letter-spacing: -0.01em;
+        }
+
+        .seo-badge {
+          font-size: 9px;
+          font-weight: 700;
+          padding: 3px 6px;
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+          color: #22c55e;
+          border-radius: 4px;
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          letter-spacing: 0.5px;
+        }
+
+        .seo-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .seo-score-placeholder {
+          margin-bottom: 20px;
+        }
+
+        .score-ring {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .score-text {
+          position: absolute;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .score-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.3);
+        }
+
+        .score-label {
+          font-size: 10px;
+          color: rgba(255, 255, 255, 0.4);
+          text-align: center;
+        }
+
+        .seo-description {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.5);
+          text-align: center;
+          line-height: 1.6;
+          margin-bottom: 20px;
+          padding: 0 8px;
+        }
+
+        .seo-features {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .feature-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.7);
         }
       `}</style>
     </div>
