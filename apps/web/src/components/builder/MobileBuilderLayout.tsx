@@ -94,6 +94,7 @@ interface MobileBuilderLayoutProps {
   onExport?: () => void;
   // Load project
   onLoadProject?: (projectId: string) => void;
+  loadingProjectId?: string | null;
   // Alfred Code - Modification Mode
   modificationPlan?: ModificationPlan | null;
   forensicReport?: ForensicReport | null;
@@ -3389,17 +3390,20 @@ function MobileProjectsModal({
   onClose,
   onLoadProject,
   currentProjectId,
+  loadingProjectId,
   isLightTheme,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onLoadProject: (projectId: string) => void;
   currentProjectId?: string | null;
+  loadingProjectId?: string | null;
   isLightTheme?: boolean;
 }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pressedId, setPressedId] = useState<string | null>(null);
 
   // Load projects
   useEffect(() => {
@@ -3466,28 +3470,45 @@ function MobileProjectsModal({
             </div>
           ) : (
             <div className="projects-list">
-              {projects.map(project => (
-                <button
-                  key={project.id}
-                  className={`project-item ${currentProjectId === project.id ? 'active' : ''}`}
-                  onClick={() => { onLoadProject(project.id); onClose(); }}
-                >
-                  <div className="project-icon">{Icons.layers}</div>
-                  <div className="project-info">
-                    <span className="project-name">{project.name}</span>
-                    <span className="project-meta">
-                      {project.fileCount} files • {formatSize(project.totalSize)} • {formatDate(project.updatedAt)}
-                    </span>
-                  </div>
+              {projects.map(project => {
+                const isLoadingThis = loadingProjectId === project.id;
+                const isPressed = pressedId === project.id;
+                return (
                   <button
-                    className="delete-btn"
-                    onClick={(e) => handleDelete(project.id, e)}
-                    disabled={deletingId === project.id}
+                    key={project.id}
+                    className={`project-item ${currentProjectId === project.id ? 'active' : ''} ${isLoadingThis ? 'loading' : ''} ${isPressed ? 'pressed' : ''}`}
+                    onClick={() => { if (!loadingProjectId) { onLoadProject(project.id); onClose(); } }}
+                    onTouchStart={() => setPressedId(project.id)}
+                    onTouchEnd={() => setPressedId(null)}
+                    onMouseDown={() => setPressedId(project.id)}
+                    onMouseUp={() => setPressedId(null)}
+                    onMouseLeave={() => setPressedId(null)}
+                    disabled={!!loadingProjectId}
                   >
-                    {deletingId === project.id ? <div className="mini-spinner" /> : Icons.trash}
+                    <div className="project-icon">
+                      {isLoadingThis ? <div className="icon-spinner" /> : Icons.layers}
+                    </div>
+                    <div className="project-info">
+                      <span className="project-name">{project.name}</span>
+                      <span className="project-meta">
+                        {isLoadingThis
+                          ? <span className="loading-text">Loading...</span>
+                          : `${project.fileCount} files • ${formatSize(project.totalSize)} • ${formatDate(project.updatedAt)}`
+                        }
+                      </span>
+                    </div>
+                    {!isLoadingThis && (
+                      <button
+                        className="delete-btn"
+                        onClick={(e) => handleDelete(project.id, e)}
+                        disabled={deletingId === project.id}
+                      >
+                        {deletingId === project.id ? <div className="mini-spinner" /> : Icons.trash}
+                      </button>
+                    )}
                   </button>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -3569,14 +3590,36 @@ function MobileProjectsModal({
           border: 1px solid var(--border, rgba(255,255,255,0.06));
           border-radius: 14px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.1s ease;
           width: 100%; text-align: left;
+          transform: scale(1);
         }
-        .project-item:active { background: var(--surface-hover, rgba(255,255,255,0.06)); transform: scale(0.98); }
+        .project-item:active, .project-item.pressed {
+          background: var(--surface-hover, rgba(255,255,255,0.06));
+          transform: scale(0.97);
+          opacity: 0.9;
+        }
+        .project-item.loading {
+          background: rgba(139,92,246,0.15);
+          border-color: rgba(139,92,246,0.5);
+          cursor: wait;
+        }
         .project-item.active {
           background: rgba(139,92,246,0.1);
           border-color: rgba(139,92,246,0.3);
         }
+        .icon-spinner {
+          width: 18px; height: 18px;
+          border: 2px solid rgba(139,92,246,0.3);
+          border-top-color: #8b5cf6;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+        .loading-text {
+          color: #a78bfa;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .project-icon {
           width: 36px; height: 36px;
           display: flex; align-items: center; justify-content: center;
@@ -3650,6 +3693,7 @@ export default function MobileBuilderLayout({
   onSave,
   isSaving,
   currentProjectId,
+  loadingProjectId,
   onOpenProjects,
   onDeploy,
   isDeploying,
@@ -3817,6 +3861,7 @@ export default function MobileBuilderLayout({
         onClose={() => setShowProjectsModal(false)}
         onLoadProject={onLoadProject || (() => {})}
         currentProjectId={currentProjectId}
+        loadingProjectId={loadingProjectId}
         isLightTheme={isLightTheme}
       />
 

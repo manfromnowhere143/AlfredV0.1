@@ -25,20 +25,23 @@ interface Project {
 }
 
 export interface ProjectsSidebarProps {
-  onLoadProject?: (projectId: string) => void;
+  onLoadProject?: (projectId: string) => Promise<void> | void;
   onClose?: () => void;
   currentProjectId?: string | null;
+  loadingProjectId?: string | null;
 }
 
 export function ProjectsSidebar({
   onLoadProject,
   onClose,
   currentProjectId,
+  loadingProjectId,
 }: ProjectsSidebarProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pressedId, setPressedId] = useState<string | null>(null);
 
   // Load projects
   const loadProjects = useCallback(async () => {
@@ -155,44 +158,64 @@ export function ProjectsSidebar({
 
         {!isLoading && !error && projects.length > 0 && (
           <div className="projects-list">
-            {projects.map(project => (
-              <div
-                key={project.id}
-                className={`project-card ${currentProjectId === project.id ? 'active' : ''}`}
-                onClick={() => onLoadProject?.(project.id)}
-              >
-                <div className="project-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                    <polyline points="2 17 12 22 22 17" />
-                    <polyline points="2 12 12 17 22 12" />
-                  </svg>
-                </div>
-                <div className="project-info">
-                  <div className="project-name">{project.name}</div>
-                  <div className="project-meta">
-                    <span>{project.fileCount} files</span>
-                    <span>{formatSize(project.totalSize)}</span>
-                    <span>{formatDate(project.updatedAt)}</span>
-                  </div>
-                </div>
-                <button
-                  className="delete-btn"
-                  onClick={(e) => handleDelete(project.id, e)}
-                  disabled={deletingId === project.id}
-                  aria-label="Delete project"
+            {projects.map(project => {
+              const isLoadingThis = loadingProjectId === project.id;
+              const isPressed = pressedId === project.id;
+              return (
+                <div
+                  key={project.id}
+                  className={`project-card ${currentProjectId === project.id ? 'active' : ''} ${isLoadingThis ? 'loading' : ''} ${isPressed ? 'pressed' : ''}`}
+                  onClick={() => !loadingProjectId && onLoadProject?.(project.id)}
+                  onMouseDown={() => setPressedId(project.id)}
+                  onMouseUp={() => setPressedId(null)}
+                  onMouseLeave={() => setPressedId(null)}
+                  style={{ pointerEvents: loadingProjectId ? 'none' : 'auto' }}
                 >
-                  {deletingId === project.id ? (
-                    <div className="mini-spinner" />
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                    </svg>
+                  <div className="project-icon">
+                    {isLoadingThis ? (
+                      <div className="icon-spinner" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                        <polyline points="2 17 12 22 22 17" />
+                        <polyline points="2 12 12 17 22 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="project-info">
+                    <div className="project-name">{project.name}</div>
+                    <div className="project-meta">
+                      {isLoadingThis ? (
+                        <span className="loading-text">Loading project...</span>
+                      ) : (
+                        <>
+                          <span>{project.fileCount} files</span>
+                          <span>{formatSize(project.totalSize)}</span>
+                          <span>{formatDate(project.updatedAt)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {!isLoadingThis && (
+                    <button
+                      className="delete-btn"
+                      onClick={(e) => handleDelete(project.id, e)}
+                      disabled={deletingId === project.id}
+                      aria-label="Delete project"
+                    >
+                      {deletingId === project.id ? (
+                        <div className="mini-spinner" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                      )}
+                    </button>
                   )}
-                </button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -304,12 +327,24 @@ export function ProjectsSidebar({
           border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
           border-radius: 8px;
           cursor: pointer;
-          transition: all 0.15s ease;
+          transition: all 0.1s ease;
+          transform: scale(1);
         }
 
         .project-card:hover {
           background: var(--surface-hover, rgba(255, 255, 255, 0.05));
           border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .project-card.pressed {
+          transform: scale(0.97);
+          opacity: 0.9;
+        }
+
+        .project-card.loading {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: rgba(139, 92, 246, 0.5);
+          cursor: wait;
         }
 
         .project-card.active {
@@ -332,6 +367,15 @@ export function ProjectsSidebar({
         .project-icon svg {
           width: 18px;
           height: 18px;
+        }
+
+        .icon-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(139, 92, 246, 0.3);
+          border-top-color: #8b5cf6;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
         }
 
         .project-info {
@@ -359,6 +403,16 @@ export function ProjectsSidebar({
         .project-meta span {
           display: flex;
           align-items: center;
+        }
+
+        .loading-text {
+          color: #a78bfa;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
 
         .delete-btn {

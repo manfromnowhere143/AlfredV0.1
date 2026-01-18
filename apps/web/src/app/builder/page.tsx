@@ -268,6 +268,7 @@ export default function BuilderPage() {
   // Projects sidebar state
   const [showProjects, setShowProjects] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Deploy modal state
@@ -567,6 +568,9 @@ export default function BuilderPage() {
   }, [builder]);
 
   const loadProject = useCallback(async (projectId: string) => {
+    // Instant feedback - set loading state immediately
+    setLoadingProjectId(projectId);
+
     try {
       const res = await fetch(`/api/builder/projects/${projectId}`);
       if (!res.ok) {
@@ -615,6 +619,8 @@ export default function BuilderPage() {
     } catch (error) {
       console.error('[Builder] Load failed:', error);
       alert('Failed to load project. Please try again.');
+    } finally {
+      setLoadingProjectId(null);
     }
   }, [builder]);
 
@@ -1391,6 +1397,7 @@ export default function BuilderPage() {
           onSave={saveProject}
           isSaving={isSaving}
           currentProjectId={currentProjectId}
+          loadingProjectId={loadingProjectId}
           onOpenProjects={() => setShowProjects(true)}
           // Deploy
           onDeploy={async () => { handleDeploy(); }}
@@ -1876,6 +1883,7 @@ export default function BuilderPage() {
               onLoadProject={loadProject}
               onClose={() => setShowProjects(false)}
               currentProjectId={currentProjectId}
+              loadingProjectId={loadingProjectId}
             />
           </div>
         )}
