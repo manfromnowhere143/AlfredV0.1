@@ -513,6 +513,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // If we have a saved project ID, fetch the actual project name from database
+    // This ensures SEO uses the real project name, not whatever was passed in the request
+    let actualProjectTitle = artifactTitle;
+    if (savedProjectId) {
+      try {
+        const client = await getDb();
+        const existingProject = await client.db
+          .select({ name: projects.name })
+          .from(projects)
+          .where(eq(projects.id, savedProjectId))
+          .limit(1);
+
+        if (existingProject.length > 0 && existingProject[0].name) {
+          actualProjectTitle = existingProject[0].name;
+          console.log('[Builder Deploy] Using project name from database:', actualProjectTitle);
+        }
+      } catch (err) {
+        console.error('[Builder Deploy] Error fetching project name:', err);
+        // Fall back to artifactTitle if fetch fails
+      }
+    }
+
     const vercelToken = getVercelToken();
     const teamId = getVercelTeamId();
     const cleanProjectName = sanitizeProjectName(projectName);
@@ -571,7 +593,7 @@ export async function POST(request: NextRequest) {
     if (!hasIndexHtml) {
       vercelFiles.push({
         file: 'index.html',
-        data: generateIndexHtml(artifactTitle || projectName, hasTypeScript),
+        data: generateIndexHtml(actualProjectTitle || projectName, hasTypeScript),
         encoding: 'utf-8',
       });
     }
@@ -740,7 +762,7 @@ export async function POST(request: NextRequest) {
 
               // Run SEO analysis
               seoAnalysis = await analyzeSEO(filesForAnalysis, {
-                projectName: artifactTitle || projectName,
+                projectName: actualProjectTitle || projectName,
                 deployUrl: customDomain ? `https://${customDomain}` : undefined,
                 seoConfig,
               });
@@ -946,13 +968,13 @@ export async function POST(request: NextRequest) {
 
             // Build SEO config with defaults from project name
             const fullSeoConfig: SEOConfigInput = {
-              siteTitle: seoConfig?.siteTitle || artifactTitle || projectName,
-              siteDescription: seoConfig?.siteDescription || `${artifactTitle || projectName} - Built with Alfred`,
+              siteTitle: seoConfig?.siteTitle || actualProjectTitle || projectName,
+              siteDescription: seoConfig?.siteDescription || `${actualProjectTitle || projectName} - Built with Alfred`,
               canonicalUrl: seoConfig?.canonicalUrl || siteUrl,
-              ogTitle: seoConfig?.ogTitle || seoConfig?.siteTitle || artifactTitle || projectName,
-              ogDescription: seoConfig?.ogDescription || seoConfig?.siteDescription || `${artifactTitle || projectName} - Built with Alfred`,
+              ogTitle: seoConfig?.ogTitle || seoConfig?.siteTitle || actualProjectTitle || projectName,
+              ogDescription: seoConfig?.ogDescription || seoConfig?.siteDescription || `${actualProjectTitle || projectName} - Built with Alfred`,
               ogType: seoConfig?.ogType || 'website',
-              ogSiteName: seoConfig?.ogSiteName || artifactTitle || projectName,
+              ogSiteName: seoConfig?.ogSiteName || actualProjectTitle || projectName,
               ogImage: seoConfig?.ogImage,
               twitterCard: seoConfig?.twitterCard || 'summary_large_image',
               twitterSite: seoConfig?.twitterSite,
@@ -971,7 +993,7 @@ export async function POST(request: NextRequest) {
             const enhanceResult = enhanceHtml({
               html: currentIndexHtml,
               config: fullSeoConfig,
-              projectName: artifactTitle || projectName,
+              projectName: actualProjectTitle || projectName,
               deployUrl: siteUrl,
             });
 
@@ -1137,7 +1159,7 @@ export async function POST(request: NextRequest) {
                     await client.db
                       .update(projects)
                       .set({
-                        name: artifactTitle || projectName,
+                        name: actualProjectTitle || projectName,
                         vercelProjectId,
                         vercelProjectName,
                         primaryDomain: `${vercelProjectName}.vercel.app`,
@@ -1161,7 +1183,7 @@ export async function POST(request: NextRequest) {
                     // Insert new project and get the ID
                     const insertResult = await client.db.insert(projects).values({
                       userId,
-                      name: artifactTitle || projectName,
+                      name: actualProjectTitle || projectName,
                       type: 'web_app',
                       vercelProjectId,
                       vercelProjectName,
