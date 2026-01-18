@@ -9,7 +9,7 @@ export const maxDuration = 300; // Vercel Pro: 5 min timeout for long generation
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { detectFacet, buildSystemPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
+import { detectFacet, buildSystemPrompt, compileDNAForPrompt, inferSkillLevel as coreInferSkillLevel } from '@alfred/core';
 import { createLLMClient, type StreamOptions, checkCodeCompleteness } from '@alfred/llm';
 import { db, conversations, messages, files, users, eq, asc, desc, sql, inArray } from '@alfred/database';
 import { readFile } from 'fs/promises';
@@ -1083,13 +1083,14 @@ export async function POST(request: NextRequest) {
     const skillLevel = coreInferSkillLevel([message || 'analyze image']);
 
     const baseSystemPrompt = buildSystemPrompt({ skillLevel });
-    let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt;
+    const dnaPrompt = compileDNAForPrompt(); // DNA injection for Apple-quality code
+    let systemPrompt = CODE_FORMATTING_RULES + baseSystemPrompt + '\n\n' + dnaPrompt;
 
     // Add orchestrator state to system prompt
     if (orchestratorPromptAdditions) {
       systemPrompt += '\n' + orchestratorPromptAdditions;
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ARTIFACT MODIFICATION: Inject current code into system prompt
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1105,7 +1106,7 @@ export async function POST(request: NextRequest) {
     // ═══════════════════════════════════════════════════════════════════════════
     if (isBuilderMode) {
       logger.debug('[Alfred]', 'BUILDER MODE: Multi-file project generation');
-      systemPrompt = BUILDER_MODE_PROMPT + '\n\n' + baseSystemPrompt;
+      systemPrompt = BUILDER_MODE_PROMPT + '\n\n' + baseSystemPrompt + '\n\n' + dnaPrompt;
     }
 
     // Load history files if continuing a conversation

@@ -17,7 +17,14 @@ import { getSkillAdaptation, type SkillLevel } from './skills';
 import { compileBoundaries } from './boundaries';
 import { compileOutputContracts } from './output';
 import { compileProcess } from './process';
-import { compileDesignSystem } from './designSystem';
+import {
+  compileDesignSystem,
+  INTERACTION_STATES,
+  RESPONSIVE,
+  ACCESSIBILITY,
+  LAYOUT,
+  MOTION,
+} from './designSystem';
 import {
   compileProjectContext,
   compileMemoryContext,
@@ -262,4 +269,150 @@ export function compactPrompt(prompt: string, maxTokens: number): string {
 
   // Last resort: minimal prompt
   return buildMinimalPrompt();
+}
+
+/**
+ * Compiles DNA design system into a format ready for system prompt injection.
+ * This MUST be included in every code generation prompt for Apple-quality output.
+ */
+export function compileDNAForPrompt(): string {
+  return `
+## ═══════════════════════════════════════════════════════════════════════════
+## MANDATORY DESIGN SYSTEM - USE THESE EXACT VALUES
+## Arbitrary values are FORBIDDEN. Use only these patterns.
+## ═══════════════════════════════════════════════════════════════════════════
+
+### INTERACTION STATES (Apply to ALL interactive elements)
+
+**Button Pattern:**
+\`${INTERACTION_STATES.tailwind.button}\`
+
+**Card Pattern:**
+\`${INTERACTION_STATES.tailwind.card}\`
+
+**Interactive Element Pattern:**
+\`${INTERACTION_STATES.tailwind.interactive}\`
+
+**Link Pattern:**
+\`${INTERACTION_STATES.tailwind.link}\`
+
+**Individual States:**
+- Hover: \`${INTERACTION_STATES.tailwind.hover}\`
+- Active: \`${INTERACTION_STATES.tailwind.active}\`
+- Disabled: \`${INTERACTION_STATES.tailwind.disabled}\`
+- Focus: \`${INTERACTION_STATES.tailwind.focusVisible}\`
+- Loading: \`${INTERACTION_STATES.tailwind.loading}\`
+- Error: \`${INTERACTION_STATES.tailwind.error}\`
+- Success: \`${INTERACTION_STATES.tailwind.success}\`
+
+### RESPONSIVE DESIGN (Mobile-First)
+
+**Breakpoints:**
+- sm: ${RESPONSIVE.breakpoints.sm} (phones landscape)
+- md: ${RESPONSIVE.breakpoints.md} (tablets)
+- lg: ${RESPONSIVE.breakpoints.lg} (laptops)
+- xl: ${RESPONSIVE.breakpoints.xl} (desktops)
+- 2xl: ${RESPONSIVE.breakpoints['2xl']} (large screens)
+
+**Fluid Typography (USE THESE):**
+- Hero: \`${RESPONSIVE.fluidTypography.hero}\`
+- Title: \`${RESPONSIVE.fluidTypography.title}\`
+- Heading: \`${RESPONSIVE.fluidTypography.heading}\`
+- Body: \`${RESPONSIVE.fluidTypography.body}\`
+- Small: \`${RESPONSIVE.fluidTypography.small}\`
+
+**Device Patterns:**
+- Mobile: \`${RESPONSIVE.patterns.mobile.padding}\` + \`${RESPONSIVE.patterns.mobile.touchTarget}\`
+- Tablet: \`${RESPONSIVE.patterns.tablet.padding}\` + \`${RESPONSIVE.patterns.tablet.columns}\`
+- Desktop: \`${RESPONSIVE.patterns.desktop.padding}\` + \`${RESPONSIVE.patterns.desktop.maxWidth}\`
+
+### ACCESSIBILITY (WCAG AAA Required)
+
+**Focus Management:**
+\`${ACCESSIBILITY.focus.ring}\`
+
+**Screen Reader:**
+- Hidden but accessible: \`${ACCESSIBILITY.screenReader.only}\`
+- Skip link: \`${ACCESSIBILITY.focus.skipLink}\`
+
+**Reduced Motion:**
+\`${ACCESSIBILITY.motion.respectPreference}\`
+
+### LAYOUT PATTERNS
+
+**Container:**
+\`${LAYOUT.patterns.container}\`
+
+**Flex Patterns:**
+- Center: \`${LAYOUT.patterns.flexCenter}\`
+- Between: \`${LAYOUT.patterns.flexBetween}\`
+- Column: \`${LAYOUT.patterns.flexCol}\`
+
+**Stack Patterns:**
+- Default: \`${LAYOUT.patterns.stack}\`
+- Tight: \`${LAYOUT.patterns.stackTight}\`
+- Loose: \`${LAYOUT.patterns.stackLoose}\`
+
+**Section Spacing:**
+- Hero: \`${LAYOUT.sections.hero}\`
+- Section: \`${LAYOUT.sections.section}\`
+
+**Z-Index Scale:**
+dropdown: ${LAYOUT.zIndex.dropdown}, modal: ${LAYOUT.zIndex.modal}, tooltip: ${LAYOUT.zIndex.tooltip}, toast: ${LAYOUT.zIndex.toast}
+
+### MOTION & ANIMATION
+
+**Easing:**
+- Spring: \`${MOTION.easing.spring}\`
+- Smooth: \`${MOTION.easing.smooth}\`
+
+**Durations:**
+- Hover: ${MOTION.duration.hover}
+- Active: ${MOTION.duration.active}
+- Enter: ${MOTION.duration.enter}
+- Exit: ${MOTION.duration.exit}
+
+**Presets:**
+- Fade In: \`${MOTION.presets.fadeIn}\`
+- Scale In: \`${MOTION.presets.scaleIn}\`
+- Slide In: \`${MOTION.presets.slideInFromBottom}\`
+
+**Micro-interactions:**
+- Button Press: \`${MOTION.micro.buttonPress}\`
+- Card Hover: \`${MOTION.micro.cardHover}\`
+
+### ⛔ FORBIDDEN PATTERNS - NEVER USE
+
+**Arbitrary Spacing:**
+❌ gap-[13px] → ✅ gap-3 (12px) or gap-4 (16px)
+❌ p-[17px] → ✅ p-4 (16px) or p-5 (20px)
+❌ m-[23px] → ✅ m-6 (24px)
+
+**Arbitrary Typography:**
+❌ text-[15px] → ✅ text-sm (14px) or text-base (16px)
+❌ text-[19px] → ✅ text-lg (18px) or text-xl (20px)
+
+**Arbitrary Colors:**
+❌ bg-[#1a1a1a] → ✅ bg-[#0a0a0a] or bg-white/5
+❌ bg-[#2a2a2a] → ✅ bg-white/10
+❌ text-[#888] → ✅ text-gray-400
+
+**Arbitrary Border Radius:**
+❌ rounded-[10px] → ✅ rounded-lg (8px) or rounded-xl (12px)
+
+**Missing States:**
+❌ Button without hover/active/focus states
+❌ Card without hover elevation
+❌ Input without focus ring
+❌ Interactive element without disabled state
+
+## ═══════════════════════════════════════════════════════════════════════════
+## ENFORCEMENT: Before outputting ANY code, verify:
+## 1. All interactive elements have hover/active/focus/disabled states
+## 2. All spacing uses Tailwind scale (gap-4, p-6, not gap-[17px])
+## 3. All colors from palette (white/10, gray-400, not #888)
+## 4. All animations have proper easing and durations
+## 5. Reduced motion is respected with motion-reduce: classes
+## ═══════════════════════════════════════════════════════════════════════════
+`;
 }

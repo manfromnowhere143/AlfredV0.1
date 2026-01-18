@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createLLMClient } from '@alfred/llm';
+import { compileDNAForPrompt } from '@alfred/core';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -266,7 +267,9 @@ CONFIDENCE LEVELS:
 - "medium": Changes affecting multiple files or component behavior
 - "low": Architectural changes or unclear requirements
 
-IMPORTANT: Only output valid JSON. No explanatory text before or after.`;
+IMPORTANT: Only output valid JSON. No explanatory text before or after.
+
+${compileDNAForPrompt()}`;
 
     // Build user message content with optional images
     type ContentBlock = { type: 'text'; text: string } | {

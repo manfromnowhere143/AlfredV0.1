@@ -135,6 +135,7 @@ export {
     buildMinimalPrompt,
     compactPrompt,
     estimateTokens,
+    compileDNAForPrompt,
     SPECIALIZED_PROMPTS,
     DEFAULT_CONFIG,
     type PromptConfig,
