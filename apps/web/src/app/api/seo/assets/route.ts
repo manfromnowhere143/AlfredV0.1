@@ -124,9 +124,9 @@ export async function POST(request: NextRequest) {
           content = config.robotsTxtContent;
           metadata = { custom: true };
         } else {
-          const robotsTxt = robotsPresets.allowAll(sitemapUrl);
+          const robotsTxt = robotsPresets.standard(sitemapUrl);
           content = robotsTxt.content;
-          metadata = { rules: robotsTxt.rules, preset: 'allowAll' };
+          metadata = { rules: robotsTxt.rules, preset: 'standard' };
         }
       }
     } else {

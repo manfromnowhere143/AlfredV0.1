@@ -21,6 +21,7 @@ import {
   generateSitemapFromFiles,
   generateRobotsTxt,
   getAutoFixableIssues,
+  enhanceHtml,
 } from '@/lib/seo';
 import type { SEOConfigInput, SEOAnalysisResult } from '@/lib/seo/types';
 
@@ -49,6 +50,13 @@ interface VercelFile {
   data: string;
   encoding?: string;
 }
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Placeholder for site URL - replaced after Vercel returns real URL
+const SITE_URL_PLACEHOLDER = '__ALFRED_SITE_URL__';
 
 // ============================================================================
 // VERCEL API HELPERS
@@ -90,6 +98,132 @@ async function vercelRequest(
       ...options.headers,
     },
   });
+}
+
+/**
+ * Replace URL placeholders in files with the real deployed URL
+ */
+function replaceUrlPlaceholders(files: VercelFile[], realUrl: string): VercelFile[] {
+  return files.map(file => {
+    // Only process text files that might contain the placeholder
+    if (file.file.endsWith('.xml') ||
+        file.file.endsWith('.txt') ||
+        file.file.endsWith('.html') ||
+        file.file.endsWith('.json')) {
+      if (file.data.includes(SITE_URL_PLACEHOLDER)) {
+        return {
+          ...file,
+          data: file.data.replaceAll(SITE_URL_PLACEHOLDER, realUrl),
+        };
+      }
+    }
+    return file;
+  });
+}
+
+/**
+ * Silent redeploy - updates files without user-visible progress
+ * Used to fix SEO URLs after we know the real deployment URL
+ */
+async function silentRedeploy(
+  vercelProjectName: string,
+  files: VercelFile[],
+  vercelToken: string,
+  teamId?: string
+): Promise<{ success: boolean; deploymentId?: string; error?: string }> {
+  try {
+    console.log('[Builder Deploy] Starting silent redeploy to fix SEO URLs...');
+
+    const deployRes = await vercelRequest('/v13/deployments', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: vercelProjectName,
+        files,
+        projectSettings: {
+          framework: 'vite',
+          buildCommand: 'npm run build',
+          outputDirectory: 'dist',
+          installCommand: 'npm install',
+        },
+        target: 'production',
+      }),
+    }, vercelToken, teamId);
+
+    if (!deployRes.ok) {
+      const err = await deployRes.json();
+      console.error('[Builder Deploy] Silent redeploy failed:', err);
+      return { success: false, error: err.error?.message || 'Silent redeploy failed' };
+    }
+
+    const deployment = await deployRes.json();
+
+    // Wait for deployment to complete (with shorter timeout for silent redeploy)
+    const maxWait = 120000; // 2 minutes
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWait) {
+      await new Promise(r => setTimeout(r, 2000));
+
+      const statusRes = await vercelRequest(
+        `/v13/deployments/${deployment.id}`,
+        { method: 'GET' },
+        vercelToken,
+        teamId
+      );
+
+      if (!statusRes.ok) continue;
+
+      const status = await statusRes.json();
+
+      if (status.readyState === 'READY') {
+        console.log('[Builder Deploy] Silent redeploy completed successfully');
+        return { success: true, deploymentId: deployment.id };
+      }
+
+      if (status.readyState === 'ERROR' || status.readyState === 'CANCELED') {
+        console.error('[Builder Deploy] Silent redeploy build failed:', status.readyState);
+        return { success: false, error: `Build ${status.readyState}` };
+      }
+    }
+
+    console.error('[Builder Deploy] Silent redeploy timed out');
+    return { success: false, error: 'Timeout' };
+  } catch (err) {
+    console.error('[Builder Deploy] Silent redeploy error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Get existing deployed URL from database by Vercel project ID
+ * This is more reliable than matching by name since Vercel may add suffixes
+ */
+async function getExistingDeployedUrlByProjectId(
+  userId: string,
+  vercelProjectId: string
+): Promise<string | null> {
+  try {
+    const client = await getDb();
+    const existingProjects = await client.db
+      .select()
+      .from(projects)
+      .where(and(
+        eq(projects.userId, userId),
+        eq(projects.vercelProjectId, vercelProjectId)
+      ))
+      .limit(1);
+
+    if (existingProjects.length > 0 && existingProjects[0].primaryDomain) {
+      const url = `https://${existingProjects[0].primaryDomain}`;
+      console.log('[Builder Deploy] Found existing deployed URL by project ID:', url);
+      return url;
+    }
+
+    return null;
+  } catch (err) {
+    console.error('[Builder Deploy] Error getting existing URL:', err);
+    return null;
+  }
 }
 
 // ============================================================================
@@ -671,118 +805,12 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Generate sitemap if configured
-          if (seoConfig?.includeSitemap !== false) {
-            const hasSitemap = deployFiles.some(f => f.file === 'sitemap.xml' || f.file === 'public/sitemap.xml');
-            if (!hasSitemap) {
-              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating sitemap...', progress: 14 });
-
-              const sitemapFiles = deployFiles.map(f => ({
-                path: f.file.startsWith('/') ? f.file : `/${f.file}`,
-              }));
-
-              const siteUrl = customDomain
-                ? `https://${customDomain}`
-                : `https://${cleanProjectName}.vercel.app`;
-
-              const sitemapResult = generateSitemapFromFiles(sitemapFiles, siteUrl);
-              deployFiles.push({
-                file: 'public/sitemap.xml',
-                data: sitemapResult.content,
-                encoding: 'utf-8',
-              });
-              console.log('[Builder Deploy] Generated sitemap.xml with', sitemapResult.urlCount, 'URLs');
-            }
-          }
-
-          // Generate robots.txt if configured
-          if (seoConfig?.includeRobotsTxt !== false) {
-            const hasRobots = deployFiles.some(f => f.file === 'robots.txt' || f.file === 'public/robots.txt');
-            if (!hasRobots) {
-              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating robots.txt...', progress: 15 });
-
-              const siteUrl = customDomain
-                ? `https://${customDomain}`
-                : `https://${cleanProjectName}.vercel.app`;
-
-              const robotsResult = generateRobotsTxt({
-                sitemapUrl: `${siteUrl}/sitemap.xml`,
-              });
-              deployFiles.push({
-                file: 'public/robots.txt',
-                data: robotsResult.content,
-                encoding: 'utf-8',
-              });
-              console.log('[Builder Deploy] Generated robots.txt');
-            }
-          }
-
-          // Enhance index.html with Foundation SEO if needed
-          const indexHtmlIndex = deployFiles.findIndex(f => f.file === 'index.html');
-          if (indexHtmlIndex !== -1 && seoConfig) {
-            const currentIndexHtml = deployFiles[indexHtmlIndex].data;
-
-            // Only enhance if missing basic SEO tags
-            if (!currentIndexHtml.includes('og:title') || !currentIndexHtml.includes('twitter:card')) {
-              sendEvent({ type: 'progress', status: 'optimizing', message: 'Enhancing SEO tags...', progress: 16 });
-
-              let enhancedHtml = currentIndexHtml;
-              const headEndIndex = enhancedHtml.indexOf('</head>');
-
-              if (headEndIndex !== -1) {
-                const seoTags: string[] = [];
-
-                // Open Graph tags
-                if (seoConfig.ogTitle || seoConfig.siteTitle) {
-                  seoTags.push(`    <meta property="og:title" content="${seoConfig.ogTitle || seoConfig.siteTitle}" />`);
-                }
-                if (seoConfig.ogDescription || seoConfig.siteDescription) {
-                  seoTags.push(`    <meta property="og:description" content="${seoConfig.ogDescription || seoConfig.siteDescription}" />`);
-                }
-                if (seoConfig.ogImage) {
-                  seoTags.push(`    <meta property="og:image" content="${seoConfig.ogImage}" />`);
-                }
-                if (!currentIndexHtml.includes('og:type')) {
-                  seoTags.push(`    <meta property="og:type" content="website" />`);
-                }
-
-                // Twitter Card tags
-                if (!currentIndexHtml.includes('twitter:card')) {
-                  seoTags.push(`    <meta name="twitter:card" content="${seoConfig.twitterCard || 'summary_large_image'}" />`);
-                }
-                if (seoConfig.twitterSite) {
-                  seoTags.push(`    <meta name="twitter:site" content="${seoConfig.twitterSite}" />`);
-                }
-
-                // Canonical URL
-                if (seoConfig.canonicalUrl && !currentIndexHtml.includes('canonical')) {
-                  seoTags.push(`    <link rel="canonical" href="${seoConfig.canonicalUrl}" />`);
-                }
-
-                if (seoTags.length > 0) {
-                  enhancedHtml = enhancedHtml.slice(0, headEndIndex) +
-                    '\n    <!-- SEO Tags -->\n' +
-                    seoTags.join('\n') +
-                    '\n  ' +
-                    enhancedHtml.slice(headEndIndex);
-
-                  deployFiles[indexHtmlIndex] = {
-                    ...deployFiles[indexHtmlIndex],
-                    data: enhancedHtml,
-                  };
-                  console.log('[Builder Deploy] Enhanced index.html with', seoTags.length, 'SEO tags');
-                }
-              }
-            }
-          }
-
           // ============================================================
-          // END SEO PROCESSING
+          // CREATE/GET VERCEL PROJECT FIRST
+          // We need the actual project ID to look up existing deployed URL
           // ============================================================
-
           sendEvent({ type: 'progress', status: 'uploading', message: 'Preparing deployment...', progress: 18 });
 
-          // Create or get project
           let vercelProjectId: string;
           let vercelProjectName: string;
 
@@ -819,6 +847,144 @@ export async function POST(request: NextRequest) {
             vercelProjectName = newProject.name;
             sendEvent({ type: 'progress', status: 'uploading', message: `Created project: ${vercelProjectName}`, progress: 25 });
           }
+
+          // ============================================================
+          // SEO URL DETERMINATION
+          // Now that we have the actual Vercel project ID, we can look up
+          // the correct existing URL from the database
+          // ============================================================
+          let usedPlaceholder = false;
+          let siteUrl: string;
+
+          if (customDomain) {
+            // Custom domain is known upfront
+            siteUrl = `https://${customDomain}`;
+            console.log('[Builder Deploy] Using custom domain for SEO URLs:', siteUrl);
+          } else {
+            // Check if we have a previously deployed URL for this project by project ID
+            const existingUrl = await getExistingDeployedUrlByProjectId(userId, vercelProjectId);
+            if (existingUrl) {
+              siteUrl = existingUrl;
+              console.log('[Builder Deploy] Using existing deployed URL for SEO:', siteUrl);
+            } else {
+              // First-time deploy - we know the actual project name from Vercel
+              // Use the actual URL format: https://{vercelProjectName}.vercel.app
+              siteUrl = `https://${vercelProjectName}.vercel.app`;
+              console.log('[Builder Deploy] First deploy - using project URL for SEO:', siteUrl);
+            }
+          }
+
+          // Generate sitemap if configured
+          if (seoConfig?.includeSitemap !== false) {
+            const hasSitemap = deployFiles.some(f => f.file === 'sitemap.xml' || f.file === 'public/sitemap.xml');
+            if (!hasSitemap) {
+              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating state-of-the-art sitemap...', progress: 14 });
+
+              // Prepare files for sitemap (only paths needed)
+              const sitemapFiles = deployFiles.map(f => ({
+                path: f.file.startsWith('/') ? f.file : `/${f.file}`,
+              }));
+
+              // Generate state-of-the-art sitemap
+              // NOTE: Only HTML files become sitemap URLs (not .tsx/.jsx source files)
+              const sitemapResult = generateSitemapFromFiles(sitemapFiles, siteUrl, {
+                includeImages: true,
+                smartPriority: true,
+              });
+
+              deployFiles.push({
+                file: 'public/sitemap.xml',
+                data: sitemapResult.content,
+                encoding: 'utf-8',
+              });
+
+              // Log detailed SEO stats
+              console.log(`[Builder Deploy] Generated sitemap.xml:`);
+              console.log(`  - URLs: ${sitemapResult.urlCount}`);
+              console.log(`  - URL type: ${usedPlaceholder ? 'placeholder (will redeploy)' : 'real URL'}`);
+            }
+          }
+
+          // Generate robots.txt if configured
+          if (seoConfig?.includeRobotsTxt !== false) {
+            const hasRobots = deployFiles.some(f => f.file === 'robots.txt' || f.file === 'public/robots.txt');
+            if (!hasRobots) {
+              sendEvent({ type: 'progress', status: 'optimizing', message: 'Generating state-of-the-art robots.txt...', progress: 15 });
+
+              // Generate state-of-the-art robots.txt with all features
+              const robotsResult = generateRobotsTxt({
+                sitemapUrl: `${siteUrl}/sitemap.xml`,
+                siteUrl: siteUrl,
+                allowAll: true,
+                hostDirective: true,
+                allowGoogleAds: true,
+                blockAICrawlers: false, // Allow AI crawlers by default
+              });
+
+              deployFiles.push({
+                file: 'public/robots.txt',
+                data: robotsResult.content,
+                encoding: 'utf-8',
+              });
+
+              console.log(`[Builder Deploy] Generated robots.txt with ${robotsResult.rules.length} rules`);
+            }
+          }
+
+          // ============================================================
+          // ENHANCE INDEX.HTML WITH FULL SEO META TAGS
+          // This injects: title, description, canonical, viewport,
+          // Open Graph, Twitter Card, and Schema.org JSON-LD
+          // ============================================================
+          const indexHtmlIndex = deployFiles.findIndex(f => f.file === 'index.html');
+          if (indexHtmlIndex !== -1) {
+            sendEvent({ type: 'progress', status: 'optimizing', message: 'Injecting SEO meta tags...', progress: 16 });
+
+            const currentIndexHtml = deployFiles[indexHtmlIndex].data;
+
+            // Build SEO config with defaults from project name
+            const fullSeoConfig: SEOConfigInput = {
+              siteTitle: seoConfig?.siteTitle || artifactTitle || projectName,
+              siteDescription: seoConfig?.siteDescription || `${artifactTitle || projectName} - Built with Alfred`,
+              canonicalUrl: seoConfig?.canonicalUrl || siteUrl,
+              ogTitle: seoConfig?.ogTitle || seoConfig?.siteTitle || artifactTitle || projectName,
+              ogDescription: seoConfig?.ogDescription || seoConfig?.siteDescription || `${artifactTitle || projectName} - Built with Alfred`,
+              ogType: seoConfig?.ogType || 'website',
+              ogSiteName: seoConfig?.ogSiteName || artifactTitle || projectName,
+              ogImage: seoConfig?.ogImage,
+              twitterCard: seoConfig?.twitterCard || 'summary_large_image',
+              twitterSite: seoConfig?.twitterSite,
+              twitterCreator: seoConfig?.twitterCreator,
+              faviconUrl: seoConfig?.faviconUrl,
+              appleTouchIconUrl: seoConfig?.appleTouchIconUrl,
+              language: seoConfig?.language || 'en',
+              locale: seoConfig?.locale || 'en_US',
+              allowIndexing: seoConfig?.allowIndexing !== false,
+              allowFollowing: seoConfig?.allowFollowing !== false,
+              autoGenerateSchema: seoConfig?.autoGenerateSchema !== false,
+              ...seoConfig,
+            };
+
+            // Use the html-enhancer to inject ALL SEO meta tags
+            const enhanceResult = enhanceHtml({
+              html: currentIndexHtml,
+              config: fullSeoConfig,
+              projectName: artifactTitle || projectName,
+              deployUrl: siteUrl,
+            });
+
+            // Update the file with enhanced HTML
+            deployFiles[indexHtmlIndex] = {
+              ...deployFiles[indexHtmlIndex],
+              data: enhanceResult.html,
+            };
+
+            console.log('[Builder Deploy] Enhanced index.html with SEO:', enhanceResult.changes);
+          }
+
+          // ============================================================
+          // END SEO PROCESSING - PROCEED TO DEPLOYMENT
+          // ============================================================
 
           // Create deployment
           sendEvent({ type: 'progress', status: 'building', message: 'Uploading files...', progress: 30 });
@@ -893,6 +1059,7 @@ export async function POST(request: NextRequest) {
               }
 
               // Save to database
+              const realUrl = `https://${vercelProjectName}.vercel.app`;
               try {
                 const client = await getDb();
                 const existingProjects = await client.db
@@ -912,6 +1079,11 @@ export async function POST(request: NextRequest) {
                       lastDeploymentStatus: 'ready',
                       lastDeployedAt: new Date(),
                       updatedAt: new Date(),
+                      metadata: {
+                        ...((existingProjects[0].metadata as Record<string, unknown>) || {}),
+                        artifactId: artifactId || undefined,
+                        lastDeployedUrl: realUrl,
+                      },
                     })
                     .where(eq(projects.id, existingProjects[0].id));
                 } else {
@@ -925,10 +1097,50 @@ export async function POST(request: NextRequest) {
                     lastDeploymentId: deploymentId,
                     lastDeploymentStatus: 'ready',
                     lastDeployedAt: new Date(),
+                    metadata: {
+                      artifactId: artifactId || undefined,
+                      lastDeployedUrl: realUrl,
+                    },
                   });
                 }
               } catch (dbErr) {
                 console.error('[Builder Deploy] DB error:', dbErr);
+              }
+
+              // ============================================================
+              // SILENT REDEPLOY FOR SEO URL FIXUP
+              // If we used placeholder URLs, now fix them with real URL
+              // ============================================================
+              if (usedPlaceholder) {
+                console.log('[Builder Deploy] Triggering silent redeploy to fix SEO URLs...');
+
+                // Replace placeholders with real URL
+                const fixedFiles = replaceUrlPlaceholders(deployFiles, realUrl);
+
+                // Check if any files were actually modified
+                const filesModified = fixedFiles.some((f, i) => f.data !== deployFiles[i].data);
+
+                if (filesModified) {
+                  // Trigger silent redeploy in background (don't wait for it)
+                  silentRedeploy(vercelProjectName, fixedFiles, vercelToken, teamId)
+                    .then(result => {
+                      if (result.success) {
+                        console.log('[Builder Deploy] Silent redeploy completed - SEO URLs fixed');
+                      } else {
+                        console.error('[Builder Deploy] Silent redeploy failed:', result.error);
+                      }
+                    })
+                    .catch(err => {
+                      console.error('[Builder Deploy] Silent redeploy error:', err);
+                    });
+
+                  // Note: We don't wait for silent redeploy to complete
+                  // The user sees the first deployment immediately
+                  // SEO URLs will be correct within ~1-2 minutes
+                  console.log('[Builder Deploy] Silent redeploy triggered in background');
+                } else {
+                  console.log('[Builder Deploy] No files contained placeholder - skipping silent redeploy');
+                }
               }
 
               sendEvent({

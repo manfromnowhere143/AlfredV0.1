@@ -1240,16 +1240,17 @@ import type {
     const baseUrl = deployUrl || `https://${sanitizePackageName(projectName || 'alfred-project')}.vercel.app`;
     const lastmod = new Date().toISOString().split('T')[0];
 
+    // Clean XML sitemap with proper declaration and namespaces
     const content = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>${escapeHtml(baseUrl)}/</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-</urlset>
-`;
+</urlset>`;
 
     return { path: 'public/sitemap.xml', content };
   }
@@ -1257,25 +1258,74 @@ import type {
   function generateRobotsTxt(deployUrl?: string, seoConfig?: SEOConfig): ProjectFile {
     const baseUrl = deployUrl || '';
     const allowIndexing = seoConfig?.allowIndexing !== false;
+    const sitemapUrl = baseUrl ? `${baseUrl}/sitemap.xml` : '';
+    const host = baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     let content = '';
 
     if (allowIndexing) {
-      content = `# Alfred SEO - robots.txt
-User-agent: *
+      // Clean robots.txt with bot-specific rules - no branding
+      content = `User-agent: Googlebot
 Allow: /
 
-# Sitemap
-${baseUrl ? `Sitemap: ${baseUrl}/sitemap.xml` : '# Sitemap URL will be added after deployment'}
+User-agent: Googlebot-Image
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.png$
+Allow: /*.gif$
+Allow: /*.webp$
+Allow: /*.svg$
 
-# Crawl-delay (optional, respected by some bots)
+User-agent: Googlebot-Video
+Allow: /*.mp4$
+Allow: /*.webm$
+Allow: /*.mov$
+
+User-agent: Bingbot
 Crawl-delay: 1
-`;
-    } else {
-      content = `# Alfred SEO - robots.txt
+Allow: /
+
+User-agent: Slurp
+Crawl-delay: 2
+
+User-agent: DuckDuckBot
+Crawl-delay: 1
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: AdsBot-Google
+Allow: /
+
+User-agent: AdsBot-Google-Mobile
+Allow: /
+
 User-agent: *
-Disallow: /
-`;
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+Disallow: /_next/
+Disallow: /node_modules/
+Disallow: /*.json$
+Disallow: /*.map$
+Crawl-delay: 1
+
+${host ? `Host: ${host}\n\n` : ''}${sitemapUrl ? `Sitemap: ${sitemapUrl}` : ''}`;
+    } else {
+      // Disallow all crawling (for staging/dev sites)
+      content = `User-agent: *
+Disallow: /`;
     }
 
     return { path: 'public/robots.txt', content };

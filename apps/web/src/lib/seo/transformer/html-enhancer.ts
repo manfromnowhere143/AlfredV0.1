@@ -6,7 +6,7 @@
 
 import type { SEOConfigInput, SEOAutoFix } from '../types';
 import { HTML_TEMPLATES } from '../constants';
-import { schemaToScript, generateWebSiteSchema } from '../generator/schema-org';
+import { schemaToScript, generateWebSiteSchema, generateSchemaGraph } from '../generator/schema-org';
 
 interface EnhanceHtmlOptions {
   html: string;
@@ -175,21 +175,25 @@ export function enhanceHtml(options: EnhanceHtmlOptions): EnhanceHtmlResult {
     changes.push('Added Apple Touch Icon');
   }
 
-  // Schema.org JSON-LD
+  // Schema.org JSON-LD with @graph format (multiple interconnected schemas)
   if (config.autoGenerateSchema !== false && !/<script\s+type=["']application\/ld\+json["']/i.test(headContent)) {
-    const schemaType = config.schemaType || 'WebSite';
-
-    if (schemaType === 'WebSite' || !config.schemaData) {
-      const schema = generateWebSiteSchema({
-        name: config.siteTitle || projectName,
-        url: deployUrl || '',
-        description: config.siteDescription,
-      });
-      headInsertions.push(schemaToScript(schema));
-      changes.push('Added Schema.org JSON-LD');
-    } else if (config.schemaData) {
+    if (config.schemaData) {
+      // Use custom schema data if provided
       headInsertions.push(schemaToScript(config.schemaData));
       changes.push('Added custom Schema.org JSON-LD');
+    } else {
+      // Generate comprehensive @graph schema with WebSite, Organization, and WebPage
+      const schemaResult = generateSchemaGraph({
+        htmlContent: html,
+        pageTitle: config.siteTitle || projectName,
+        pageDescription: config.siteDescription,
+        url: deployUrl || '',
+        siteName: config.ogSiteName || config.siteTitle || projectName,
+        logo: config.ogImage,
+        images: config.ogImage ? [config.ogImage] : [],
+      });
+      headInsertions.push(schemaToScript(schemaResult.graph));
+      changes.push(`Added Schema.org JSON-LD @graph (${schemaResult.types.join(', ')})`);
     }
   }
 
@@ -349,14 +353,18 @@ export function generateEnhancedIndexHtml(
     headParts.push('<link rel="icon" type="image/svg+xml" href="/vite.svg">');
   }
 
-  // Schema.org
+  // Schema.org with @graph format
   if (config.autoGenerateSchema !== false) {
-    const schema = generateWebSiteSchema({
-      name: title,
+    const schemaResult = generateSchemaGraph({
+      htmlContent: '',
+      pageTitle: title,
+      pageDescription: description,
       url: deployUrl || '',
-      description,
+      siteName: config.ogSiteName || title,
+      logo: config.ogImage,
+      images: config.ogImage ? [config.ogImage] : [],
     });
-    headParts.push(`<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`);
+    headParts.push(`<script type="application/ld+json">\n${JSON.stringify(schemaResult.graph, null, 2)}\n</script>`);
   }
 
   return `<!DOCTYPE html>

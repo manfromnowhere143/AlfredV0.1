@@ -84,12 +84,48 @@ export function BuilderDeploymentCard({
   const [customDomain, setCustomDomain] = useState('');
   const [seoResult, setSeoResult] = useState<SEOAnalysisResult | null>(null);
   const [seoFixesApplied, setSeoFixesApplied] = useState(0);
+  const [previousDeployment, setPreviousDeployment] = useState<{
+    projectName: string;
+    deployedUrl: string;
+    lastDeployedAt: string;
+  } | null>(null);
+  const [isCheckingProject, setIsCheckingProject] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  // Check for previous deployment when artifactId is provided
+  useEffect(() => {
+    if (!artifactId) return;
+
+    const checkProject = async () => {
+      setIsCheckingProject(true);
+      try {
+        const response = await fetch(`/api/deploy/check-project?artifactId=${encodeURIComponent(artifactId)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.found && data.projectName) {
+            setPreviousDeployment({
+              projectName: data.projectName,
+              deployedUrl: data.deployedUrl,
+              lastDeployedAt: data.lastDeployedAt,
+            });
+            // Pre-fill with the previously used project name
+            setProjectName(data.projectName);
+          }
+        }
+      } catch (err) {
+        console.error('[BuilderDeploymentCard] Error checking project:', err);
+      } finally {
+        setIsCheckingProject(false);
+      }
+    };
+
+    checkProject();
+  }, [artifactId]);
 
   const handleDeploy = useCallback(async () => {
     setPhase('deploying');
@@ -425,10 +461,35 @@ export function BuilderDeploymentCard({
               </div>
               <div className="input-section">
                 <label htmlFor="projectName">Project Name</label>
-                <div className="input-wrapper">
-                  <input id="projectName" type="text" value={projectName} onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="my-project" maxLength={50} />
-                  <span className="input-suffix">.vercel.app</span>
-                </div>
+                {previousDeployment ? (
+                  <div className="existing-project">
+                    <div className="existing-project-info">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                      </svg>
+                      <div className="existing-project-text">
+                        <span className="existing-url">{previousDeployment.deployedUrl?.replace('https://', '') || `${previousDeployment.projectName}.vercel.app`}</span>
+                        <span className="existing-label">Redeploy to same URL</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="new-project-btn"
+                      onClick={() => {
+                        setPreviousDeployment(null);
+                        setProjectName(initialProjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'alfred-project');
+                      }}
+                    >
+                      New URL
+                    </button>
+                  </div>
+                ) : (
+                  <div className="input-wrapper">
+                    <input id="projectName" type="text" value={projectName} onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="my-project" maxLength={50} disabled={isCheckingProject} />
+                    <span className="input-suffix">.vercel.app</span>
+                  </div>
+                )}
               </div>
 
               {/* Custom Domain Section */}
@@ -660,7 +721,16 @@ export function BuilderDeploymentCard({
         .input-wrapper:focus-within { border-color: var(--text-secondary); }
         .input-wrapper input { flex: 1; padding: 12px 14px; background: transparent; border: none; outline: none; font-size: 15px; color: var(--text); font-family: 'SF Mono', Monaco, monospace; }
         .input-wrapper input::placeholder { color: var(--text-muted); }
+        .input-wrapper input:disabled { opacity: 0.5; }
         .input-suffix { padding: 12px 14px; font-size: 14px; color: var(--text-muted); background: var(--badge-bg); border-left: 1px solid var(--border); font-family: 'SF Mono', Monaco, monospace; }
+        .existing-project { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; gap: 12px; }
+        .existing-project-info { display: flex; align-items: center; gap: 12px; color: var(--success-color); flex: 1; min-width: 0; }
+        .existing-project-info svg { flex-shrink: 0; }
+        .existing-project-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .existing-url { font-size: 14px; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .existing-label { font-size: 11px; color: var(--success-color); }
+        .new-project-btn { padding: 8px 14px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+        .new-project-btn:hover { border-color: var(--text-secondary); color: var(--text); }
         /* Custom Domain Section */
         .domain-section { margin-bottom: 20px; }
         .domain-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; background: var(--badge-bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; color: var(--text-secondary); font-size: 13px; font-weight: 500; position: relative; }
