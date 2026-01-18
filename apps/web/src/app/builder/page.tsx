@@ -276,7 +276,7 @@ export default function BuilderPage() {
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
 
   // Theme System - State of the Art
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('light');
   const [showThemePicker, setShowThemePicker] = useState(false);
   const themes = [
     { id: 'dark', bg: '#0a0a0c', label: 'Dark', mode: 'dark' as const },
@@ -286,7 +286,7 @@ export default function BuilderPage() {
     { id: 'light', bg: '#f5f5f7', label: 'Light', mode: 'light' as const },
     { id: 'white', bg: '#ffffff', label: 'White', mode: 'light' as const },
   ];
-  const [currentTheme, setCurrentTheme] = useState(themes[0]);
+  const [currentTheme, setCurrentTheme] = useState(themes[5]);
 
   // Computed theme values
   const isLightTheme = currentTheme.mode === 'light';
