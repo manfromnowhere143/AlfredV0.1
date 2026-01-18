@@ -2310,8 +2310,18 @@ function MobileChat({
 }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const [showActions, setShowActions] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+
+  // Auto-expand chat textarea as user types
+  useEffect(() => {
+    const textarea = chatInputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    }
+  }, [input]);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -2778,6 +2788,13 @@ function MobileChat({
                       </span>
                     )}
                     <span className="attachment-name">{file.name}</span>
+                    {file.status === 'uploading' && (
+                      <div className="attachment-progress-bar">
+                        <div className="attachment-progress-fill" style={{ width: `${file.progress || 0}%` }} />
+                      </div>
+                    )}
+                    {file.status === 'ready' && <span className="attachment-ready">{Icons.check}</span>}
+                    {file.status === 'error' && <span className="attachment-error">!</span>}
                     <button
                       className="attachment-remove"
                       onClick={() => onRemoveFile?.(file.id)}
@@ -2819,6 +2836,7 @@ function MobileChat({
                 </button>
               </div>
               <textarea
+                ref={chatInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
@@ -3212,9 +3230,10 @@ function MobileChat({
         .input-row textarea {
           flex: 1; background: transparent; border: none; outline: none;
           color: var(--text, rgba(255,255,255,0.95));
-          font-size: 14px; font-family: inherit;
+          font-size: 16px; font-family: inherit;
           line-height: 1.5; resize: none;
-          min-height: 20px; max-height: 100px;
+          min-height: 24px; max-height: 120px;
+          overflow-y: auto; word-wrap: break-word; white-space: pre-wrap;
         }
         .input-row textarea::placeholder { color: var(--text-muted, rgba(255,255,255,0.35)); }
 
@@ -3294,6 +3313,11 @@ function MobileChat({
           background: rgba(239, 68, 68, 0.1);
           color: #ef4444;
         }
+        .attachment-progress-bar { width: 40px; height: 4px; background: rgba(139,92,246,0.2); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+        .attachment-progress-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #a78bfa); border-radius: 2px; transition: width 0.3s ease-out; }
+        .attachment-ready { width: 16px; height: 16px; border-radius: 50%; background: rgba(34,197,94,0.2); color: #22c55e; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .attachment-ready svg { width: 10px; height: 10px; }
+        .attachment-error { width: 16px; height: 16px; border-radius: 50%; background: rgba(239,68,68,0.2); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
 
         /* Send & Mic Buttons - Desktop Style */
         .btn-mic, .btn-send {

@@ -428,6 +428,15 @@ export default function BuilderPage() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, streamingSteps]);
 
+  // Auto-expand textarea as user types (iMessage/Slack pattern)
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    }
+  }, [inputValue]);
+
   // Warn before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1772,7 +1781,12 @@ export default function BuilderPage() {
                         <span className="attachment-size">
                           {file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
                         </span>
-                        {file.status === 'uploading' && <span className="attachment-progress">{file.progress}%</span>}
+                        {file.status === 'uploading' && (
+                          <div className="attachment-progress-bar">
+                            <div className="attachment-progress-fill" style={{ width: `${file.progress}%` }} />
+                          </div>
+                        )}
+                        {file.status === 'ready' && <span className="attachment-ready">{Icons.check}</span>}
                         {file.status === 'error' && <span className="attachment-error">!</span>}
                         <button
                           className="attachment-remove"
@@ -2021,7 +2035,7 @@ export default function BuilderPage() {
         .chat-input-area { padding: 14px 16px; background: var(--surface); border-top: 1px solid var(--border); }
         .input-row { display: flex; align-items: flex-end; gap: 8px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; transition: border-color 0.2s; }
         .input-row:focus-within { border-color: rgba(139,92,246,0.4); }
-        .input-row textarea { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 13px; font-family: inherit; resize: none; min-height: 20px; max-height: 100px; line-height: 1.5; }
+        .input-row textarea { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 15px; font-family: inherit; resize: none; min-height: 24px; max-height: 160px; line-height: 1.5; overflow-y: auto; word-wrap: break-word; white-space: pre-wrap; }
         .input-row textarea::placeholder { color: var(--text-muted); }
         .btn-enhance, .btn-mic, .btn-send { width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
         .btn-enhance { background: var(--surface); color: var(--icon); }
@@ -2085,6 +2099,11 @@ export default function BuilderPage() {
         .attachment-size { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
         .attachment-remove { width: 20px; height: 20px; border: none; border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; flex-shrink: 0; }
         .attachment-remove:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .attachment-progress-bar { width: 48px; height: 4px; background: rgba(139,92,246,0.2); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+        .attachment-progress-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #a78bfa); border-radius: 2px; transition: width 0.3s ease-out; }
+        .attachment-ready { width: 18px; height: 18px; border-radius: 50%; background: rgba(34,197,94,0.2); color: #22c55e; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .attachment-ready svg { width: 12px; height: 12px; }
+        .attachment-error { width: 18px; height: 18px; border-radius: 50%; background: rgba(239,68,68,0.2); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
 
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
