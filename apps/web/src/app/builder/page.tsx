@@ -2097,8 +2097,8 @@ export default function BuilderPage() {
         .attachment-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--surface-hover); border-radius: 4px; color: var(--icon); flex-shrink: 0; }
         .attachment-name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
         .attachment-size { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-        .attachment-remove { width: 20px; height: 20px; border: none; border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; flex-shrink: 0; }
-        .attachment-remove:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .attachment-remove { width: 20px; height: 20px; border: none; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; flex-shrink: 0; }
+        .attachment-remove:hover { background: var(--surface-hover); color: var(--text-secondary); }
         .attachment-progress-bar { width: 48px; height: 4px; background: rgba(139,92,246,0.2); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
         .attachment-progress-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #a78bfa); border-radius: 2px; transition: width 0.3s ease-out; }
         .attachment-ready { width: 18px; height: 18px; border-radius: 50%; background: rgba(34,197,94,0.2); color: #22c55e; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }

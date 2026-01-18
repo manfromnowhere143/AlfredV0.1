@@ -3301,7 +3301,7 @@ function MobileChat({
           padding: 0;
           background: transparent;
           border: none;
-          border-radius: 4px;
+          border-radius: 50%;
           color: var(--text-muted, rgba(255,255,255,0.4));
           cursor: pointer;
           display: flex;
@@ -3310,8 +3310,8 @@ function MobileChat({
           transition: all 0.15s;
         }
         .attachment-remove:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
+          background: var(--surface-hover, rgba(255,255,255,0.06));
+          color: var(--text-secondary, rgba(255,255,255,0.6));
         }
         .attachment-progress-bar { width: 40px; height: 4px; background: rgba(139,92,246,0.2); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
         .attachment-progress-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #a78bfa); border-radius: 2px; transition: width 0.3s ease-out; }
