@@ -2564,7 +2564,6 @@ function MobileChat({
         {messages.length === 0 ? (
           <div className="welcome-state">
             <div className="welcome-icon">
-              <div className="icon-glow" />
               {Icons.alfred}
             </div>
             <h3>{hasFiles ? 'What would you like to modify?' : 'What would you like to build?'}</h3>
@@ -3087,19 +3086,21 @@ function MobileChat({
         .welcome-icon {
           position: relative; width: 72px; height: 72px;
           display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.08));
-          border: 1px solid rgba(139,92,246,0.2);
-          border-radius: 20px; color: #8b5cf6; margin-bottom: 20px;
-          animation: iconPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+          background: transparent;
+          border: none;
+          color: #a78bfa; margin-bottom: 20px;
+          animation: iconFloat 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
         }
-        @keyframes iconPop {
-          from { opacity: 0; transform: scale(0.8); }
-          to { opacity: 1; transform: scale(1); }
+        .welcome-icon svg {
+          width: 48px; height: 48px;
+          filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.25));
+        }
+        @keyframes iconFloat {
+          from { opacity: 0; transform: translateY(12px) scale(0.9); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .icon-glow {
-          position: absolute; inset: -16px;
-          background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
-          filter: blur(16px);
+          display: none;
         }
         .welcome-state h3 {
           font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95));
