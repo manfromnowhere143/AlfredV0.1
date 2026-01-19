@@ -236,6 +236,11 @@ export default function AlfredChat() {
         fetch('/api/projects'),
         fetch('/api/conversations')
       ]);
+      // Seamless auth handling - silently skip if not logged in
+      if (projectsRes.status === 401 || convsRes.status === 401) {
+        setIsLoadingConversations(false);
+        return;
+      }
       if (projectsRes.ok) {
         const data = await projectsRes.json();
         setProjects(data.projects || data.data || []);
@@ -339,6 +344,15 @@ export default function AlfredChat() {
       });
 
       if (!response.ok) {
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // STATE-OF-THE-ART AUTH FLOW — Seamless redirect, no error messages
+        // ═══════════════════════════════════════════════════════════════════════════════
+        if (response.status === 401) {
+          // User not logged in - silently open auth modal (no error message)
+          setIsLoading(false);
+          setAuthModalOpen(true);
+          return;
+        }
         if (response.status === 429) {
           const data = await response.json();
           setLimitReached({
@@ -419,6 +433,12 @@ export default function AlfredChat() {
     
     try {
       const res = await fetch('/api/conversations/' + id);
+      // Seamless auth handling - open modal if not logged in
+      if (res.status === 401) {
+        setIsLoadingConversation(false);
+        setAuthModalOpen(true);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
