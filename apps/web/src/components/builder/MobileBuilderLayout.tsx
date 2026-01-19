@@ -2788,7 +2788,7 @@ function MobileChat({
             <input
               ref={imageInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               style={{ display: 'none' }}
               onChange={handleFileInputChange}
@@ -2863,7 +2863,7 @@ function MobileChat({
                       className="btn-upload"
                       onClick={() => imageInputRef.current?.click()}
                       disabled={isStreaming || isUploading}
-                      title="Add image"
+                      title="Add media"
                     >
                       {Icons.image}
                     </button>
