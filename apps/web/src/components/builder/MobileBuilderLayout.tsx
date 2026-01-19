@@ -2845,51 +2845,48 @@ function MobileChat({
             )}
 
             <div className="input-row">
-              {/* Upload Buttons - Desktop Identical */}
-              <div className="upload-buttons">
-                <button
-                  className="btn-upload"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isStreaming || isUploading}
-                  title="Add image"
-                >
-                  {Icons.image}
-                </button>
-                <button
-                  className="btn-upload"
-                  onClick={() => videoInputRef.current?.click()}
-                  disabled={isStreaming || isUploading}
-                  title="Add video"
-                >
-                  {Icons.video}
-                </button>
-                <button
-                  className="btn-upload"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isStreaming || isUploading}
-                  title="Add file"
-                >
-                  {Icons.paperclip}
-                </button>
-              </div>
+              {/* Textarea - Left aligned for clean typing */}
               <textarea
                 ref={chatInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Describe what you want to build..."
+                placeholder="Message Alfred..."
                 disabled={isStreaming}
                 rows={1}
               />
-              {input.trim() ? (
-                <button className="btn-send" onClick={handleSend} disabled={isStreaming}>
-                  {Icons.send}
-                </button>
-              ) : (
-                <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>
-                  {Icons.mic}
-                </button>
-              )}
+              {/* Action Buttons - Right side */}
+              <div className="input-actions">
+                {!input.trim() && (
+                  <div className="upload-buttons">
+                    <button
+                      className="btn-upload"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isStreaming || isUploading}
+                      title="Add image"
+                    >
+                      {Icons.image}
+                    </button>
+                    <button
+                      className="btn-upload"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isStreaming || isUploading}
+                      title="Add file"
+                    >
+                      {Icons.paperclip}
+                    </button>
+                  </div>
+                )}
+                {input.trim() ? (
+                  <button className="btn-send" onClick={handleSend} disabled={isStreaming}>
+                    {Icons.send}
+                  </button>
+                ) : (
+                  <button className="btn-mic" onClick={startRecording} disabled={isStreaming}>
+                    {Icons.mic}
+                  </button>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -3359,46 +3356,107 @@ function MobileChat({
           box-shadow: 0 6px 32px rgba(139, 92, 246, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
+        /* Professional Input Row - State of the Art */
         .input-row {
-          display: flex; align-items: flex-end; gap: 8px;
-          background: transparent;
-          border: none;
-          border-radius: 12px;
-          padding: 4px 4px;
-          transition: all 0.2s;
+          display: flex;
+          align-items: flex-end;
+          gap: 12px;
+          padding: 2px;
         }
         .input-row textarea {
-          flex: 1; background: transparent; border: none; outline: none;
-          color: var(--text, rgba(255,255,255,0.95));
-          font-size: 16px; font-family: inherit;
-          line-height: 1.5; resize: none;
-          min-height: 24px; max-height: 120px;
-          overflow-y: auto; word-wrap: break-word; white-space: pre-wrap;
-        }
-        .input-row textarea::placeholder { color: var(--text-muted, rgba(255,255,255,0.35)); }
-
-        /* Upload Buttons - Desktop Style */
-        .upload-buttons { display: flex; gap: 2px; margin-right: 4px; }
-        .btn-upload {
-          width: 28px; height: 28px;
-          border: none; border-radius: 6px;
+          flex: 1;
           background: transparent;
-          color: var(--text-muted, rgba(255,255,255,0.4));
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          transition: all 0.15s ease;
+          border: none;
+          outline: none;
+          color: var(--text, rgba(255,255,255,0.95));
+          font-size: 16px;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+          font-weight: 400;
+          line-height: 1.5;
+          resize: none;
+          min-height: 24px;
+          max-height: 120px;
+          overflow-y: auto;
+          word-wrap: break-word;
+          white-space: pre-wrap;
+          padding: 6px 4px;
+          letter-spacing: -0.01em;
         }
-        .btn-upload:active { background: var(--surface-hover, rgba(255,255,255,0.1)); color: var(--text-secondary, rgba(255,255,255,0.6)); }
-        .btn-upload:disabled { opacity: 0.3; cursor: not-allowed; }
+        .input-row textarea::placeholder {
+          color: var(--text-muted, rgba(255,255,255,0.4));
+          font-weight: 400;
+        }
+        .mobile-chat.light .input-row textarea {
+          color: rgba(0,0,0,0.9);
+        }
+        .mobile-chat.light .input-row textarea::placeholder {
+          color: rgba(0,0,0,0.4);
+        }
 
-        /* Attachments Preview */
+        /* Input Actions - Right side group */
+        .input-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        /* Upload Buttons - Minimal & Elegant */
+        .upload-buttons {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          padding-right: 4px;
+          border-right: 1px solid var(--border, rgba(255,255,255,0.1));
+          margin-right: 4px;
+        }
+        .btn-upload {
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted, rgba(255,255,255,0.45));
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .btn-upload:hover {
+          color: var(--text-secondary, rgba(255,255,255,0.7));
+          background: var(--surface-hover, rgba(255,255,255,0.06));
+        }
+        .btn-upload:active {
+          transform: scale(0.92);
+          background: var(--surface-hover, rgba(255,255,255,0.1));
+          color: var(--text, rgba(255,255,255,0.9));
+        }
+        .btn-upload:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .mobile-chat.light .upload-buttons {
+          border-right-color: rgba(0,0,0,0.08);
+        }
+        .mobile-chat.light .btn-upload {
+          color: rgba(0,0,0,0.4);
+        }
+        .mobile-chat.light .btn-upload:hover {
+          color: rgba(0,0,0,0.6);
+          background: rgba(0,0,0,0.04);
+        }
+
+        /* Attachments Preview - Clean & Minimal */
         .attachments-preview {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
-          padding: 8px 12px;
-          background: var(--surface, rgba(255,255,255,0.02));
-          border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+          padding: 8px 4px;
+          padding-bottom: 12px;
+          margin-bottom: 4px;
+          border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
         }
         .attachment-chip {
           display: flex;
@@ -3459,24 +3517,57 @@ function MobileChat({
         .attachment-ready svg { width: 10px; height: 10px; }
         .attachment-error { width: 16px; height: 16px; border-radius: 50%; background: rgba(239,68,68,0.2); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
 
-        /* Send & Mic Buttons - Desktop Style */
+        /* Send & Mic Buttons - State of the Art */
         .btn-mic, .btn-send {
-          width: 32px; height: 32px;
-          border-radius: 8px; border: none;
+          width: 36px;
+          height: 36px;
+          border-radius: 12px;
+          border: none;
           cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           flex-shrink: 0;
-          transition: all 0.15s;
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .btn-mic { background: transparent; color: var(--icon, rgba(255,255,255,0.6)); }
-        .btn-mic:active { color: var(--text, white); }
+        .btn-mic {
+          background: var(--surface-hover, rgba(255,255,255,0.06));
+          color: var(--text-secondary, rgba(255,255,255,0.6));
+        }
+        .btn-mic:hover {
+          background: var(--surface-hover, rgba(255,255,255,0.1));
+          color: var(--text, rgba(255,255,255,0.9));
+        }
+        .btn-mic:active {
+          transform: scale(0.9);
+          color: #a78bfa;
+        }
         .btn-send {
-          background: linear-gradient(135deg, #8b5cf6, #6366f1);
+          background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
           color: white;
-          box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+          box-shadow: 0 2px 12px rgba(139,92,246,0.4), 0 0 0 1px rgba(139,92,246,0.2);
         }
-        .btn-send:active:not(:disabled) { transform: scale(0.94); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
-        .btn-send:disabled, .btn-mic:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-send:hover:not(:disabled) {
+          transform: scale(1.05);
+          box-shadow: 0 4px 20px rgba(139,92,246,0.5), 0 0 0 1px rgba(139,92,246,0.3);
+        }
+        .btn-send:active:not(:disabled) {
+          transform: scale(0.92);
+          box-shadow: 0 2px 8px rgba(139,92,246,0.4);
+        }
+        .btn-send:disabled, .btn-mic:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .mobile-chat.light .btn-mic {
+          background: rgba(0,0,0,0.04);
+          color: rgba(0,0,0,0.5);
+        }
+        .mobile-chat.light .btn-mic:hover {
+          background: rgba(0,0,0,0.08);
+          color: rgba(0,0,0,0.8);
+        }
 
         /* Recording UI - Desktop Orb Style */
         .recording-ui { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
