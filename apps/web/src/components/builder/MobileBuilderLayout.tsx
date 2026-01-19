@@ -1038,12 +1038,6 @@ function MobileFileExplorer({
 
   return (
     <div className={`mobile-file-explorer ${isLightTheme ? 'light' : ''}`}>
-      <MobileHeader
-        title={projectName || 'Files'}
-        subtitle={`${files.length} files`}
-        isLightTheme={isLightTheme}
-      />
-
       <div className="tree-container">
         {files.length === 0 ? (
           <div className="empty-state">
@@ -1078,7 +1072,7 @@ function MobileFileExplorer({
           flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          padding: 8px 0;
+          padding: 20px 0;
           padding-bottom: 100px;
         }
 
