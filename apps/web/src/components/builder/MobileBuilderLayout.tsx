@@ -633,14 +633,11 @@ function MobileHeader({
           position: sticky;
           top: 0;
           z-index: 40;
-          background: var(--header-bg, rgba(9, 9, 11, 0.85));
+          background: var(--header-bg, rgba(9, 9, 11, 0.9));
           backdrop-filter: blur(24px) saturate(180%);
           -webkit-backdrop-filter: blur(24px) saturate(180%);
           border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
-        }
-
-        .mobile-header.light {
-          --header-bg: rgba(255, 255, 255, 0.85);
+          transition: background 0.3s ease;
         }
 
         .header-glow {
@@ -830,10 +827,7 @@ function BottomNavigation({
           backdrop-filter: blur(24px) saturate(180%);
           -webkit-backdrop-filter: blur(24px) saturate(180%);
           border-top: 1px solid var(--border, rgba(255, 255, 255, 0.06));
-        }
-
-        .bottom-nav.light {
-          --nav-bg: rgba(255, 255, 255, 0.92);
+          transition: background 0.3s ease;
         }
 
         .nav-glow {
@@ -3802,8 +3796,11 @@ export default function MobileBuilderLayout({
   const tabOrder: MobileTab[] = ['files', 'code', 'preview', 'chat'];
 
   // Computed theme vars for root element
+  // Header and nav backgrounds use theme color with transparency for blur effect
   const themeVars = currentTheme ? {
     '--bg': currentTheme.bg,
+    '--header-bg': currentTheme.bg + 'e6', // ~90% opacity (hex e6 = 230/255)
+    '--nav-bg': currentTheme.bg + 'eb', // ~92% opacity (hex eb = 235/255)
     '--text': isLightTheme ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.9)',
     '--text-secondary': isLightTheme ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)',
     '--text-muted': isLightTheme ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
