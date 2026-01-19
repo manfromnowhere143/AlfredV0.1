@@ -3330,25 +3330,43 @@ function MobileChat({
           overflow: hidden;
         }
 
-        /* Desktop-Identical Chat Input Area */
+        /* Floating Chat Input Area - State of the Art */
         .chat-input-area {
-          position: fixed; bottom: 84px; left: 0; right: 0;
-          padding: 14px 16px;
-          background: var(--surface, rgba(9,9,11,0.95));
-          border-top: 1px solid var(--border, rgba(255,255,255,0.06));
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
+          position: fixed;
+          bottom: 94px;
+          left: 16px;
+          right: 16px;
+          padding: 12px;
+          background: var(--surface, rgba(255,255,255,0.08));
+          border: 1px solid var(--border, rgba(255,255,255,0.12));
+          border-radius: 20px;
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .mobile-chat.light .chat-input-area { background: rgba(255,255,255,0.95); }
+        .chat-input-area:focus-within {
+          border-color: rgba(139, 92, 246, 0.4);
+          box-shadow: 0 6px 32px rgba(139, 92, 246, 0.15), 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .mobile-chat.light .chat-input-area {
+          background: rgba(255,255,255,0.7);
+          border-color: rgba(0,0,0,0.08);
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05);
+        }
+        .mobile-chat.light .chat-input-area:focus-within {
+          border-color: rgba(139, 92, 246, 0.5);
+          box-shadow: 0 6px 32px rgba(139, 92, 246, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
 
         .input-row {
           display: flex; align-items: flex-end; gap: 8px;
-          background: var(--surface-hover, rgba(255,255,255,0.04));
-          border: 1px solid var(--border, rgba(255,255,255,0.08));
-          border-radius: 14px; padding: 10px 12px;
-          transition: border-color 0.2s;
+          background: transparent;
+          border: none;
+          border-radius: 12px;
+          padding: 4px 4px;
+          transition: all 0.2s;
         }
-        .input-row:focus-within { border-color: rgba(139,92,246,0.4); }
         .input-row textarea {
           flex: 1; background: transparent; border: none; outline: none;
           color: var(--text, rgba(255,255,255,0.95));
