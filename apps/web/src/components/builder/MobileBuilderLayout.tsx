@@ -1565,28 +1565,22 @@ function MobilePreview({
 
   return (
     <div className={`mobile-preview ${isLightTheme ? 'light' : ''} ${isFullscreen ? 'fullscreen-mode' : ''}`}>
-      {/* Header - Hidden in fullscreen */}
+      {/* Floating Action Buttons - Hidden in fullscreen */}
       {!isFullscreen && (
-        <MobileHeader
-          title="Preview"
-          isBuilding={isBuilding}
-          isLightTheme={isLightTheme}
-          rightAction={
-            <div className="preview-actions">
-              {deployedUrl && (
-                <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="live-badge">
-                  <span className="live-dot" />
-                  <span>LIVE</span>
-                  {Icons.externalLink}
-                </a>
-              )}
-              <button className="expand-btn" onClick={toggleFullscreen} title="Fullscreen">
-                {Icons.expand}
-              </button>
-              <button className="refresh-btn" onClick={onRefresh}>{Icons.refresh}</button>
-            </div>
-          }
-        />
+        <div className="preview-floating-actions">
+          {deployedUrl && (
+            <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="floating-live-badge">
+              <span className="live-dot" />
+              <span>LIVE</span>
+            </a>
+          )}
+          <button className="floating-btn" onClick={toggleFullscreen} title="Fullscreen">
+            {Icons.expand}
+          </button>
+          <button className={`floating-btn ${isBuilding ? 'spinning' : ''}`} onClick={onRefresh} title="Refresh">
+            {Icons.refresh}
+          </button>
+        </div>
       )}
 
       {/* Fullscreen iPhone Preview - True Fullscreen */}
@@ -1740,21 +1734,73 @@ function MobilePreview({
         )}
       </div>
       <style jsx>{`
-        .mobile-preview { display: flex; flex-direction: column; height: 100%; background: var(--bg, #09090b); }
-        .preview-actions { display: flex; align-items: center; gap: 10px; }
-        .live-badge {
+        .mobile-preview { display: flex; flex-direction: column; height: 100%; background: var(--bg, #09090b); position: relative; }
+
+        /* Floating Action Buttons - State of the Art */
+        .preview-floating-actions {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          z-index: 50;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .floating-btn {
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--surface, rgba(255,255,255,0.08));
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border: 1px solid var(--border, rgba(255,255,255,0.12));
+          border-radius: 14px;
+          color: var(--text, rgba(255,255,255,0.9));
+          cursor: pointer;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .floating-btn:hover {
+          transform: scale(1.05);
+          border-color: rgba(139, 92, 246, 0.3);
+          box-shadow: 0 6px 32px rgba(139, 92, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .floating-btn:active {
+          transform: scale(0.92);
+        }
+        .floating-btn.spinning svg {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .floating-live-badge {
           display: flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 12px;
-          background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(22, 163, 74, 0.1));
-          border: 1px solid rgba(34, 197, 94, 0.3);
-          border-radius: 16px;
-          font-size: 10px;
-          font-weight: 650;
+          padding: 10px 14px;
+          background: rgba(34, 197, 94, 0.12);
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border: 1px solid rgba(34, 197, 94, 0.25);
+          border-radius: 14px;
+          font-size: 11px;
+          font-weight: 600;
           color: #22c55e;
           text-decoration: none;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.03em;
+          box-shadow: 0 4px 24px rgba(34, 197, 94, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .floating-live-badge:hover {
+          transform: scale(1.05);
+          box-shadow: 0 6px 32px rgba(34, 197, 94, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .floating-live-badge:active {
+          transform: scale(0.95);
         }
         .live-dot {
           width: 6px;
@@ -1767,30 +1813,16 @@ function MobilePreview({
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.6; transform: scale(1.2); }
         }
-        .expand-btn {
-          width: 40px; height: 40px;
-          display: flex; align-items: center; justify-content: center;
-          background: var(--surface, rgba(255,255,255,0.05));
-          border: 1px solid var(--border, rgba(255,255,255,0.08));
-          border-radius: 12px;
-          color: var(--text-secondary, rgba(255,255,255,0.6));
-          cursor: pointer;
-          transition: all 0.2s;
+        .mobile-preview.light .floating-btn {
+          background: rgba(255,255,255,0.7);
+          border-color: rgba(0,0,0,0.08);
+          color: rgba(0,0,0,0.8);
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05);
         }
-        .expand-btn:active {
-          background: rgba(139, 92, 246, 0.15);
-          border-color: rgba(139, 92, 246, 0.3);
-          color: #8b5cf6;
-          transform: scale(0.94);
+        .mobile-preview.light .floating-live-badge {
+          background: rgba(34, 197, 94, 0.1);
+          border-color: rgba(34, 197, 94, 0.2);
         }
-        .refresh-btn {
-          width: 40px; height: 40px;
-          display: flex; align-items: center; justify-content: center;
-          background: transparent; border: none;
-          color: var(--text-secondary, rgba(255,255,255,0.6)); cursor: pointer;
-          border-radius: 12px; transition: all 0.3s;
-        }
-        .refresh-btn:active { background: var(--surface-hover, rgba(255,255,255,0.08)); transform: rotate(180deg); }
         .pull-indicator {
           display: flex;
           align-items: center;
