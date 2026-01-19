@@ -2433,9 +2433,20 @@ function MobileChat({
     }
   }, [isRecording]);
 
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messages.length > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [messages, streamingSteps]);
+
+  // CRITICAL: Always scroll to TOP when showing welcome state (no messages)
+  // This ensures users see "What would you like to build/modify?" first
+  useEffect(() => {
+    if (messages.length === 0 && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [messages.length]);
 
   const handleSend = useCallback(() => {
     const text = input.trim();
@@ -2564,62 +2575,62 @@ function MobileChat({
               {hasFiles ? (
                 <>
                   <button className="suggestion-card" onClick={() => onSendMessage('Change the color scheme to use darker tones with purple accents')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' }}>{Icons.modColors}</div>
+                    <div className="suggestion-icon" style={{ color: '#a78bfa' }}>{Icons.modColors}</div>
                     <span>Colors</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Update typography with Inter font and better spacing')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>{Icons.modFonts}</div>
+                    <div className="suggestion-icon" style={{ color: '#fbbf24' }}>{Icons.modFonts}</div>
                     <span>Fonts</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Add a navigation bar with smooth hover effects')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>{Icons.modNav}</div>
+                    <div className="suggestion-icon" style={{ color: '#38bdf8' }}>{Icons.modNav}</div>
                     <span>Nav</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Style buttons with gradients and hover animations')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>{Icons.modButtons}</div>
+                    <div className="suggestion-icon" style={{ color: '#4ade80' }}>{Icons.modButtons}</div>
                     <span>Buttons</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Improve the layout spacing and visual balance')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#f472b6' }}>{Icons.modLayout}</div>
+                    <div className="suggestion-icon" style={{ color: '#f472b6' }}>{Icons.modLayout}</div>
                     <span>Layout</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Add smooth fade-in and transition animations')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185' }}>{Icons.modAnimate}</div>
+                    <div className="suggestion-icon" style={{ color: '#fb7185' }}>{Icons.modAnimate}</div>
                     <span>Animate</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Add a hero image to enhance the design')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf' }}>{Icons.modImages}</div>
+                    <div className="suggestion-icon" style={{ color: '#2dd4bf' }}>{Icons.modImages}</div>
                     <span>Images</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Add dark mode toggle functionality')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>{Icons.modDark}</div>
+                    <div className="suggestion-icon" style={{ color: '#818cf8' }}>{Icons.modDark}</div>
                     <span>Dark</span>
                   </button>
                 </>
               ) : (
                 <>
                   <button className="suggestion-card" onClick={() => onSendMessage('Build an analytics dashboard with charts, KPI cards, and dark theme')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>{Icons.templateDashboard}</div>
+                    <div className="suggestion-icon" style={{ color: '#818cf8' }}>{Icons.templateDashboard}</div>
                     <span>Dashboard</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Create a modern e-commerce storefront with product grid and cart')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>{Icons.templateEcommerce}</div>
+                    <div className="suggestion-icon" style={{ color: '#4ade80' }}>{Icons.templateEcommerce}</div>
                     <span>E-commerce</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Design a premium SaaS landing page with hero, pricing, and testimonials')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>{Icons.templateSaas}</div>
+                    <div className="suggestion-icon" style={{ color: '#fbbf24' }}>{Icons.templateSaas}</div>
                     <span>SaaS Page</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Build a ChatGPT-style chat interface with message bubbles and dark theme')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#f472b6' }}>{Icons.templateAI}</div>
+                    <div className="suggestion-icon" style={{ color: '#f472b6' }}>{Icons.templateAI}</div>
                     <span>AI Chat</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Create a stunning developer portfolio with project showcase')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf' }}>{Icons.templatePortfolio}</div>
+                    <div className="suggestion-icon" style={{ color: '#2dd4bf' }}>{Icons.templatePortfolio}</div>
                     <span>Portfolio</span>
                   </button>
                   <button className="suggestion-card" onClick={() => onSendMessage('Build a real-time monitoring dashboard with live metrics and charts')}>
-                    <div className="suggestion-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185' }}>{Icons.templateLiveData}</div>
+                    <div className="suggestion-icon" style={{ color: '#fb7185' }}>{Icons.templateLiveData}</div>
                     <span>Live Data</span>
                   </button>
                 </>
@@ -3119,8 +3130,8 @@ function MobileChat({
           align-items: center;
           gap: 8px;
           padding: 16px 8px 14px;
-          background: var(--surface, rgba(255,255,255,0.03));
-          border: 1px solid var(--border, rgba(255,255,255,0.06));
+          background: transparent;
+          border: none;
           border-radius: 14px;
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3138,9 +3149,12 @@ function MobileChat({
           from { opacity: 0; transform: scale(0.92); }
           to { opacity: 1; transform: scale(1); }
         }
+        .suggestion-card:hover {
+          transform: scale(1.08);
+        }
         .suggestion-card:active {
-          transform: scale(0.96);
-          background: var(--surface-hover, rgba(255,255,255,0.06));
+          transform: scale(0.95);
+          opacity: 0.8;
         }
         .suggestion-icon {
           width: 44px;
@@ -3148,7 +3162,7 @@ function MobileChat({
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 12px;
+          background: transparent;
         }
         .suggestion-card span {
           font-size: 11px;
