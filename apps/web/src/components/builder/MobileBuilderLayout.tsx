@@ -3076,7 +3076,7 @@ function MobileChat({
         .welcome-state {
           display: flex; flex-direction: column; align-items: center;
           justify-content: flex-start; min-height: 100%; text-align: center;
-          padding: 32px 20px; padding-bottom: 200px;
+          padding: 16px 20px; padding-bottom: 200px;
           animation: welcomeFadeIn 0.4s ease-out;
         }
         @keyframes welcomeFadeIn {
@@ -3084,16 +3084,16 @@ function MobileChat({
           to { opacity: 1; }
         }
         .welcome-icon {
-          position: relative; width: 72px; height: 72px;
+          position: relative; width: 64px; height: 64px;
           display: flex; align-items: center; justify-content: center;
           background: transparent;
           border: none;
-          color: #a78bfa; margin-bottom: 20px;
+          color: #a78bfa; margin-bottom: 14px;
           animation: iconFloat 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
         }
         .welcome-icon svg {
-          width: 48px; height: 48px;
-          filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.25));
+          width: 56px; height: 56px;
+          filter: drop-shadow(0 4px 16px rgba(139, 92, 246, 0.3));
         }
         @keyframes iconFloat {
           from { opacity: 0; transform: translateY(12px) scale(0.9); }
@@ -3103,13 +3103,13 @@ function MobileChat({
           display: none;
         }
         .welcome-state h3 {
-          font-size: 20px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95));
-          margin: 0 0 6px; letter-spacing: -0.02em;
+          font-size: 19px; font-weight: 650; color: var(--text, rgba(255,255,255,0.95));
+          margin: 0 0 4px; letter-spacing: -0.02em;
           animation: textFadeIn 0.4s ease-out 0.15s both;
         }
         .welcome-state p {
-          font-size: 14px; color: var(--text-muted, rgba(255,255,255,0.45));
-          margin: 0 0 24px;
+          font-size: 13px; color: var(--text-muted, rgba(255,255,255,0.45));
+          margin: 0 0 18px;
           animation: textFadeIn 0.4s ease-out 0.2s both;
         }
         @keyframes textFadeIn {
