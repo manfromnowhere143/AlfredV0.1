@@ -2465,17 +2465,19 @@ function MobileChat({
 
   return (
     <div className={`mobile-chat ${isLightTheme ? 'light' : ''}`}>
-      <MobileHeader
-        title="Alfred AI"
-        subtitle={isStreaming ? 'Generating...' : 'Online'}
-        isStreaming={isStreaming}
-        isLightTheme={isLightTheme}
-        rightAction={
-          <button className="actions-btn" onClick={() => setShowActions(!showActions)}>
-            {Icons.more}
-          </button>
-        }
-      />
+      {/* Floating Action Button - State of the Art */}
+      <button
+        className={`floating-action-btn ${showActions ? 'active' : ''} ${isStreaming ? 'streaming' : ''}`}
+        onClick={() => setShowActions(!showActions)}
+        aria-label="Open actions menu"
+      >
+        <div className="fab-inner">
+          <div className="fab-icon">
+            {showActions ? Icons.close : Icons.more}
+          </div>
+          {isStreaming && <div className="fab-pulse" />}
+        </div>
+      </button>
 
       {/* Action Sheet */}
       {showActions && (
@@ -2894,20 +2896,72 @@ function MobileChat({
       </div>
       <style jsx>{`
         .mobile-chat { display: flex; flex-direction: column; height: 100%; background: var(--bg, #09090b); }
-        .messages-container { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-bottom: 200px; }
+        .messages-container { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-bottom: 200px; padding-top: 70px; }
 
-        /* Actions Button */
-        .actions-btn {
-          width: 40px; height: 40px;
-          display: flex; align-items: center; justify-content: center;
-          background: var(--surface, rgba(255,255,255,0.05));
-          border: 1px solid var(--border, rgba(255,255,255,0.08));
-          border-radius: 12px;
-          color: var(--text-secondary, rgba(255,255,255,0.6));
+        /* Floating Action Button - State of the Art */
+        .floating-action-btn {
+          position: fixed;
+          top: 16px;
+          right: 16px;
+          z-index: 60;
+          width: 48px;
+          height: 48px;
+          padding: 0;
+          border: none;
+          border-radius: 16px;
           cursor: pointer;
-          transition: all 0.2s;
+          background: transparent;
+          -webkit-tap-highlight-color: transparent;
         }
-        .actions-btn:active { background: var(--surface-hover, rgba(255,255,255,0.1)); transform: scale(0.95); }
+        .fab-inner {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--surface, rgba(255,255,255,0.08));
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border: 1px solid var(--border, rgba(255,255,255,0.12));
+          border-radius: 16px;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .fab-icon {
+          color: var(--text, rgba(255,255,255,0.9));
+          transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .floating-action-btn:hover .fab-inner {
+          transform: scale(1.05);
+          border-color: rgba(139, 92, 246, 0.3);
+          box-shadow: 0 6px 32px rgba(139, 92, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .floating-action-btn:active .fab-inner {
+          transform: scale(0.95);
+        }
+        .floating-action-btn.active .fab-inner {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: rgba(139, 92, 246, 0.3);
+        }
+        .floating-action-btn.active .fab-icon {
+          transform: rotate(90deg);
+          color: #a78bfa;
+        }
+        .floating-action-btn.streaming .fab-inner {
+          border-color: rgba(139, 92, 246, 0.4);
+        }
+        .fab-pulse {
+          position: absolute;
+          inset: -4px;
+          border-radius: 20px;
+          border: 2px solid rgba(139, 92, 246, 0.5);
+          animation: fabPulse 2s ease-in-out infinite;
+        }
+        @keyframes fabPulse {
+          0%, 100% { opacity: 0; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.05); }
+        }
 
         /* Action Sheet */
         .action-sheet-overlay {
